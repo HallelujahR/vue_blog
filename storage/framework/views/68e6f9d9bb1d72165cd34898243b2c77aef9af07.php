@@ -47,4 +47,5 @@
 
 <script type="text/javascript" src="<?php echo e(mix('js/app.js')); ?>"></script>
 <?php echo $__env->yieldContent('js'); ?>
+
 </html>

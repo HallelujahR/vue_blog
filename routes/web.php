@@ -16,3 +16,17 @@ Route::get('/', function () {
 });
 
 Route::get('/article','ArticleController@Index');
+Route::get('/article/test','ArticleController@test');
+
+Route::get('/test/{phone}','ArticleController@send');
+Auth::routes();
+
+Route::get('/home', 'HomeController@index')->name('home');
+
+Route::group([
+	'namespace'=>'Api',
+],function(){
+	Route::post('VerificationCodes','VerificationCodesController@send');
+});
+
+
