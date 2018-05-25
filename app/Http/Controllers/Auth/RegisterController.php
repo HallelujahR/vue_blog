@@ -48,20 +48,28 @@ class RegisterController extends Controller
     protected function validator(array $data)
     {
 
-        if($data['acction_type'] == 'email'){
+        if($data['account_type'] == 'email'){
             return Validator::make($data, [
                 'name' => 'required|string|max:100|unique:users',
                 'account' => 'required|string|max:32|unique:users',
                 'password' => 'required|string|min:6|confirmed',
             ]);
         }else{
-            return Validator::make($data, [
-                'name' => 'required|string|max:100|unique:users',
-                'account' => 'required|string|max:20|unique:users|regex:/^1[34578]{1}\d{9}$/',
-                'password' => 'required|string|min:6|confirmed',
-            ]);
+
+                return Validator::make($data, [
+                    'name' => 'required|string|max:100|unique:users',
+                    'account' => 'required|string|max:20|unique:users|regex:/^1[34578]{1}\d{9}$/',
+                    'password' => 'required|string|min:6|confirmed',
+                    'code'=> ['min:4',function($attribute, $value, $fail) use($data) {
+                                if ($value != \Cache::get($data['codekey'])['code']){
+                                    return $fail($attribute.' is wrong.');
+                                }
+                            }],
+                ]);
+
         }
     }
+
 
     /**
      * Create a new user instance after a valid registration.

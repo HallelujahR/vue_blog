@@ -14,20 +14,20 @@ class VerificationCodesController extends Controller
         $code = str_pad(random_int(1, 9999), 4, 0, STR_PAD_LEFT);
 
         $phone = $request->phone;
-
+        $code = '0000';
     	$sms = app('easysms');
-		 try {
-            $result = $easySms->send($phone, [
-			    'template' => 'SMS_135895054',
-			    'data' => [
-			        'code' => $code
-			    ],
-            ]);
-        } catch (\GuzzleHttp\Exception\ClientException $exception) {
-            $response = $exception->getResponse();
-            $result = json_decode($response->getBody()->getContents(), true);
-            return $this->response->errorInternal($result['msg'] ?? '短信发送异常');
-        }
+		 // try {
+   //          $result = $easySms->send($phone, [
+			//     'template' => 'SMS_135895054',
+			//     'data' => [
+			//         'code' => $code
+			//     ],
+   //          ]);
+   //      } catch (\GuzzleHttp\Exception\ClientException $exception) {
+   //          $response = $exception->getResponse();
+   //          $result = json_decode($response->getBody()->getContents(), true);
+   //          return $this->response->errorInternal($result['msg'] ?? '短信发送异常');
+   //      }
 
         $key = 'verificationCode_'.str_random(15);
         $expiredAt = now()->addMinutes(10);
