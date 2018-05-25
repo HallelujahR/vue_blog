@@ -27,15 +27,15 @@
 
                     <transition name="fade" mode="out-in">
                     <template v-if="loginType === 'email'" >
-                         <div class="form-group{{ $errors->has('account') ? ' has-error' : '' }}" key="email">
+                         <div class="form-group{{ $errors->has('accountSign') ? ' has-error' : '' }}" key="email">
                             <label for="email" class="col-md-4 control-label">邮箱</label>
 
                             <div class="col-md-6">
-                                <input id="email" type="email" class="form-control" name="account" value="{{ old('account') }}" required>
+                                <input id="email" type="email" class="form-control" name="accountSign" value="{{ old('accountSign') }}" required>
 
-                                @if ($errors->has('account'))
+                                @if ($errors->has('accountSign'))
                                     <span class="help-block">
-                                        <strong>{{ $errors->first('account') }}</strong>
+                                        <strong>{{ $errors->first('accountSign') }}</strong>
                                     </span>
                                 @endif
                             </div>
@@ -44,15 +44,15 @@
                         </div>
                     </template>
                     <template v-else>
-                          <div class="form-group{{ $errors->has('account') ? ' has-error' : '' }}" key="phone" key="phone">
+                          <div class="form-group{{ $errors->has('accountSign') ? ' has-error' : '' }}" key="phone" key="phone">
                                 <label for="email" class="col-md-4 control-label">手机号</label>
 
                                 <div class="col-md-6">
-                                    <input id="phone" type="number" class="form-control" name="account" value="{{ old('account') }}" required>
+                                    <input id="phone" type="number" class="form-control" name="accountSign" value="{{ old('accountSign') }}" required>
 
-                                    @if ($errors->has('account'))
+                                    @if ($errors->has('accountSign'))
                                         <span class="help-block">
-                                            <strong>{{ $errors->first('account') }}</strong>
+                                            <strong>{{ $errors->first('accountSign') }}</strong>
                                         </span>
                                     @endif
                                     <div id="sendMessage" @click="code">@{{codemessage}}</div>
@@ -74,15 +74,15 @@
                     </template>
                 </transition>
                     <input type="hidden" name="account_type" :value="accounttype" />
-                    <div class="form-group{{ $errors->has('password') ? ' has-error' : '' }}">
+                    <div class="form-group{{ $errors->has('passwordSign') ? ' has-error' : '' }}">
                         <label for="password" class="col-md-4 control-label">密码</label>
 
                         <div class="col-md-6">
-                            <input id="password" type="password" class="form-control" name="password" required>
+                            <input id="password" type="password" class="form-control" name="passwordSign" required>
 
-                            @if ($errors->has('password'))
+                            @if ($errors->has('passwordSign'))
                                 <span class="help-block">
-                                    <strong>{{ $errors->first('password') }}</strong>
+                                    <strong>{{ $errors->first('passwordSign') }}</strong>
                                 </span>
                             @endif
                         </div>
@@ -173,19 +173,19 @@
                     this.sendCode=true
                 }else{
                     this.sendCode=false
+                    alert('请输入手机号');
                     return false;   
                 }
                 var el = event.currentTarget
-                    // this.isSend = false
                 if (this.isSend) { 
-
                     axios.post('VerificationCodes', {
                           phone:this.phone
                     })
                     .then(function (response) {
                         that.isSend =false;
                         const TIME_COUNT = 60
-                        that.count = TIME_COUNT;    
+                        that.count = TIME_COUNT;  
+                        that.sendCode=true;  
                         that.timer = setInterval(() => {    
                             if (that.count > 0 && that.count <= TIME_COUNT) {  
 
@@ -216,13 +216,21 @@
     <script type="text/javascript">
         $('#qh').trigger('click');
     </script>
-@elseif($errors->has('account'))
+@elseif($errors->has('accountSign'))
     <script type="text/javascript">
         $('#qh').trigger('click');
     </script>
-@elseif($errors->has('password'))
+@elseif($errors->has('passwordSign'))
     <script type="text/javascript">
         $('#qh').trigger('click');
+    </script>
+@elseif( $errors->has('account'))
+    <script type="text/javascript">
+        $('#dl').trigger('click');
+    </script>
+@elseif($errors->has('password'))
+    <script type="text/javascript">
+        $('#dl').trigger('click');
     </script>
 @elseif($errors->has('code'))
     <script type="text/javascript">

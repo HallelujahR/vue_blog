@@ -29,7 +29,7 @@
                             <label for="password" class="col-md-4 control-label">密码</label>
 
                             <div class="col-md-6">
-                                <input type="password" class="form-control" name="password" required>
+                                <input  type="password" class="form-control" name="password" required>
 
                                 @if ($errors->has('password'))
                                     <span class="help-block">
@@ -68,10 +68,3 @@
   </div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
 
-@section('js')
-<script type="text/javascript">
-    
-</script>
-
-
-@endsection

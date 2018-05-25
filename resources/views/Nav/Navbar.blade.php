@@ -65,7 +65,7 @@
                     @else
                         <ul class="nav navbar-nav navbar-right" id="personLink" > 
                             <li><a href="#" data-toggle="modal" data-target="#myModal"  id="qh" ><span class="glyphicon glyphicon-user"></span> 注册</a></li> 
-                            <li><a href="#" data-toggle="modal" data-target="#myModal2" ><span class="glyphicon glyphicon-log-in"></span> 登录</a></li> 
+                            <li><a href="#" data-toggle="modal" data-target="#myModal2" id="dl"><span class="glyphicon glyphicon-log-in"></span> 登录</a></li> 
                         </ul>
                     @endif
                 </div>

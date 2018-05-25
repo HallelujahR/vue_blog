@@ -17,7 +17,6 @@ Route::get('/', function () {
 
 Route::get('/article','ArticleController@Index');
 Route::get('/article/test','ArticleController@test');
-
 Route::get('/test/{phone}','ArticleController@send');
 Auth::routes();
 
