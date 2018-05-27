@@ -39,20 +39,24 @@
                         <ul class="nav navbar-nav navbar-right" id="personLink">
                         
                             <transition-group name="slide-fade">
-                                <li  v-for="(item, index) in items"  v-if="show" class="personLi" :key="index" >
-                                    <a class="personA" :href="item.link">
-                                        <span :class="item.class"></span>
-                                        {{item.message}}
+                                <li   v-if="show" class="personLi" key="1" >
+                                    <a class="personA" href="#" data-toggle="modal" data-target="#Release" >
+                                        <span class="glyphicon glyphicon-pencil" ></span>
+                                        发布
                                     </a>
                                 </li>
-
+                                <li  v-if="show" class="personLi" key="2" >
+                                    <a class="personA" href="/">
+                                        <span class="glyphicon glyphicon-cog"></span>
+                                        设置
+                                    </a>
+                                </li>
                                 <li  v-if="show" class="personLi" key="3" >
                                     <a class="personA" href="#" @click="out" id="out">
                                         <span class="glyphicon glyphicon-off"></span>
                                         登出
                                     </a>
                                 </li>
-
                             </transition-group>
                             <li id="person" @click="show = !show">
                                 <span class="glyphicon glyphicon-plus"></span>
@@ -76,5 +80,6 @@
 
 <?php echo $__env->make('Nav.Signup', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
 <?php echo $__env->make('Nav.Login', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
+<?php echo $__env->make('Release.Release', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
 
 

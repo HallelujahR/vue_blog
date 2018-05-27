@@ -40,6 +40,7 @@
         <div id="app">
             <div class="main">
                 @yield('content')
+                <div id="app"></div>
             </div>
         </div>
 

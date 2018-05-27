@@ -93,7 +93,7 @@
                         <label for="password-confirm" class="col-md-4 control-label">确认密码</label>
 
                         <div class="col-md-6">
-                            <input id="password-confirm" type="password" class="form-control" name="password_confirmation" required>
+                            <input id="passwordSign-confirm" type="password" class="form-control" name="passwordSign_confirmation" required>
                         </div>
                     </div>
 
@@ -119,10 +119,7 @@
     var  personLink = new Vue({
       el: '#nav',
       data: {
-        items: [
-          {class:'glyphicon glyphicon-pencil',message: '发布',link:'/' },
-          {class:'glyphicon glyphicon-cog',message: '设置',link:'/' },
-        ],
+        
         show:false,
 
       },

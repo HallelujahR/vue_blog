@@ -52,8 +52,9 @@ class RegisterController extends Controller
             return Validator::make($data, [
                 'name' => 'required|string|max:100|unique:users',
                 'accountSign' => ['required','string','max:32',function($attribute,$value,$fail){
-                    if(User::where('account',$value)->first()){
-                        return $fail($attribute.'is wrong');
+                    if(User::where('account',$value)->get()){
+                        dd(User::where('account',$value)->get());
+                        return $fail($attribute.'is exists');
                     };
                 }],
                 'passwordSign' => 'required|string|min:6|confirmed',
@@ -63,7 +64,7 @@ class RegisterController extends Controller
                 return Validator::make($data, [
                     'name' => 'required|string|max:100|unique:users',
                     'accountSign' => ['required','string','max:20','regex:/^1[34578]{1}\d{9}$/',function($attribute,$value,$fail){
-                        if(User::where('account',$value)->first()){
+                        if(User::where('accountSign',$value)->get()){
                                 return $fail($attribute.'is wrong');
                             };
                         }],
@@ -89,9 +90,9 @@ class RegisterController extends Controller
     {   
         return User::create([
             'name' => $data['name'],
-            'account' => $data['account'],
+            'account' => $data['accountSign'],
             'account_type'=>$data['account_type'],
-            'password' => bcrypt($data['password']),
+            'password' => bcrypt($data['passwordSign']),
         ]);
     }
 }

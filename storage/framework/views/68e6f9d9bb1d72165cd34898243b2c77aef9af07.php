@@ -40,6 +40,7 @@
         <div id="app">
             <div class="main">
                 <?php echo $__env->yieldContent('content'); ?>
+                <div id="app"></div>
             </div>
         </div>
 
