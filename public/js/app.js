@@ -992,15 +992,13 @@ window.Vue = __webpack_require__(35);
  * or customize the JavaScript scaffolding to fit your unique needs.
  */
 
+//引入发布文章、问题组件
 
-
-/* harmony default export */ __webpack_exports__["default"] = ({
-  components: {
-    Reles: Reles
-  }
-});
-new Vue({
-  el: '#Release'
+//组件引用
+var release = new Vue({
+  el: '#re',
+  components: { Release: __WEBPACK_IMPORTED_MODULE_1__components_Release_vue___default.a },
+  template: '<Release/>'
 });
 
 /***/ }),
@@ -45901,9 +45899,29 @@ var render = function() {
   var _vm = this
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
-  return _c("div", [_vm._v("\n\t123asdfasdf\n")])
+  return _vm._m(0)
 }
-var staticRenderFns = []
+var staticRenderFns = [
+  function() {
+    var _vm = this
+    var _h = _vm.$createElement
+    var _c = _vm._self._c || _h
+    return _c("div", [
+      _c("form", { staticClass: "form-inline" }, [
+        _c("div", { staticClass: "form-group", attrs: { id: "titleDiv" } }, [
+          _c("input", {
+            attrs: {
+              id: "title",
+              type: "text",
+              autofocus: "",
+              placeholder: "输入文章的标题"
+            }
+          })
+        ])
+      ])
+    ])
+  }
+]
 render._withStripped = true
 module.exports = { render: render, staticRenderFns: staticRenderFns }
 if (false) {

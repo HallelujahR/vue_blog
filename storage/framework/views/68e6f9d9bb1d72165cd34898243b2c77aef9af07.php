@@ -8,12 +8,13 @@
         <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
         <link rel="stylesheet" href="<?php echo e(mix('css/app.css')); ?>">
         <link rel="stylesheet" href="<?php echo e(asset('css/home.css')); ?>">
-
+        <link rel="stylesheet" href="<?php echo e(asset('css/release.css')); ?>">
         <title>Laravel</title>
 
 
         <!-- Styles -->
         <style>
+           <?php echo $__env->yieldContent('css'); ?>
            @media  only screen and (max-width: 1024px){ 
                 .main-header{
                     background:url(<?php echo e(asset('image/backgroundSmall2.jpg')); ?>);
@@ -26,11 +27,13 @@
             @media  only screen and (min-width: 1024px){
                 .main-header{
                     background-image: url(<?php echo e(asset('image/background2.jpg')); ?>);
-                    background-position:-50px -350px;
+                    background-position:0px -350px;
+                    background-size:cover;
                     background-repeat:no-repeat;
                     height:240px;
                 }
             }
+
         </style>
     </head>
     <body>

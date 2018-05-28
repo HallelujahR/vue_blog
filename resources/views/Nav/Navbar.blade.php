@@ -77,8 +77,11 @@
     </div>
 </nav>
 
+
+
+@include('Release.Release')
 @include('Nav.Signup')
 @include('Nav.Login')
-@include('Release.Release')
+
 
 

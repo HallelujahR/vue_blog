@@ -1,0 +1,20 @@
+#fb{
+    font-size:18px !important;
+    margin-right:10px;
+
+}
+#title{
+	border:none;
+	padding:0px;
+	border-top-color:transform;
+	outline: none;
+	box-shadow：none;
+	height:50px;
+	font-size:25px;
+	border:1px solid red;
+	width:100%;
+	font-weight:bold;
+}
+#titleDiv{
+	width:100%;
+}

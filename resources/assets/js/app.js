@@ -16,13 +16,11 @@ window.Vue = require('vue');
  */
 
 
+//引入发布文章、问题组件
 import Release from './components/Release.vue'
-
-export default {
-  components:{
-  	Reles
-  },
-}
-new Vue({
-	el:'#Release',
+//组件引用
+const release = new Vue({
+	el:'#re',
+	components:{ Release},
+	template:'<Release/>'
 })
