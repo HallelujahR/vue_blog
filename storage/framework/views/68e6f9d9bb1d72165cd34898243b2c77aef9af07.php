@@ -9,6 +9,7 @@
         <link rel="stylesheet" href="<?php echo e(mix('css/app.css')); ?>">
         <link rel="stylesheet" href="<?php echo e(asset('css/home.css')); ?>">
         <link rel="stylesheet" href="<?php echo e(asset('css/release.css')); ?>">
+        <link rel="stylesheet" href="<?php echo e(asset('font-awesome-4.7.0/css/font-awesome.min.css')); ?>">
         <title>Laravel</title>
 
 
@@ -48,8 +49,6 @@
         </div>
 
     </body>
-
 <script type="text/javascript" src="<?php echo e(mix('js/app.js')); ?>"></script>
 <?php echo $__env->yieldContent('js'); ?>
-
 </html>

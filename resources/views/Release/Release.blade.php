@@ -1,5 +1,5 @@
 <!-- Modal -->
-<div class="modal fade" id="Release" tabindex="-1" style="display:block;opacity:1;z-index:1000" role="dialog" aria-labelledby="gridSystemModalLabel">
+<div class="modal fade" id="Release" tabindex="-1" role="dialog" aria-labelledby="gridSystemModalLabel">
   <div class="modal-dialog" role="document">
     <div class="modal-content">
       <div class="modal-header">
@@ -21,3 +21,8 @@
     </div><!-- /.modal-content -->
   </div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
+@section('js')
+<script type="text/javascript">
+
+</script>
+@endsection
