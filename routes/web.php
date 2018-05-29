@@ -17,6 +17,8 @@ Route::get('/', function () {
 
 Route::get('/article','ArticleController@Index');
 Route::get('/article/test','ArticleController@test');
+Route::post('/article/createArticle','ArticleController@createArticle');
+
 Route::get('/test/{phone}','ArticleController@send');
 Auth::routes();
 
@@ -29,3 +31,4 @@ Route::group([
 });
 
 
+Route::post('/getTopic','TopicController@getTopic');

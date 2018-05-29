@@ -16,5 +16,8 @@ class ArticleController extends Controller
     	return 'ok';
     }
 
+    public function createArticle(Request $request){
+    	dump($request);
+    }
 }
 

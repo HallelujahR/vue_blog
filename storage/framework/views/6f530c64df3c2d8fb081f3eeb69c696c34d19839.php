@@ -63,7 +63,7 @@
                             </li>
                             <li>
                                 <a id="headA" href="">
-                                    <img src="<?php echo e(asset('image/testhead.jpg')); ?>" id="headImg" class="img-circle">
+                                    <img src="<?php echo e(asset('image/testhead.jpg')); ?>" id="headImg" userid="<?php echo e(Auth::id()); ?>" class="img-circle">
                                 </a>
                             </li>
                         </ul> 

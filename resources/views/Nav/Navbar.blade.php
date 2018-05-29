@@ -62,7 +62,7 @@
                             </li>
                             <li>
                                 <a id="headA" href="">
-                                    <img src="{{asset('image/testhead.jpg')}}" id="headImg" class="img-circle">
+                                    <img src="{{asset('image/testhead.jpg')}}" id="headImg" userid="{{Auth::id()}}" class="img-circle">
                                 </a>
                             </li>
                         </ul> 
