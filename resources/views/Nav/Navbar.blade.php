@@ -39,7 +39,7 @@
                         
                             <transition-group name="slide-fade">
                                 <li   v-if="show" class="personLi" key="1" >
-                                    <a class="personA" href="#" data-toggle="modal" data-target="#Release" >
+                                    <a class="personA" id="rel" href="#" data-toggle="modal" data-target="#Release" >
                                         <span class="glyphicon glyphicon-pencil" ></span>
                                         发布
                                     </a>
@@ -78,8 +78,8 @@
 </nav>
 
 @include('Nav.Signup')
-@include('Nav.Login')
 @include('Release.Release')
+@include('Nav.Login')
 
 
 

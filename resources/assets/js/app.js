@@ -19,10 +19,24 @@ window.Vue = require('vue');
 
 
 //引入发布文章、问题组件
-import Release from './components/Release.vue'
-//组件引用
-const release = new Vue({
-	el:'#re',
-	components:{ Release},
-	template:'<Release/>'
-})
+import Release from './components/Release.vue';
+import Question from './components/Question.vue';
+Vue.component('Release',Release);
+Vue.component('Question',Question);
+new Vue({
+	el:'#Release',
+	data:{
+		show:true,
+	},
+	methods:{
+		test:function(){
+			this.show = true;
+		},
+		test1:function(){
+			this.show = false;
+		}
+	},
+
+
+
+});

@@ -5655,6 +5655,8 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_vue_router__ = __webpack_require__(36);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__components_Release_vue__ = __webpack_require__(40);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__components_Release_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_1__components_Release_vue__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__components_Question_vue__ = __webpack_require__(71);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__components_Question_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2__components_Question_vue__);
 
 /**
  * First we will load all of this project's JavaScript dependencies which
@@ -5676,11 +5678,23 @@ window.Vue = __webpack_require__(37);
 
 //引入发布文章、问题组件
 
-//组件引用
-var release = new Vue({
-  el: '#re',
-  components: { Release: __WEBPACK_IMPORTED_MODULE_1__components_Release_vue___default.a },
-  template: '<Release/>'
+
+Vue.component('Release', __WEBPACK_IMPORTED_MODULE_1__components_Release_vue___default.a);
+Vue.component('Question', __WEBPACK_IMPORTED_MODULE_2__components_Question_vue___default.a);
+new Vue({
+	el: '#Release',
+	data: {
+		show: true
+	},
+	methods: {
+		test: function test() {
+			this.show = true;
+		},
+		test1: function test1() {
+			this.show = false;
+		}
+	}
+
 });
 
 /***/ }),
@@ -50624,45 +50638,6 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //
 //
 
-//引入富文本编辑器
-window.onload = function () {
-	var E = __webpack_require__(9);
-	var editor = new E('#editorOne', '#editorTwo');
-	//配置菜单
-	editor.customConfig.menus = ['head', // 标题
-	'bold', // 粗体
-	'fontSize', // 字号
-	'fontName', // 字体
-	'italic', // 斜体
-	'underline', // 下划线
-	'strikeThrough', // 删除线
-	'link', // 插入链接
-	'image', // 插入图片
-
-	'quote', // 引用
-	'justify', // 对齐方式
-	'list', // 列表
-	'foreColor', // 文字颜色
-	'code', // 插入代码
-	'undo', // 撤销
-	'redo' // 重复
-	];
-	editor.customConfig.showLinkImg = false;
-	editor.customConfig.uploadImgShowBase64 = true;
-	var text1 = document.getElementById('text1');
-	editor.customConfig.onchange = function (html) {
-		// 监控变化，同步更新到 textarea
-
-		text1.value = html;
-	};
-	editor.create();
-	editor.txt.html('<p>在此处输入文章内容</p>');
-	document.getElementById('getHtml').onclick = function () {
-		editor.txt.html('');
-	};
-	console.log(document.getElementById('re'));
-};
-
 /* harmony default export */ __webpack_exports__["default"] = ({
 	data: function data() {
 		return {
@@ -50680,7 +50655,10 @@ window.onload = function () {
 				html: '',
 				topicid: []
 				// userid:'',
-			}
+			},
+
+			editor: '',
+			text1: ''
 		};
 	},
 	mounted: function mounted() {
@@ -50727,8 +50705,10 @@ window.onload = function () {
 					self.article.title = '';
 					self.selectTopic = [];
 					self.list = [];
+					self.editor.txt.html('');
 					self.query = '';
-					location.reload();
+					alert('发布成功');
+					$('#rel').trigger('click');
 				} else {
 					alert('2');
 				}
@@ -50736,10 +50716,41 @@ window.onload = function () {
 				console.log(error);
 			});
 		},
-		getHtml: function getHtml() {},
 		init: function init() {
+			//引入富文本编辑器
+			var self = this;
 			// console.log(document.getElementById('headImage'));
-			console.log(document.getElementById('re'));
+			this.editor = new E('#editorOne', '#editorTwo');
+
+			//配置菜单
+			this.editor.customConfig.menus = ['head', // 标题
+			'bold', // 粗体
+			'fontSize', // 字号
+			'fontName', // 字体
+			'italic', // 斜体
+			'underline', // 下划线
+			'strikeThrough', // 删除线
+			'link', // 插入链接
+			'image', // 插入图片
+
+			'quote', // 引用
+			'justify', // 对齐方式
+			'list', // 列表
+			'foreColor', // 文字颜色
+			'code', // 插入代码
+			'undo', // 撤销
+			'redo' // 重复
+			];
+			this.editor.customConfig.showLinkImg = false;
+			this.editor.customConfig.uploadImgShowBase64 = true;
+			this.text1 = document.getElementById('text1');
+			this.editor.customConfig.onchange = function (html) {
+				// 监控变化，同步更新到 textarea
+
+				self.text1.value = html;
+			};
+			this.editor.create();
+			this.editor.txt.html('<p>在此处输入文章内容</p>');
 		},
 		selectIs: function selectIs(e, topicid, topic) {
 
@@ -51130,10 +51141,7 @@ var staticRenderFns = [
     return _c("div", { staticClass: "form-group" }, [
       _c(
         "button",
-        {
-          staticClass: "btn btn-success",
-          attrs: { type: "submit", id: "getHtml" }
-        },
+        { staticClass: "btn btn-success", attrs: { type: "submit" } },
         [_vm._v("发布文章")]
       )
     ])
@@ -55961,6 +55969,88 @@ var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_RESULT__;/*! VelocityJS
  Velocity, however, doesn't make this distinction. Thus, converting to or from the % unit with these subproperties
  will produce an inaccurate conversion value. The same issue exists with the cx/cy attributes of SVG circles and ellipses. */
 
+
+/***/ }),
+/* 71 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var disposed = false
+var normalizeComponent = __webpack_require__(41)
+/* script */
+var __vue_script__ = __webpack_require__(73)
+/* template */
+var __vue_template__ = __webpack_require__(72)
+/* template functional */
+var __vue_template_functional__ = false
+/* styles */
+var __vue_styles__ = null
+/* scopeId */
+var __vue_scopeId__ = null
+/* moduleIdentifier (server only) */
+var __vue_module_identifier__ = null
+var Component = normalizeComponent(
+  __vue_script__,
+  __vue_template__,
+  __vue_template_functional__,
+  __vue_styles__,
+  __vue_scopeId__,
+  __vue_module_identifier__
+)
+Component.options.__file = "resources\\assets\\js\\components\\Question.vue"
+
+/* hot reload */
+if (false) {(function () {
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), false)
+  if (!hotAPI.compatible) return
+  module.hot.accept()
+  if (!module.hot.data) {
+    hotAPI.createRecord("data-v-2b340146", Component.options)
+  } else {
+    hotAPI.reload("data-v-2b340146", Component.options)
+  }
+  module.hot.dispose(function (data) {
+    disposed = true
+  })
+})()}
+
+module.exports = Component.exports
+
+
+/***/ }),
+/* 72 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var render = function() {
+  var _vm = this
+  var _h = _vm.$createElement
+  var _c = _vm._self._c || _h
+  return _c("div", [_vm._v("\n\t12\n")])
+}
+var staticRenderFns = []
+render._withStripped = true
+module.exports = { render: render, staticRenderFns: staticRenderFns }
+if (false) {
+  module.hot.accept()
+  if (module.hot.data) {
+    require("vue-hot-reload-api")      .rerender("data-v-2b340146", module.exports)
+  }
+}
+
+/***/ }),
+/* 73 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+//
+//
+//
+//
+//
+//
+
+/* harmony default export */ __webpack_exports__["default"] = ({});
 
 /***/ })
 /******/ ]);

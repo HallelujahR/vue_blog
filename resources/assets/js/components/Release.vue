@@ -67,53 +67,12 @@
 				 <textarea id="text1" style="display:none" name="html"></textarea>
 			</div>
 			<div class="form-group">
-				<button type="submit"  id="getHtml" class="btn btn-success">发布文章</button>
+				<button type="submit" class="btn btn-success">发布文章</button>
 			</div>
 		</form>
 	</div>
 </template>
 <script type="text/javascript">
-//引入富文本编辑器
-window.onload=function(){
-		var E = require('wangeditor');
-		const editor = new E('#editorOne','#editorTwo');
-		//配置菜单
-		 editor.customConfig.menus = [
-	 	'head',  // 标题
-	    'bold',  // 粗体
-	    'fontSize',  // 字号
-	    'fontName',  // 字体
-	    'italic',  // 斜体
-	    'underline',  // 下划线
-	    'strikeThrough',  // 删除线
-	    'link',  // 插入链接
-	    'image',  // 插入图片
-	    
-	    'quote',  // 引用
-	    'justify',  // 对齐方式
-	    'list',  // 列表
-	    'foreColor',  // 文字颜色
-	    'code',  // 插入代码
-	    'undo',  // 撤销
-	    'redo'  // 重复
-	    ]
-	    editor.customConfig.showLinkImg = false
-	    editor.customConfig.uploadImgShowBase64 = true;
-	    var text1 = document.getElementById('text1')
- 		editor.customConfig.onchange = function (html) {
-            // 监控变化，同步更新到 textarea
-
-            text1.value=html;
-        }
-		editor.create();
-		editor.txt.html('<p>在此处输入文章内容</p>');
-		document.getElementById('getHtml').onclick = function(){
-			editor.txt.html('');
-		}
-		console.log(document.getElementById('re'));
-	}
-
-
 	export default {
     data () {
         return {
@@ -131,12 +90,16 @@ window.onload=function(){
 		    	html:'',
 		    	topicid:[],
 		    	// userid:'',
-		    }
+		    },
+
+		    editor:'',
+		    text1:'',
         }
 
     },
 	mounted(){
 	    this.init()
+	     
 	},
     computed: {
 	    computedList: function () {
@@ -179,8 +142,10 @@ window.onload=function(){
 			  		self.article.title='';
 			  		self.selectTopic=[];
 			  		self.list=[];
+			  		self.editor.txt.html('');
 			  		self.query = '';
-			  		location.reload()
+			  		alert('发布成功');
+			  		$('#rel').trigger('click');
 				}else{
 					alert('2');
 				}
@@ -189,11 +154,43 @@ window.onload=function(){
 			    console.log(error);
 			});
 		},
-		getHtml:function(){
-		},
 		init:function(){
+			//引入富文本编辑器
+			let self = this;
 			// console.log(document.getElementById('headImage'));
-			console.log(document.getElementById('re'));
+			this.editor = new E('#editorOne','#editorTwo');
+
+				//配置菜单
+			this.editor.customConfig.menus = [
+		 	'head',  // 标题
+		    'bold',  // 粗体
+		    'fontSize',  // 字号
+		    'fontName',  // 字体
+		    'italic',  // 斜体
+		    'underline',  // 下划线
+		    'strikeThrough',  // 删除线
+		    'link',  // 插入链接
+		    'image',  // 插入图片
+		    
+		    'quote',  // 引用
+		    'justify',  // 对齐方式
+		    'list',  // 列表
+		    'foreColor',  // 文字颜色
+		    'code',  // 插入代码
+		    'undo',  // 撤销
+		    'redo'  // 重复
+		    ]
+		    this.editor.customConfig.showLinkImg = false
+		    this.editor.customConfig.uploadImgShowBase64 = true;
+		    this.text1 = document.getElementById('text1')
+	 		this.editor.customConfig.onchange = function (html) {
+	            // 监控变化，同步更新到 textarea
+
+	            self.text1.value=html;
+	        }
+			this.editor.create();
+			this.editor.txt.html('<p>在此处输入文章内容</p>');
+
 		},
 		selectIs:function(e,topicid,topic){
 

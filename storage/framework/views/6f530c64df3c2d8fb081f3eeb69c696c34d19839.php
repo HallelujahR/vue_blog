@@ -40,7 +40,7 @@
                         
                             <transition-group name="slide-fade">
                                 <li   v-if="show" class="personLi" key="1" >
-                                    <a class="personA" href="#" data-toggle="modal" data-target="#Release" >
+                                    <a class="personA" id="rel" href="#" data-toggle="modal" data-target="#Release" >
                                         <span class="glyphicon glyphicon-pencil" ></span>
                                         发布
                                     </a>
@@ -79,8 +79,8 @@
 </nav>
 
 <?php echo $__env->make('Nav.Signup', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
-<?php echo $__env->make('Nav.Login', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
 <?php echo $__env->make('Release.Release', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
+<?php echo $__env->make('Nav.Login', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
 
 
 

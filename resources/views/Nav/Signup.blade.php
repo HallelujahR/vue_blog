@@ -129,7 +129,7 @@
         },
 
       }
-    })
+    });
 
 
     const myModal = new Vue({  
@@ -206,8 +206,10 @@
                 }  
             }  
         }, 
-    })     
+    });     
 </script>
+
+@endsection
 
 @if( $errors->first('name'))
     <script type="text/javascript">
@@ -234,5 +236,3 @@
         $('#qh').trigger('click');
     </script>
 @endif
-
-@endsection
