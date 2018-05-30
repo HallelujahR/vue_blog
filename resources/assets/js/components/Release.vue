@@ -1,7 +1,6 @@
 <template>
 	<div>
-		<form class="form-inline" method="post" action="/article/createArticle">
-			<input type="hidden" name="_token" value="<?php echo csrf_token(); ?>">
+		<form class="form-inline" @submit.prevent="submit">
 			<input type="file" @change="picChange" ref="inputer" name="headpic" id="headpic" />
 			<div class="form-group" id="headPic"  v-if="showUp" >
 				<div @click="pic">
@@ -21,45 +20,45 @@
 			</div>
 
 			<div class="form-group" id="titleDiv">
-				<input id="title" type="text" autofocus="autofocus" placeholder="输入文章的标题" maxlength="20" required>
+				<input id="title" type="text" autofocus="autofocus" placeholder="输入文章的标题" maxlength="20" v-model="article.title" autocomplete="off" required>
 			</div>
-
+			<div id="staggered-list-demo">
+			  <transition-group
+			    name="staggered-fade"
+			    tag="ul"
+			    v-bind:css="false"
+			    v-on:before-enter="beforeEnter"
+			    v-on:enter="enter"
+			    v-on:leave="leave"
+			    id="list-ul"
+			    class="list-group"
+			  >
+			    <li
+			      v-for="(item, index) in computedList"
+			      v-bind:key="item.topic"
+			      v-bind:data-index="index"
+			      class="topic-li "
+			      :topicid="item.id"
+			      v-on:click="selectIs($event,item.id,item.topic)"
+			    >{{ item.topic }}</li>
+			  </transition-group>
+			</div>
 			<div class="form-group" id="topic">
-				<div>
-					<i class="fa fa-search" aria-hidden="true"></i><input type="text" name="topic" id="searchTopic" v-model="query" v-on:input ="inputFunc" placeholder="选择文章标签,最多三个" />
-					<ul id="selectul" >
+					
+					<i class="fa fa-search" aria-hidden="true"></i><input type="text" name="topic" id="searchTopic" v-model="query" v-on:input ="inputFunc" placeholder="选择文章标签,最多三个" autocomplete="off" />
+					<ul id="selectul"  >
 						<li class="selectTopic"  v-for="(item,index) in selectTopic" style="float:left">
 							{{item.topic}}
-							<input type="hidden" name="topicid" :value="item.id">
+							<input type="hidden" name="topicid" v-model="article.topicid">
 							<i class="fa fa-times deleteTopic" @click="deleteTopic(index)" aria-hidden="true"></i>
 						</li>
 						
 					</ul>
 
-				</div>
-					<div id="staggered-list-demo">
-					  <transition-group
-					    name="staggered-fade"
-					    tag="ul"
-					    v-bind:css="false"
-					    v-on:before-enter="beforeEnter"
-					    v-on:enter="enter"
-					    v-on:leave="leave"
-					    id="list-ul"
-					  >
-					    <li
-					      v-for="(item, index) in computedList"
-					      v-bind:key="item.topic"
-					      v-bind:data-index="index"
-					      class="topic-li"
-					      :topicid="item.id"
-					      v-on:click="selectIs($event,item.id,item.topic)"
-					    >{{ item.topic }}</li>
-					  </transition-group>
-					</div>
 			</div>
 
-			<div class="form-group" >
+
+			<div class="form-group">
 				<div id="editorOneDiv">
 					<div id="editorOne" ></div>
 				</div>
@@ -100,12 +99,18 @@ window.onload=function(){
 	    ]
 	    editor.customConfig.showLinkImg = false
 	    editor.customConfig.uploadImgShowBase64 = true;
+	    var text1 = document.getElementById('text1')
+ 		editor.customConfig.onchange = function (html) {
+            // 监控变化，同步更新到 textarea
+
+            text1.value=html;
+        }
 		editor.create();
 		editor.txt.html('<p>在此处输入文章内容</p>');
-
 		document.getElementById('getHtml').onclick = function(){
-			document.getElementById('text1').val(editor.txt.html());
+			editor.txt.html('');
 		}
+		console.log(document.getElementById('re'));
 	}
 
 
@@ -119,7 +124,14 @@ window.onload=function(){
             query: '',
 		    list: [],
 		    selectTopic:[],//这里是选中了哪个话题
-		    userid:'',
+
+		    article:{
+		    	title:'',
+		    	pic:'',
+		    	html:'',
+		    	topicid:[],
+		    	// userid:'',
+		    }
         }
 
     },
@@ -132,14 +144,56 @@ window.onload=function(){
 	      return this.list.filter(function (item) {
 	        return item.topic.toLowerCase().indexOf(vm.query.toLowerCase()) !== -1
 	      })
-	    }
+	    },
 	  },
 	methods:{
+		submit:function(){
+
+			this.article.html = document.getElementById('text1').value;
+			//判断是否文本输入			
+			if(this.article.html ==''){
+				alert('请编写文章');
+				return false;
+			}
+			//判断是标签是否选择
+			if(this.article.topicid.length == 0){
+				alert('请选择标签');
+				return false;
+			}
+			this.article.pic = this.dataUrl;
+			let self = this;
+			axios.post('/article/createArticle', {
+				article:self.article
+			})
+			.then(function (response) {
+				//成功清楚表单内的数据
+				if(response['data'] == '1'){
+					var file = document.getElementById('headpic');
+			  		self.dataUrl=null;
+			  		file.value='';
+			  		self.show=false;
+			  		self.showUp=true;
+			  		self.article.html ='';
+			  		self.article.topicid=[];
+			  		self.article.pic = '';
+			  		self.article.title='';
+			  		self.selectTopic=[];
+			  		self.list=[];
+			  		self.query = '';
+			  		location.reload()
+				}else{
+					alert('2');
+				}
+			})
+			.catch(function (error) {
+			    console.log(error);
+			});
+		},
 		getHtml:function(){
-			alert(editor.txt.html());
 		},
 		init:function(){
-			console.log(document.getElementById('headImage'));
+			// console.log(document.getElementById('headImage'));
+			console.log(document.getElementById('re'));
 		},
 		selectIs:function(e,topicid,topic){
 
@@ -152,6 +206,7 @@ window.onload=function(){
 			//最多选择三个
 			if(this.selectTopic.length <3){
 				this.selectTopic.push({id:topicid,topic:topic});
+				this.article.topicid.push(topicid);
 			}else{
 				return false;
 			}
@@ -159,13 +214,16 @@ window.onload=function(){
 	    },
 	    deleteTopic:function(index){
 	    	this.selectTopic.splice(index,1);
+	    	this.article.topicid.splice(index,1);
 	    	// alert(index);
 	    },
 	  	pic:function(){
 	  		document.getElementById('headpic').click();
 	  	},
 	  	clearPic:function(){
+	  		alert(1);
 	  		var file = document.getElementById('headpic');
+	  		this.dataUrl=null;
 	  		file.value='';
 	  		this.show=false;
 	  		this.showUp=true;
@@ -195,7 +253,8 @@ window.onload=function(){
 	  	picChange:function(e){
 	  		let inputDOM = this.$refs.inputer;
 	  		this.file    = inputDOM.files[0];
-	  		console.log(this.file);
+	  		this.article.pic = this.file;
+	  		console.log(this.article.pic);
 	  		 let size = Math.floor(this.file.size / 1024);
 	        if (size > 3000) {
 	            // 这里可以加个文件大小控制
@@ -218,15 +277,12 @@ window.onload=function(){
 	        this.imgPreview(this.file);
 	  	},
 	  	getTopic:function(){
-	  		console.log('topic');
 	  	},
 	  	beforeEnter: function (el) {
-	  		console.log('before');
 		  el.style.opacity = 0
 		  el.style.height = 0
 		},
 	    enter: function (el, done) {
-	    	console.log('enter');
 	      var delay = el.dataset.index * 150
 	      setTimeout(function () {
 	        Velocity(
@@ -237,7 +293,6 @@ window.onload=function(){
 	      }, delay)
 	    },
 	    leave: function (el, done) {
-	    	console.log('leave');
 	      var delay = el.dataset.index * 150
 	      setTimeout(function () {
 	        Velocity(
@@ -253,14 +308,12 @@ window.onload=function(){
 
 			   	var timer = setInterval(function(){
 				    for(var i=0;i<time;i++){
-				    	console.log(i);
 				    	if(i==1){
 					   		const TOPIC = document.getElementById('searchTopic').value;
 							axios.post('/getTopic', {
 							      topic: TOPIC
 							  })
 							  .then(function (response) {
-							  	console.log(response.data);
 							    if(response.data != []){
 							  		self.list = response.data;
 							    }else{
@@ -270,7 +323,6 @@ window.onload=function(){
 							  .catch(function (response) {
 							    console.log(response);
 							  });
-							  console.log('test');
 				    		clearInterval(timer);
 				    	}
 				    }

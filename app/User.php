@@ -43,4 +43,12 @@ class User extends Authenticatable
         }
         return redirect('/')->withInput($request->except('password'))->with('msg', '用户名或密码错误');
     }
+
+    public function article(){
+        return $this->hasMany('App\Article');
+    }
+
+    public function topic(){
+        return $this->hasMany('App\Topic');
+    }
 }

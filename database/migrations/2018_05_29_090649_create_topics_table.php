@@ -17,6 +17,7 @@ class CreateTopicsTable extends Migration
             $table->increments('id');
             $table->integer('uid');
             $table->string('topic')->unqiue();
+            $table->integer('article_count')->default(0);
             $table->timestamps();
         });
     }

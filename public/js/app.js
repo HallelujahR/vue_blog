@@ -50623,7 +50623,6 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //
 //
 //
-//
 
 //引入富文本编辑器
 window.onload = function () {
@@ -50650,12 +50649,18 @@ window.onload = function () {
 	];
 	editor.customConfig.showLinkImg = false;
 	editor.customConfig.uploadImgShowBase64 = true;
+	var text1 = document.getElementById('text1');
+	editor.customConfig.onchange = function (html) {
+		// 监控变化，同步更新到 textarea
+
+		text1.value = html;
+	};
 	editor.create();
 	editor.txt.html('<p>在此处输入文章内容</p>');
-
 	document.getElementById('getHtml').onclick = function () {
-		document.getElementById('text1').val(editor.txt.html());
+		editor.txt.html('');
 	};
+	console.log(document.getElementById('re'));
 };
 
 /* harmony default export */ __webpack_exports__["default"] = ({
@@ -50668,7 +50673,14 @@ window.onload = function () {
 			query: '',
 			list: [],
 			selectTopic: [], //这里是选中了哪个话题
-			userid: ''
+
+			article: {
+				title: '',
+				pic: '',
+				html: '',
+				topicid: []
+				// userid:'',
+			}
 		};
 	},
 	mounted: function mounted() {
@@ -50684,11 +50696,50 @@ window.onload = function () {
 		}
 	},
 	methods: {
-		getHtml: function getHtml() {
-			alert(editor.txt.html());
+		submit: function submit() {
+
+			this.article.html = document.getElementById('text1').value;
+			//判断是否文本输入			
+			if (this.article.html == '') {
+				alert('请编写文章');
+				return false;
+			}
+			//判断是标签是否选择
+			if (this.article.topicid.length == 0) {
+				alert('请选择标签');
+				return false;
+			}
+			this.article.pic = this.dataUrl;
+			var self = this;
+			axios.post('/article/createArticle', {
+				article: self.article
+			}).then(function (response) {
+				//成功清楚表单内的数据
+				if (response['data'] == '1') {
+					var file = document.getElementById('headpic');
+					self.dataUrl = null;
+					file.value = '';
+					self.show = false;
+					self.showUp = true;
+					self.article.html = '';
+					self.article.topicid = [];
+					self.article.pic = '';
+					self.article.title = '';
+					self.selectTopic = [];
+					self.list = [];
+					self.query = '';
+					location.reload();
+				} else {
+					alert('2');
+				}
+			}).catch(function (error) {
+				console.log(error);
+			});
 		},
+		getHtml: function getHtml() {},
 		init: function init() {
-			console.log(document.getElementById('headImage'));
+			// console.log(document.getElementById('headImage'));
+			console.log(document.getElementById('re'));
 		},
 		selectIs: function selectIs(e, topicid, topic) {
 
@@ -50701,19 +50752,23 @@ window.onload = function () {
 			//最多选择三个
 			if (this.selectTopic.length < 3) {
 				this.selectTopic.push({ id: topicid, topic: topic });
+				this.article.topicid.push(topicid);
 			} else {
 				return false;
 			}
 		},
 		deleteTopic: function deleteTopic(index) {
 			this.selectTopic.splice(index, 1);
+			this.article.topicid.splice(index, 1);
 			// alert(index);
 		},
 		pic: function pic() {
 			document.getElementById('headpic').click();
 		},
 		clearPic: function clearPic() {
+			alert(1);
 			var file = document.getElementById('headpic');
+			this.dataUrl = null;
 			file.value = '';
 			this.show = false;
 			this.showUp = true;
@@ -50743,7 +50798,8 @@ window.onload = function () {
 		picChange: function picChange(e) {
 			var inputDOM = this.$refs.inputer;
 			this.file = inputDOM.files[0];
-			console.log(this.file);
+			this.article.pic = this.file;
+			console.log(this.article.pic);
 			var size = Math.floor(this.file.size / 1024);
 			if (size > 3000) {
 				// 这里可以加个文件大小控制
@@ -50765,23 +50821,18 @@ window.onload = function () {
 
 			this.imgPreview(this.file);
 		},
-		getTopic: function getTopic() {
-			console.log('topic');
-		},
+		getTopic: function getTopic() {},
 		beforeEnter: function beforeEnter(el) {
-			console.log('before');
 			el.style.opacity = 0;
 			el.style.height = 0;
 		},
 		enter: function enter(el, done) {
-			console.log('enter');
 			var delay = el.dataset.index * 150;
 			setTimeout(function () {
 				Velocity(el, { opacity: 1, height: '1.6em' }, { complete: done });
 			}, delay);
 		},
 		leave: function leave(el, done) {
-			console.log('leave');
 			var delay = el.dataset.index * 150;
 			setTimeout(function () {
 				Velocity(el, { opacity: 0, height: 0 }, { complete: done });
@@ -50793,13 +50844,11 @@ window.onload = function () {
 
 			var timer = setInterval(function () {
 				for (var i = 0; i < time; i++) {
-					console.log(i);
 					if (i == 1) {
 						var TOPIC = document.getElementById('searchTopic').value;
 						axios.post('/getTopic', {
 							topic: TOPIC
 						}).then(function (response) {
-							console.log(response.data);
 							if (response.data != []) {
 								self.list = response.data;
 							} else {
@@ -50808,7 +50857,6 @@ window.onload = function () {
 						}).catch(function (response) {
 							console.log(response);
 						});
-						console.log('test');
 						clearInterval(timer);
 					}
 				}
@@ -50831,17 +50879,14 @@ var render = function() {
       "form",
       {
         staticClass: "form-inline",
-        attrs: { method: "post", action: "/article/createArticle" }
+        on: {
+          submit: function($event) {
+            $event.preventDefault()
+            return _vm.submit($event)
+          }
+        }
       },
       [
-        _c("input", {
-          attrs: {
-            type: "hidden",
-            name: "_token",
-            value: "<?php echo csrf_token(); ?>"
-          }
-        }),
-        _vm._v(" "),
         _c("input", {
           ref: "inputer",
           attrs: { type: "file", name: "headpic", id: "headpic" },
@@ -50885,121 +50930,163 @@ var render = function() {
               ]
             ),
         _vm._v(" "),
-        _vm._m(1),
-        _vm._v(" "),
-        _c("div", { staticClass: "form-group", attrs: { id: "topic" } }, [
-          _c("div", [
-            _c("i", {
-              staticClass: "fa fa-search",
-              attrs: { "aria-hidden": "true" }
-            }),
-            _c("input", {
-              directives: [
-                {
-                  name: "model",
-                  rawName: "v-model",
-                  value: _vm.query,
-                  expression: "query"
-                }
-              ],
-              attrs: {
-                type: "text",
-                name: "topic",
-                id: "searchTopic",
-                placeholder: "选择文章标签,最多三个"
-              },
-              domProps: { value: _vm.query },
-              on: {
-                input: [
-                  function($event) {
-                    if ($event.target.composing) {
-                      return
-                    }
-                    _vm.query = $event.target.value
-                  },
-                  _vm.inputFunc
-                ]
+        _c("div", { staticClass: "form-group", attrs: { id: "titleDiv" } }, [
+          _c("input", {
+            directives: [
+              {
+                name: "model",
+                rawName: "v-model",
+                value: _vm.article.title,
+                expression: "article.title"
               }
-            }),
-            _vm._v(" "),
+            ],
+            attrs: {
+              id: "title",
+              type: "text",
+              autofocus: "autofocus",
+              placeholder: "输入文章的标题",
+              maxlength: "20",
+              autocomplete: "off",
+              required: ""
+            },
+            domProps: { value: _vm.article.title },
+            on: {
+              input: function($event) {
+                if ($event.target.composing) {
+                  return
+                }
+                _vm.$set(_vm.article, "title", $event.target.value)
+              }
+            }
+          })
+        ]),
+        _vm._v(" "),
+        _c(
+          "div",
+          { attrs: { id: "staggered-list-demo" } },
+          [
             _c(
-              "ul",
-              { attrs: { id: "selectul" } },
-              _vm._l(_vm.selectTopic, function(item, index) {
+              "transition-group",
+              {
+                staticClass: "list-group",
+                attrs: {
+                  name: "staggered-fade",
+                  tag: "ul",
+                  css: false,
+                  id: "list-ul"
+                },
+                on: {
+                  "before-enter": _vm.beforeEnter,
+                  enter: _vm.enter,
+                  leave: _vm.leave
+                }
+              },
+              _vm._l(_vm.computedList, function(item, index) {
                 return _c(
                   "li",
                   {
-                    staticClass: "selectTopic",
-                    staticStyle: { float: "left" }
-                  },
-                  [
-                    _vm._v(
-                      "\n\t\t\t\t\t\t" + _vm._s(item.topic) + "\n\t\t\t\t\t\t"
-                    ),
-                    _c("input", {
-                      attrs: { type: "hidden", name: "topicid" },
-                      domProps: { value: item.id }
-                    }),
-                    _vm._v(" "),
-                    _c("i", {
-                      staticClass: "fa fa-times deleteTopic",
-                      attrs: { "aria-hidden": "true" },
-                      on: {
-                        click: function($event) {
-                          _vm.deleteTopic(index)
-                        }
+                    key: item.topic,
+                    staticClass: "topic-li ",
+                    attrs: { "data-index": index, topicid: item.id },
+                    on: {
+                      click: function($event) {
+                        _vm.selectIs($event, item.id, item.topic)
                       }
-                    })
-                  ]
+                    }
+                  },
+                  [_vm._v(_vm._s(item.topic))]
                 )
               })
             )
-          ]),
+          ],
+          1
+        ),
+        _vm._v(" "),
+        _c("div", { staticClass: "form-group", attrs: { id: "topic" } }, [
+          _c("i", {
+            staticClass: "fa fa-search",
+            attrs: { "aria-hidden": "true" }
+          }),
+          _c("input", {
+            directives: [
+              {
+                name: "model",
+                rawName: "v-model",
+                value: _vm.query,
+                expression: "query"
+              }
+            ],
+            attrs: {
+              type: "text",
+              name: "topic",
+              id: "searchTopic",
+              placeholder: "选择文章标签,最多三个",
+              autocomplete: "off"
+            },
+            domProps: { value: _vm.query },
+            on: {
+              input: [
+                function($event) {
+                  if ($event.target.composing) {
+                    return
+                  }
+                  _vm.query = $event.target.value
+                },
+                _vm.inputFunc
+              ]
+            }
+          }),
           _vm._v(" "),
           _c(
-            "div",
-            { attrs: { id: "staggered-list-demo" } },
-            [
-              _c(
-                "transition-group",
-                {
-                  attrs: {
-                    name: "staggered-fade",
-                    tag: "ul",
-                    css: false,
-                    id: "list-ul"
-                  },
-                  on: {
-                    "before-enter": _vm.beforeEnter,
-                    enter: _vm.enter,
-                    leave: _vm.leave
-                  }
-                },
-                _vm._l(_vm.computedList, function(item, index) {
-                  return _c(
-                    "li",
-                    {
-                      key: item.topic,
-                      staticClass: "topic-li",
-                      attrs: { "data-index": index, topicid: item.id },
-                      on: {
-                        click: function($event) {
-                          _vm.selectIs($event, item.id, item.topic)
-                        }
+            "ul",
+            { attrs: { id: "selectul" } },
+            _vm._l(_vm.selectTopic, function(item, index) {
+              return _c(
+                "li",
+                { staticClass: "selectTopic", staticStyle: { float: "left" } },
+                [
+                  _vm._v(
+                    "\n\t\t\t\t\t\t" + _vm._s(item.topic) + "\n\t\t\t\t\t\t"
+                  ),
+                  _c("input", {
+                    directives: [
+                      {
+                        name: "model",
+                        rawName: "v-model",
+                        value: _vm.article.topicid,
+                        expression: "article.topicid"
                       }
-                    },
-                    [_vm._v(_vm._s(item.topic))]
-                  )
-                })
+                    ],
+                    attrs: { type: "hidden", name: "topicid" },
+                    domProps: { value: _vm.article.topicid },
+                    on: {
+                      input: function($event) {
+                        if ($event.target.composing) {
+                          return
+                        }
+                        _vm.$set(_vm.article, "topicid", $event.target.value)
+                      }
+                    }
+                  }),
+                  _vm._v(" "),
+                  _c("i", {
+                    staticClass: "fa fa-times deleteTopic",
+                    attrs: { "aria-hidden": "true" },
+                    on: {
+                      click: function($event) {
+                        _vm.deleteTopic(index)
+                      }
+                    }
+                  })
+                ]
               )
-            ],
-            1
+            })
           )
         ]),
         _vm._v(" "),
-        _vm._m(2),
+        _vm._m(1),
         _vm._v(" "),
-        _vm._m(3)
+        _vm._m(2)
       ]
     )
   ])
@@ -51013,23 +51100,6 @@ var staticRenderFns = [
       _c("i", {
         staticClass: "fa fa-camera fa-5x",
         attrs: { "aria-hidden": "true" }
-      })
-    ])
-  },
-  function() {
-    var _vm = this
-    var _h = _vm.$createElement
-    var _c = _vm._self._c || _h
-    return _c("div", { staticClass: "form-group", attrs: { id: "titleDiv" } }, [
-      _c("input", {
-        attrs: {
-          id: "title",
-          type: "text",
-          autofocus: "autofocus",
-          placeholder: "输入文章的标题",
-          maxlength: "20",
-          required: ""
-        }
       })
     ])
   },
