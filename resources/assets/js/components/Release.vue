@@ -92,6 +92,8 @@
 		    },
 
 		    editor:'',
+
+		    test:1,
         }
 
     },
@@ -109,7 +111,7 @@
 	  },
 	methods:{
 		submit:function(){
-
+			
 			this.article.html = this.editor.txt.html();
 			//判断是否文本输入			
 			if(this.editor.txt.text() ==''){
@@ -165,6 +167,7 @@
 			});
 		},
 		init:function(){
+
 			//引入富文本编辑器
 			let self = this;
 			// console.log(document.getElementById('headImage'));

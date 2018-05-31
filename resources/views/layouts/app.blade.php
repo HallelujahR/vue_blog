@@ -40,11 +40,14 @@
     <body>
         <header class="main-header">
         </header>
-        @include('Nav.Navbar')
         <div id="app">
+        @include('Nav.Navbar')
             <div class="main">
                 @yield('content')
-                <div id="app"></div>
+                <div id="imp">
+                      <li><router-link to="/article">Go to Foo</router-link></li>
+                     <router-view></router-view>
+                </div>
             </div>
         </div>
 

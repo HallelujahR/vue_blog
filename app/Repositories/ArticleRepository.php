@@ -3,7 +3,7 @@
 namespace App\Repositories;
 use App\Article;
 use App\Topic;
-
+use App\User;
 class ArticleRepository {
 
 	//发表文章
@@ -28,7 +28,7 @@ class ArticleRepository {
 	    	for($i =0 ;$i<count($top);$i++){
 	    		Topic::findOrFail($top[$i])->increment('article_count');
 	    	}
-	    	User::findOrFail($request->user()['id'])->increment('question_count');
+	    	User::findOrFail($request->user()['id'])->increment('article_count');
      		return '1';
         }else{
         	return '0';

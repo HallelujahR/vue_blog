@@ -40,11 +40,14 @@
     <body>
         <header class="main-header">
         </header>
-        <?php echo $__env->make('Nav.Navbar', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
         <div id="app">
+        <?php echo $__env->make('Nav.Navbar', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
             <div class="main">
                 <?php echo $__env->yieldContent('content'); ?>
-                <div id="app"></div>
+                <div id="imp">
+                      <li><router-link to="/article">Go to Foo</router-link></li>
+                     <router-view></router-view>
+                </div>
             </div>
         </div>
 

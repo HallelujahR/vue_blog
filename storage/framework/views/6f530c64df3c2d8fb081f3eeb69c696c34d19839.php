@@ -19,6 +19,7 @@
                 <div class="collapse navbar-collapse" id="example-navbar-collapse">
                     <ul class="nav navbar-nav">
                         <li><a class='fontColor' href="/article">文章</a></li>
+                      
                         <li><a class='fontColor' href="#">问题</a></li>
                         <li><a class='fontColor' href="#">话题</a></li>
                         <li>
