@@ -8,6 +8,7 @@
 require('./bootstrap');
 window.E = require('wangeditor')
 window.Velocity = require('velocity-animate');
+window.Swal = require('sweetalert2');
 import VueRouter from 'vue-router';
 window.Vue = require('vue');
 

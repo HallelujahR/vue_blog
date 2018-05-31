@@ -19,6 +19,7 @@ Route::get('/article','ArticleController@Index');
 Route::get('/article/test','ArticleController@test');
 Route::post('/article/createArticle','ArticleController@createArticle');
 
+Route::post('/question/createQuestion','QuestionController@createQuestion');
 Route::get('/test/{phone}','ArticleController@send');
 Auth::routes();
 

@@ -64,7 +64,6 @@
 				</div>
 				<div id="editorTwo" class="col-md-12" require>
 				</div>
-				 <textarea id="text1" style="display:none" name="html"></textarea>
 			</div>
 			<div class="form-group">
 				<button type="submit" class="btn btn-success">发布文章</button>
@@ -93,7 +92,6 @@
 		    },
 
 		    editor:'',
-		    text1:'',
         }
 
     },
@@ -112,15 +110,23 @@
 	methods:{
 		submit:function(){
 
-			this.article.html = document.getElementById('text1').value;
+			this.article.html = this.editor.txt.html();
 			//判断是否文本输入			
-			if(this.article.html ==''){
-				alert('请编写文章');
+			if(this.editor.txt.text() ==''){
+				new Swal({ 
+				  title: "请编写文章！", 
+				  timer: 1500, 
+				  showConfirmButton: false 
+				});
 				return false;
 			}
 			//判断是标签是否选择
 			if(this.article.topicid.length == 0){
-				alert('请选择标签');
+				new Swal({ 
+				  title: "请选择文章标签", 
+				  timer: 1500, 
+				  showConfirmButton: false 
+				});
 				return false;
 			}
 			this.article.pic = this.dataUrl;
@@ -144,7 +150,11 @@
 			  		self.list=[];
 			  		self.editor.txt.html('');
 			  		self.query = '';
-			  		alert('发布成功');
+			  		new Swal({ 
+					  title: "发布文章成功", 
+					  timer: 1500, 
+					  showConfirmButton: false 
+					});
 			  		$('#rel').trigger('click');
 				}else{
 					alert('2');
@@ -182,12 +192,6 @@
 		    ]
 		    this.editor.customConfig.showLinkImg = false
 		    this.editor.customConfig.uploadImgShowBase64 = true;
-		    this.text1 = document.getElementById('text1')
-	 		this.editor.customConfig.onchange = function (html) {
-	            // 监控变化，同步更新到 textarea
-
-	            self.text1.value=html;
-	        }
 			this.editor.create();
 			this.editor.txt.html('<p>在此处输入文章内容</p>');
 
@@ -202,32 +206,38 @@
 			}
 			//最多选择三个
 			if(this.selectTopic.length <3){
+				//向topic更新数据 前台
 				this.selectTopic.push({id:topicid,topic:topic});
+				//给提交给后台的数据更新
 				this.article.topicid.push(topicid);
 			}else{
 				return false;
 			}
 
 	    },
+	    //删除已经选中的标签
 	    deleteTopic:function(index){
 	    	this.selectTopic.splice(index,1);
 	    	this.article.topicid.splice(index,1);
 	    	// alert(index);
 	    },
+	    //题图的点击
 	  	pic:function(){
 	  		document.getElementById('headpic').click();
 	  	},
+	  	//清除题图
 	  	clearPic:function(){
-	  		alert(1);
 	  		var file = document.getElementById('headpic');
 	  		this.dataUrl=null;
 	  		file.value='';
 	  		this.show=false;
 	  		this.showUp=true;
 	  	},
+	  	//改变题图
 	  	change:function(){
 	  		document.getElementById('headpic').click();
 	  	},
+	  	//转换为base64文件并且产出所缩略图
 	  	imgPreview (file) {
 	        let self = this;
 	        // 看支持不支持FileReader

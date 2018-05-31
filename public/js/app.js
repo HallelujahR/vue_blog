@@ -960,4682 +960,111 @@ module.exports = Cancel;
 
 /***/ }),
 /* 9 */
-/***/ (function(module, exports, __webpack_require__) {
+/***/ (function(module, exports) {
 
-(function (global, factory) {
-	 true ? module.exports = factory() :
-	typeof define === 'function' && define.amd ? define(factory) :
-	(global.wangEditor = factory());
-}(this, (function () { 'use strict';
+/* globals __VUE_SSR_CONTEXT__ */
 
-/*
-    poly-fill
-*/
+// IMPORTANT: Do NOT use ES2015 features in this file.
+// This module is a runtime utility for cleaner component module output and will
+// be included in the final webpack user bundle.
 
-var polyfill = function () {
+module.exports = function normalizeComponent (
+  rawScriptExports,
+  compiledTemplate,
+  functionalTemplate,
+  injectStyles,
+  scopeId,
+  moduleIdentifier /* server only */
+) {
+  var esModule
+  var scriptExports = rawScriptExports = rawScriptExports || {}
 
-    // Object.assign
-    if (typeof Object.assign != 'function') {
-        Object.assign = function (target, varArgs) {
-            // .length of function is 2
-            if (target == null) {
-                // TypeError if undefined or null
-                throw new TypeError('Cannot convert undefined or null to object');
-            }
+  // ES6 modules interop
+  var type = typeof rawScriptExports.default
+  if (type === 'object' || type === 'function') {
+    esModule = rawScriptExports
+    scriptExports = rawScriptExports.default
+  }
 
-            var to = Object(target);
+  // Vue.extend constructor export interop
+  var options = typeof scriptExports === 'function'
+    ? scriptExports.options
+    : scriptExports
 
-            for (var index = 1; index < arguments.length; index++) {
-                var nextSource = arguments[index];
+  // render functions
+  if (compiledTemplate) {
+    options.render = compiledTemplate.render
+    options.staticRenderFns = compiledTemplate.staticRenderFns
+    options._compiled = true
+  }
 
-                if (nextSource != null) {
-                    // Skip over if undefined or null
-                    for (var nextKey in nextSource) {
-                        // Avoid bugs when hasOwnProperty is shadowed
-                        if (Object.prototype.hasOwnProperty.call(nextSource, nextKey)) {
-                            to[nextKey] = nextSource[nextKey];
-                        }
-                    }
-                }
-            }
-            return to;
-        };
+  // functional template
+  if (functionalTemplate) {
+    options.functional = true
+  }
+
+  // scopedId
+  if (scopeId) {
+    options._scopeId = scopeId
+  }
+
+  var hook
+  if (moduleIdentifier) { // server build
+    hook = function (context) {
+      // 2.3 injection
+      context =
+        context || // cached call
+        (this.$vnode && this.$vnode.ssrContext) || // stateful
+        (this.parent && this.parent.$vnode && this.parent.$vnode.ssrContext) // functional
+      // 2.2 with runInNewContext: true
+      if (!context && typeof __VUE_SSR_CONTEXT__ !== 'undefined') {
+        context = __VUE_SSR_CONTEXT__
+      }
+      // inject component styles
+      if (injectStyles) {
+        injectStyles.call(this, context)
+      }
+      // register component module identifier for async chunk inferrence
+      if (context && context._registeredComponents) {
+        context._registeredComponents.add(moduleIdentifier)
+      }
     }
+    // used by ssr in case component is cached and beforeCreate
+    // never gets called
+    options._ssrRegister = hook
+  } else if (injectStyles) {
+    hook = injectStyles
+  }
 
-    // IE 中兼容 Element.prototype.matches
-    if (!Element.prototype.matches) {
-        Element.prototype.matches = Element.prototype.matchesSelector || Element.prototype.mozMatchesSelector || Element.prototype.msMatchesSelector || Element.prototype.oMatchesSelector || Element.prototype.webkitMatchesSelector || function (s) {
-            var matches = (this.document || this.ownerDocument).querySelectorAll(s),
-                i = matches.length;
-            while (--i >= 0 && matches.item(i) !== this) {}
-            return i > -1;
-        };
-    }
-};
+  if (hook) {
+    var functional = options.functional
+    var existing = functional
+      ? options.render
+      : options.beforeCreate
 
-/*
-    DOM 操作 API
-*/
-
-// 根据 html 代码片段创建 dom 对象
-function createElemByHTML(html) {
-    var div = void 0;
-    div = document.createElement('div');
-    div.innerHTML = html;
-    return div.children;
-}
-
-// 是否是 DOM List
-function isDOMList(selector) {
-    if (!selector) {
-        return false;
-    }
-    if (selector instanceof HTMLCollection || selector instanceof NodeList) {
-        return true;
-    }
-    return false;
-}
-
-// 封装 document.querySelectorAll
-function querySelectorAll(selector) {
-    var result = document.querySelectorAll(selector);
-    if (isDOMList(result)) {
-        return result;
+    if (!functional) {
+      // inject component registration as beforeCreate hook
+      options.beforeCreate = existing
+        ? [].concat(existing, hook)
+        : [hook]
     } else {
-        return [result];
+      // for template-only hot-reload because in that case the render fn doesn't
+      // go through the normalizer
+      options._injectStyles = hook
+      // register for functioal component in vue file
+      options.render = function renderWithStyleInjection (h, context) {
+        hook.call(context)
+        return existing(h, context)
+      }
     }
+  }
+
+  return {
+    esModule: esModule,
+    exports: scriptExports,
+    options: options
+  }
 }
-
-// 记录所有的事件绑定
-var eventList = [];
-
-// 创建构造函数
-function DomElement(selector) {
-    if (!selector) {
-        return;
-    }
-
-    // selector 本来就是 DomElement 对象，直接返回
-    if (selector instanceof DomElement) {
-        return selector;
-    }
-
-    this.selector = selector;
-    var nodeType = selector.nodeType;
-
-    // 根据 selector 得出的结果（如 DOM，DOM List）
-    var selectorResult = [];
-    if (nodeType === 9) {
-        // document 节点
-        selectorResult = [selector];
-    } else if (nodeType === 1) {
-        // 单个 DOM 节点
-        selectorResult = [selector];
-    } else if (isDOMList(selector) || selector instanceof Array) {
-        // DOM List 或者数组
-        selectorResult = selector;
-    } else if (typeof selector === 'string') {
-        // 字符串
-        selector = selector.replace('/\n/mg', '').trim();
-        if (selector.indexOf('<') === 0) {
-            // 如 <div>
-            selectorResult = createElemByHTML(selector);
-        } else {
-            // 如 #id .class
-            selectorResult = querySelectorAll(selector);
-        }
-    }
-
-    var length = selectorResult.length;
-    if (!length) {
-        // 空数组
-        return this;
-    }
-
-    // 加入 DOM 节点
-    var i = void 0;
-    for (i = 0; i < length; i++) {
-        this[i] = selectorResult[i];
-    }
-    this.length = length;
-}
-
-// 修改原型
-DomElement.prototype = {
-    constructor: DomElement,
-
-    // 类数组，forEach
-    forEach: function forEach(fn) {
-        var i = void 0;
-        for (i = 0; i < this.length; i++) {
-            var elem = this[i];
-            var result = fn.call(elem, elem, i);
-            if (result === false) {
-                break;
-            }
-        }
-        return this;
-    },
-
-    // clone
-    clone: function clone(deep) {
-        var cloneList = [];
-        this.forEach(function (elem) {
-            cloneList.push(elem.cloneNode(!!deep));
-        });
-        return $(cloneList);
-    },
-
-    // 获取第几个元素
-    get: function get(index) {
-        var length = this.length;
-        if (index >= length) {
-            index = index % length;
-        }
-        return $(this[index]);
-    },
-
-    // 第一个
-    first: function first() {
-        return this.get(0);
-    },
-
-    // 最后一个
-    last: function last() {
-        var length = this.length;
-        return this.get(length - 1);
-    },
-
-    // 绑定事件
-    on: function on(type, selector, fn) {
-        // selector 不为空，证明绑定事件要加代理
-        if (!fn) {
-            fn = selector;
-            selector = null;
-        }
-
-        // type 是否有多个
-        var types = [];
-        types = type.split(/\s+/);
-
-        return this.forEach(function (elem) {
-            types.forEach(function (type) {
-                if (!type) {
-                    return;
-                }
-
-                // 记录下，方便后面解绑
-                eventList.push({
-                    elem: elem,
-                    type: type,
-                    fn: fn
-                });
-
-                if (!selector) {
-                    // 无代理
-                    elem.addEventListener(type, fn);
-                    return;
-                }
-
-                // 有代理
-                elem.addEventListener(type, function (e) {
-                    var target = e.target;
-                    if (target.matches(selector)) {
-                        fn.call(target, e);
-                    }
-                });
-            });
-        });
-    },
-
-    // 取消事件绑定
-    off: function off(type, fn) {
-        return this.forEach(function (elem) {
-            elem.removeEventListener(type, fn);
-        });
-    },
-
-    // 获取/设置 属性
-    attr: function attr(key, val) {
-        if (val == null) {
-            // 获取值
-            return this[0].getAttribute(key);
-        } else {
-            // 设置值
-            return this.forEach(function (elem) {
-                elem.setAttribute(key, val);
-            });
-        }
-    },
-
-    // 添加 class
-    addClass: function addClass(className) {
-        if (!className) {
-            return this;
-        }
-        return this.forEach(function (elem) {
-            var arr = void 0;
-            if (elem.className) {
-                // 解析当前 className 转换为数组
-                arr = elem.className.split(/\s/);
-                arr = arr.filter(function (item) {
-                    return !!item.trim();
-                });
-                // 添加 class
-                if (arr.indexOf(className) < 0) {
-                    arr.push(className);
-                }
-                // 修改 elem.class
-                elem.className = arr.join(' ');
-            } else {
-                elem.className = className;
-            }
-        });
-    },
-
-    // 删除 class
-    removeClass: function removeClass(className) {
-        if (!className) {
-            return this;
-        }
-        return this.forEach(function (elem) {
-            var arr = void 0;
-            if (elem.className) {
-                // 解析当前 className 转换为数组
-                arr = elem.className.split(/\s/);
-                arr = arr.filter(function (item) {
-                    item = item.trim();
-                    // 删除 class
-                    if (!item || item === className) {
-                        return false;
-                    }
-                    return true;
-                });
-                // 修改 elem.class
-                elem.className = arr.join(' ');
-            }
-        });
-    },
-
-    // 修改 css
-    css: function css(key, val) {
-        var currentStyle = key + ':' + val + ';';
-        return this.forEach(function (elem) {
-            var style = (elem.getAttribute('style') || '').trim();
-            var styleArr = void 0,
-                resultArr = [];
-            if (style) {
-                // 将 style 按照 ; 拆分为数组
-                styleArr = style.split(';');
-                styleArr.forEach(function (item) {
-                    // 对每项样式，按照 : 拆分为 key 和 value
-                    var arr = item.split(':').map(function (i) {
-                        return i.trim();
-                    });
-                    if (arr.length === 2) {
-                        resultArr.push(arr[0] + ':' + arr[1]);
-                    }
-                });
-                // 替换或者新增
-                resultArr = resultArr.map(function (item) {
-                    if (item.indexOf(key) === 0) {
-                        return currentStyle;
-                    } else {
-                        return item;
-                    }
-                });
-                if (resultArr.indexOf(currentStyle) < 0) {
-                    resultArr.push(currentStyle);
-                }
-                // 结果
-                elem.setAttribute('style', resultArr.join('; '));
-            } else {
-                // style 无值
-                elem.setAttribute('style', currentStyle);
-            }
-        });
-    },
-
-    // 显示
-    show: function show() {
-        return this.css('display', 'block');
-    },
-
-    // 隐藏
-    hide: function hide() {
-        return this.css('display', 'none');
-    },
-
-    // 获取子节点
-    children: function children() {
-        var elem = this[0];
-        if (!elem) {
-            return null;
-        }
-
-        return $(elem.children);
-    },
-
-    // 获取子节点（包括文本节点）
-    childNodes: function childNodes() {
-        var elem = this[0];
-        if (!elem) {
-            return null;
-        }
-
-        return $(elem.childNodes);
-    },
-
-    // 增加子节点
-    append: function append($children) {
-        return this.forEach(function (elem) {
-            $children.forEach(function (child) {
-                elem.appendChild(child);
-            });
-        });
-    },
-
-    // 移除当前节点
-    remove: function remove() {
-        return this.forEach(function (elem) {
-            if (elem.remove) {
-                elem.remove();
-            } else {
-                var parent = elem.parentElement;
-                parent && parent.removeChild(elem);
-            }
-        });
-    },
-
-    // 是否包含某个子节点
-    isContain: function isContain($child) {
-        var elem = this[0];
-        var child = $child[0];
-        return elem.contains(child);
-    },
-
-    // 尺寸数据
-    getSizeData: function getSizeData() {
-        var elem = this[0];
-        return elem.getBoundingClientRect(); // 可得到 bottom height left right top width 的数据
-    },
-
-    // 封装 nodeName
-    getNodeName: function getNodeName() {
-        var elem = this[0];
-        return elem.nodeName;
-    },
-
-    // 从当前元素查找
-    find: function find(selector) {
-        var elem = this[0];
-        return $(elem.querySelectorAll(selector));
-    },
-
-    // 获取当前元素的 text
-    text: function text(val) {
-        if (!val) {
-            // 获取 text
-            var elem = this[0];
-            return elem.innerHTML.replace(/<.*?>/g, function () {
-                return '';
-            });
-        } else {
-            // 设置 text
-            return this.forEach(function (elem) {
-                elem.innerHTML = val;
-            });
-        }
-    },
-
-    // 获取 html
-    html: function html(value) {
-        var elem = this[0];
-        if (value == null) {
-            return elem.innerHTML;
-        } else {
-            elem.innerHTML = value;
-            return this;
-        }
-    },
-
-    // 获取 value
-    val: function val() {
-        var elem = this[0];
-        return elem.value.trim();
-    },
-
-    // focus
-    focus: function focus() {
-        return this.forEach(function (elem) {
-            elem.focus();
-        });
-    },
-
-    // parent
-    parent: function parent() {
-        var elem = this[0];
-        return $(elem.parentElement);
-    },
-
-    // parentUntil 找到符合 selector 的父节点
-    parentUntil: function parentUntil(selector, _currentElem) {
-        var results = document.querySelectorAll(selector);
-        var length = results.length;
-        if (!length) {
-            // 传入的 selector 无效
-            return null;
-        }
-
-        var elem = _currentElem || this[0];
-        if (elem.nodeName === 'BODY') {
-            return null;
-        }
-
-        var parent = elem.parentElement;
-        var i = void 0;
-        for (i = 0; i < length; i++) {
-            if (parent === results[i]) {
-                // 找到，并返回
-                return $(parent);
-            }
-        }
-
-        // 继续查找
-        return this.parentUntil(selector, parent);
-    },
-
-    // 判断两个 elem 是否相等
-    equal: function equal($elem) {
-        if ($elem.nodeType === 1) {
-            return this[0] === $elem;
-        } else {
-            return this[0] === $elem[0];
-        }
-    },
-
-    // 将该元素插入到某个元素前面
-    insertBefore: function insertBefore(selector) {
-        var $referenceNode = $(selector);
-        var referenceNode = $referenceNode[0];
-        if (!referenceNode) {
-            return this;
-        }
-        return this.forEach(function (elem) {
-            var parent = referenceNode.parentNode;
-            parent.insertBefore(elem, referenceNode);
-        });
-    },
-
-    // 将该元素插入到某个元素后面
-    insertAfter: function insertAfter(selector) {
-        var $referenceNode = $(selector);
-        var referenceNode = $referenceNode[0];
-        if (!referenceNode) {
-            return this;
-        }
-        return this.forEach(function (elem) {
-            var parent = referenceNode.parentNode;
-            if (parent.lastChild === referenceNode) {
-                // 最后一个元素
-                parent.appendChild(elem);
-            } else {
-                // 不是最后一个元素
-                parent.insertBefore(elem, referenceNode.nextSibling);
-            }
-        });
-    }
-};
-
-// new 一个对象
-function $(selector) {
-    return new DomElement(selector);
-}
-
-// 解绑所有事件，用于销毁编辑器
-$.offAll = function () {
-    eventList.forEach(function (item) {
-        var elem = item.elem;
-        var type = item.type;
-        var fn = item.fn;
-        // 解绑
-        elem.removeEventListener(type, fn);
-    });
-};
-
-/*
-    配置信息
-*/
-
-var config = {
-
-    // 默认菜单配置
-    menus: ['head', 'bold', 'fontSize', 'fontName', 'italic', 'underline', 'strikeThrough', 'foreColor', 'backColor', 'link', 'list', 'justify', 'quote', 'emoticon', 'image', 'table', 'video', 'code', 'undo', 'redo'],
-
-    fontNames: ['宋体', '微软雅黑', 'Arial', 'Tahoma', 'Verdana'],
-
-    colors: ['#000000', '#eeece0', '#1c487f', '#4d80bf', '#c24f4a', '#8baa4a', '#7b5ba1', '#46acc8', '#f9963b', '#ffffff'],
-
-    // // 语言配置
-    // lang: {
-    //     '设置标题': 'title',
-    //     '正文': 'p',
-    //     '链接文字': 'link text',
-    //     '链接': 'link',
-    //     '插入': 'insert',
-    //     '创建': 'init'
-    // },
-
-    // 表情
-    emotions: [{
-        // tab 的标题
-        title: '默认',
-        // type -> 'emoji' / 'image'
-        type: 'image',
-        // content -> 数组
-        content: [{
-            alt: '[坏笑]',
-            src: 'http://img.t.sinajs.cn/t4/appstyle/expression/ext/normal/50/pcmoren_huaixiao_org.png'
-        }, {
-            alt: '[舔屏]',
-            src: 'http://img.t.sinajs.cn/t4/appstyle/expression/ext/normal/40/pcmoren_tian_org.png'
-        }, {
-            alt: '[污]',
-            src: 'http://img.t.sinajs.cn/t4/appstyle/expression/ext/normal/3c/pcmoren_wu_org.png'
-        }]
-    }, {
-        // tab 的标题
-        title: '新浪',
-        // type -> 'emoji' / 'image'
-        type: 'image',
-        // content -> 数组
-        content: [{
-            src: 'http://img.t.sinajs.cn/t35/style/images/common/face/ext/normal/7a/shenshou_thumb.gif',
-            alt: '[草泥马]'
-        }, {
-            src: 'http://img.t.sinajs.cn/t35/style/images/common/face/ext/normal/60/horse2_thumb.gif',
-            alt: '[神马]'
-        }, {
-            src: 'http://img.t.sinajs.cn/t35/style/images/common/face/ext/normal/bc/fuyun_thumb.gif',
-            alt: '[浮云]'
-        }]
-    }, {
-        // tab 的标题
-        title: 'emoji',
-        // type -> 'emoji' / 'image'
-        type: 'emoji',
-        // content -> 数组
-        content: '😀 😃 😄 😁 😆 😅 😂 😊 😇 🙂 🙃 😉 😓 😪 😴 🙄 🤔 😬 🤐'.split(/\s/)
-    }],
-
-    // 编辑区域的 z-index
-    zIndex: 10000,
-
-    // 是否开启 debug 模式（debug 模式下错误会 throw error 形式抛出）
-    debug: false,
-
-    // 插入链接时候的格式校验
-    linkCheck: function linkCheck(text, link) {
-        // text 是插入的文字
-        // link 是插入的链接
-        return true; // 返回 true 即表示成功
-        // return '校验失败' // 返回字符串即表示失败的提示信息
-    },
-
-    // 插入网络图片的校验
-    linkImgCheck: function linkImgCheck(src) {
-        // src 即图片的地址
-        return true; // 返回 true 即表示成功
-        // return '校验失败'  // 返回字符串即表示失败的提示信息
-    },
-
-    // 粘贴过滤样式，默认开启
-    pasteFilterStyle: true,
-
-    // 粘贴内容时，忽略图片。默认关闭
-    pasteIgnoreImg: false,
-
-    // 对粘贴的文字进行自定义处理，返回处理后的结果。编辑器会将处理后的结果粘贴到编辑区域中。
-    // IE 暂时不支持
-    pasteTextHandle: function pasteTextHandle(content) {
-        // content 即粘贴过来的内容（html 或 纯文本），可进行自定义处理然后返回
-        return content;
-    },
-
-    // onchange 事件
-    // onchange: function (html) {
-    //     // html 即变化之后的内容
-    //     console.log(html)
-    // },
-
-    // 是否显示添加网络图片的 tab
-    showLinkImg: true,
-
-    // 插入网络图片的回调
-    linkImgCallback: function linkImgCallback(url) {
-        // console.log(url)  // url 即插入图片的地址
-    },
-
-    // 默认上传图片 max size: 5M
-    uploadImgMaxSize: 5 * 1024 * 1024,
-
-    // 配置一次最多上传几个图片
-    // uploadImgMaxLength: 5,
-
-    // 上传图片，是否显示 base64 格式
-    uploadImgShowBase64: false,
-
-    // 上传图片，server 地址（如果有值，则 base64 格式的配置则失效）
-    // uploadImgServer: '/upload',
-
-    // 自定义配置 filename
-    uploadFileName: '',
-
-    // 上传图片的自定义参数
-    uploadImgParams: {
-        // token: 'abcdef12345'
-    },
-
-    // 上传图片的自定义header
-    uploadImgHeaders: {
-        // 'Accept': 'text/x-json'
-    },
-
-    // 配置 XHR withCredentials
-    withCredentials: false,
-
-    // 自定义上传图片超时时间 ms
-    uploadImgTimeout: 10000,
-
-    // 上传图片 hook 
-    uploadImgHooks: {
-        // customInsert: function (insertLinkImg, result, editor) {
-        //     console.log('customInsert')
-        //     // 图片上传并返回结果，自定义插入图片的事件，而不是编辑器自动插入图片
-        //     const data = result.data1 || []
-        //     data.forEach(link => {
-        //         insertLinkImg(link)
-        //     })
-        // },
-        before: function before(xhr, editor, files) {
-            // 图片上传之前触发
-
-            // 如果返回的结果是 {prevent: true, msg: 'xxxx'} 则表示用户放弃上传
-            // return {
-            //     prevent: true,
-            //     msg: '放弃上传'
-            // }
-        },
-        success: function success(xhr, editor, result) {
-            // 图片上传并返回结果，图片插入成功之后触发
-        },
-        fail: function fail(xhr, editor, result) {
-            // 图片上传并返回结果，但图片插入错误时触发
-        },
-        error: function error(xhr, editor) {
-            // 图片上传出错时触发
-        },
-        timeout: function timeout(xhr, editor) {
-            // 图片上传超时时触发
-        }
-    },
-
-    // 是否上传七牛云，默认为 false
-    qiniu: false
-
-};
-
-/*
-    工具
-*/
-
-// 和 UA 相关的属性
-var UA = {
-    _ua: navigator.userAgent,
-
-    // 是否 webkit
-    isWebkit: function isWebkit() {
-        var reg = /webkit/i;
-        return reg.test(this._ua);
-    },
-
-    // 是否 IE
-    isIE: function isIE() {
-        return 'ActiveXObject' in window;
-    }
-};
-
-// 遍历对象
-function objForEach(obj, fn) {
-    var key = void 0,
-        result = void 0;
-    for (key in obj) {
-        if (obj.hasOwnProperty(key)) {
-            result = fn.call(obj, key, obj[key]);
-            if (result === false) {
-                break;
-            }
-        }
-    }
-}
-
-// 遍历类数组
-function arrForEach(fakeArr, fn) {
-    var i = void 0,
-        item = void 0,
-        result = void 0;
-    var length = fakeArr.length || 0;
-    for (i = 0; i < length; i++) {
-        item = fakeArr[i];
-        result = fn.call(fakeArr, item, i);
-        if (result === false) {
-            break;
-        }
-    }
-}
-
-// 获取随机数
-function getRandom(prefix) {
-    return prefix + Math.random().toString().slice(2);
-}
-
-// 替换 html 特殊字符
-function replaceHtmlSymbol(html) {
-    if (html == null) {
-        return '';
-    }
-    return html.replace(/</gm, '&lt;').replace(/>/gm, '&gt;').replace(/"/gm, '&quot;').replace(/(\r\n|\r|\n)/g, '<br/>');
-}
-
-// 返回百分比的格式
-
-
-// 判断是不是 function
-function isFunction(fn) {
-    return typeof fn === 'function';
-}
-
-/*
-    bold-menu
-*/
-// 构造函数
-function Bold(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-bold"></i>\n        </div>');
-    this.type = 'click';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Bold.prototype = {
-    constructor: Bold,
-
-    // 点击事件
-    onClick: function onClick(e) {
-        // 点击菜单将触发这里
-
-        var editor = this.editor;
-        var isSeleEmpty = editor.selection.isSelectionEmpty();
-
-        if (isSeleEmpty) {
-            // 选区是空的，插入并选中一个“空白”
-            editor.selection.createEmptyRange();
-        }
-
-        // 执行 bold 命令
-        editor.cmd.do('bold');
-
-        if (isSeleEmpty) {
-            // 需要将选取折叠起来
-            editor.selection.collapseRange();
-            editor.selection.restoreSelection();
-        }
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        if (editor.cmd.queryCommandState('bold')) {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    替换多语言
- */
-
-var replaceLang = function (editor, str) {
-    var langArgs = editor.config.langArgs || [];
-    var result = str;
-
-    langArgs.forEach(function (item) {
-        var reg = item.reg;
-        var val = item.val;
-
-        if (reg.test(result)) {
-            result = result.replace(reg, function () {
-                return val;
-            });
-        }
-    });
-
-    return result;
-};
-
-/*
-    droplist
-*/
-var _emptyFn = function _emptyFn() {};
-
-// 构造函数
-function DropList(menu, opt) {
-    var _this = this;
-
-    // droplist 所依附的菜单
-    var editor = menu.editor;
-    this.menu = menu;
-    this.opt = opt;
-    // 容器
-    var $container = $('<div class="w-e-droplist"></div>');
-
-    // 标题
-    var $title = opt.$title;
-    var titleHtml = void 0;
-    if ($title) {
-        // 替换多语言
-        titleHtml = $title.html();
-        titleHtml = replaceLang(editor, titleHtml);
-        $title.html(titleHtml);
-
-        $title.addClass('w-e-dp-title');
-        $container.append($title);
-    }
-
-    var list = opt.list || [];
-    var type = opt.type || 'list'; // 'list' 列表形式（如“标题”菜单） / 'inline-block' 块状形式（如“颜色”菜单）
-    var onClick = opt.onClick || _emptyFn;
-
-    // 加入 DOM 并绑定事件
-    var $list = $('<ul class="' + (type === 'list' ? 'w-e-list' : 'w-e-block') + '"></ul>');
-    $container.append($list);
-    list.forEach(function (item) {
-        var $elem = item.$elem;
-
-        // 替换多语言
-        var elemHtml = $elem.html();
-        elemHtml = replaceLang(editor, elemHtml);
-        $elem.html(elemHtml);
-
-        var value = item.value;
-        var $li = $('<li class="w-e-item"></li>');
-        if ($elem) {
-            $li.append($elem);
-            $list.append($li);
-            $li.on('click', function (e) {
-                onClick(value);
-
-                // 隐藏
-                _this.hideTimeoutId = setTimeout(function () {
-                    _this.hide();
-                }, 0);
-            });
-        }
-    });
-
-    // 绑定隐藏事件
-    $container.on('mouseleave', function (e) {
-        _this.hideTimeoutId = setTimeout(function () {
-            _this.hide();
-        }, 0);
-    });
-
-    // 记录属性
-    this.$container = $container;
-
-    // 基本属性
-    this._rendered = false;
-    this._show = false;
-}
-
-// 原型
-DropList.prototype = {
-    constructor: DropList,
-
-    // 显示（插入DOM）
-    show: function show() {
-        if (this.hideTimeoutId) {
-            // 清除之前的定时隐藏
-            clearTimeout(this.hideTimeoutId);
-        }
-
-        var menu = this.menu;
-        var $menuELem = menu.$elem;
-        var $container = this.$container;
-        if (this._show) {
-            return;
-        }
-        if (this._rendered) {
-            // 显示
-            $container.show();
-        } else {
-            // 加入 DOM 之前先定位位置
-            var menuHeight = $menuELem.getSizeData().height || 0;
-            var width = this.opt.width || 100; // 默认为 100
-            $container.css('margin-top', menuHeight + 'px').css('width', width + 'px');
-
-            // 加入到 DOM
-            $menuELem.append($container);
-            this._rendered = true;
-        }
-
-        // 修改属性
-        this._show = true;
-    },
-
-    // 隐藏（移除DOM）
-    hide: function hide() {
-        if (this.showTimeoutId) {
-            // 清除之前的定时显示
-            clearTimeout(this.showTimeoutId);
-        }
-
-        var $container = this.$container;
-        if (!this._show) {
-            return;
-        }
-        // 隐藏并需改属性
-        $container.hide();
-        this._show = false;
-    }
-};
-
-/*
-    menu - header
-*/
-// 构造函数
-function Head(editor) {
-    var _this = this;
-
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-header"></i></div>');
-    this.type = 'droplist';
-
-    // 当前是否 active 状态
-    this._active = false;
-
-    // 初始化 droplist
-    this.droplist = new DropList(this, {
-        width: 100,
-        $title: $('<p>设置标题</p>'),
-        type: 'list', // droplist 以列表形式展示
-        list: [{ $elem: $('<h1>H1</h1>'), value: '<h1>' }, { $elem: $('<h2>H2</h2>'), value: '<h2>' }, { $elem: $('<h3>H3</h3>'), value: '<h3>' }, { $elem: $('<h4>H4</h4>'), value: '<h4>' }, { $elem: $('<h5>H5</h5>'), value: '<h5>' }, { $elem: $('<p>正文</p>'), value: '<p>' }],
-        onClick: function onClick(value) {
-            // 注意 this 是指向当前的 Head 对象
-            _this._command(value);
-        }
-    });
-}
-
-// 原型
-Head.prototype = {
-    constructor: Head,
-
-    // 执行命令
-    _command: function _command(value) {
-        var editor = this.editor;
-
-        var $selectionElem = editor.selection.getSelectionContainerElem();
-        if (editor.$textElem.equal($selectionElem)) {
-            // 不能选中多行来设置标题，否则会出现问题
-            // 例如选中的是 <p>xxx</p><p>yyy</p> 来设置标题，设置之后会成为 <h1>xxx<br>yyy</h1> 不符合预期
-            return;
-        }
-
-        editor.cmd.do('formatBlock', value);
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        var reg = /^h/i;
-        var cmdValue = editor.cmd.queryCommandValue('formatBlock');
-        if (reg.test(cmdValue)) {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    menu - fontSize
-*/
-
-// 构造函数
-function FontSize(editor) {
-    var _this = this;
-
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-text-heigh"></i></div>');
-    this.type = 'droplist';
-
-    // 当前是否 active 状态
-    this._active = false;
-
-    // 初始化 droplist
-    this.droplist = new DropList(this, {
-        width: 160,
-        $title: $('<p>字号</p>'),
-        type: 'list', // droplist 以列表形式展示
-        list: [{ $elem: $('<span style="font-size: x-small;">x-small</span>'), value: '1' }, { $elem: $('<span style="font-size: small;">small</span>'), value: '2' }, { $elem: $('<span>normal</span>'), value: '3' }, { $elem: $('<span style="font-size: large;">large</span>'), value: '4' }, { $elem: $('<span style="font-size: x-large;">x-large</span>'), value: '5' }, { $elem: $('<span style="font-size: xx-large;">xx-large</span>'), value: '6' }],
-        onClick: function onClick(value) {
-            // 注意 this 是指向当前的 FontSize 对象
-            _this._command(value);
-        }
-    });
-}
-
-// 原型
-FontSize.prototype = {
-    constructor: FontSize,
-
-    // 执行命令
-    _command: function _command(value) {
-        var editor = this.editor;
-        editor.cmd.do('fontSize', value);
-    }
-};
-
-/*
-    menu - fontName
-*/
-
-// 构造函数
-function FontName(editor) {
-    var _this = this;
-
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-font"></i></div>');
-    this.type = 'droplist';
-
-    // 当前是否 active 状态
-    this._active = false;
-
-    // 获取配置的字体
-    var config = editor.config;
-    var fontNames = config.fontNames || [];
-
-    // 初始化 droplist
-    this.droplist = new DropList(this, {
-        width: 100,
-        $title: $('<p>字体</p>'),
-        type: 'list', // droplist 以列表形式展示
-        list: fontNames.map(function (fontName) {
-            return { $elem: $('<span style="font-family: ' + fontName + ';">' + fontName + '</span>'), value: fontName };
-        }),
-        onClick: function onClick(value) {
-            // 注意 this 是指向当前的 FontName 对象
-            _this._command(value);
-        }
-    });
-}
-
-// 原型
-FontName.prototype = {
-    constructor: FontName,
-
-    _command: function _command(value) {
-        var editor = this.editor;
-        editor.cmd.do('fontName', value);
-    }
-};
-
-/*
-    panel
-*/
-
-var emptyFn = function emptyFn() {};
-
-// 记录已经显示 panel 的菜单
-var _isCreatedPanelMenus = [];
-
-// 构造函数
-function Panel(menu, opt) {
-    this.menu = menu;
-    this.opt = opt;
-}
-
-// 原型
-Panel.prototype = {
-    constructor: Panel,
-
-    // 显示（插入DOM）
-    show: function show() {
-        var _this = this;
-
-        var menu = this.menu;
-        if (_isCreatedPanelMenus.indexOf(menu) >= 0) {
-            // 该菜单已经创建了 panel 不能再创建
-            return;
-        }
-
-        var editor = menu.editor;
-        var $body = $('body');
-        var $textContainerElem = editor.$textContainerElem;
-        var opt = this.opt;
-
-        // panel 的容器
-        var $container = $('<div class="w-e-panel-container"></div>');
-        var width = opt.width || 300; // 默认 300px
-        $container.css('width', width + 'px').css('margin-left', (0 - width) / 2 + 'px');
-
-        // 添加关闭按钮
-        var $closeBtn = $('<i class="w-e-icon-close w-e-panel-close"></i>');
-        $container.append($closeBtn);
-        $closeBtn.on('click', function () {
-            _this.hide();
-        });
-
-        // 准备 tabs 容器
-        var $tabTitleContainer = $('<ul class="w-e-panel-tab-title"></ul>');
-        var $tabContentContainer = $('<div class="w-e-panel-tab-content"></div>');
-        $container.append($tabTitleContainer).append($tabContentContainer);
-
-        // 设置高度
-        var height = opt.height;
-        if (height) {
-            $tabContentContainer.css('height', height + 'px').css('overflow-y', 'auto');
-        }
-
-        // tabs
-        var tabs = opt.tabs || [];
-        var tabTitleArr = [];
-        var tabContentArr = [];
-        tabs.forEach(function (tab, tabIndex) {
-            if (!tab) {
-                return;
-            }
-            var title = tab.title || '';
-            var tpl = tab.tpl || '';
-
-            // 替换多语言
-            title = replaceLang(editor, title);
-            tpl = replaceLang(editor, tpl);
-
-            // 添加到 DOM
-            var $title = $('<li class="w-e-item">' + title + '</li>');
-            $tabTitleContainer.append($title);
-            var $content = $(tpl);
-            $tabContentContainer.append($content);
-
-            // 记录到内存
-            $title._index = tabIndex;
-            tabTitleArr.push($title);
-            tabContentArr.push($content);
-
-            // 设置 active 项
-            if (tabIndex === 0) {
-                $title._active = true;
-                $title.addClass('w-e-active');
-            } else {
-                $content.hide();
-            }
-
-            // 绑定 tab 的事件
-            $title.on('click', function (e) {
-                if ($title._active) {
-                    return;
-                }
-                // 隐藏所有的 tab
-                tabTitleArr.forEach(function ($title) {
-                    $title._active = false;
-                    $title.removeClass('w-e-active');
-                });
-                tabContentArr.forEach(function ($content) {
-                    $content.hide();
-                });
-
-                // 显示当前的 tab
-                $title._active = true;
-                $title.addClass('w-e-active');
-                $content.show();
-            });
-        });
-
-        // 绑定关闭事件
-        $container.on('click', function (e) {
-            // 点击时阻止冒泡
-            e.stopPropagation();
-        });
-        $body.on('click', function (e) {
-            _this.hide();
-        });
-
-        // 添加到 DOM
-        $textContainerElem.append($container);
-
-        // 绑定 opt 的事件，只有添加到 DOM 之后才能绑定成功
-        tabs.forEach(function (tab, index) {
-            if (!tab) {
-                return;
-            }
-            var events = tab.events || [];
-            events.forEach(function (event) {
-                var selector = event.selector;
-                var type = event.type;
-                var fn = event.fn || emptyFn;
-                var $content = tabContentArr[index];
-                $content.find(selector).on(type, function (e) {
-                    e.stopPropagation();
-                    var needToHide = fn(e);
-                    // 执行完事件之后，是否要关闭 panel
-                    if (needToHide) {
-                        _this.hide();
-                    }
-                });
-            });
-        });
-
-        // focus 第一个 elem
-        var $inputs = $container.find('input[type=text],textarea');
-        if ($inputs.length) {
-            $inputs.get(0).focus();
-        }
-
-        // 添加到属性
-        this.$container = $container;
-
-        // 隐藏其他 panel
-        this._hideOtherPanels();
-        // 记录该 menu 已经创建了 panel
-        _isCreatedPanelMenus.push(menu);
-    },
-
-    // 隐藏（移除DOM）
-    hide: function hide() {
-        var menu = this.menu;
-        var $container = this.$container;
-        if ($container) {
-            $container.remove();
-        }
-
-        // 将该 menu 记录中移除
-        _isCreatedPanelMenus = _isCreatedPanelMenus.filter(function (item) {
-            if (item === menu) {
-                return false;
-            } else {
-                return true;
-            }
-        });
-    },
-
-    // 一个 panel 展示时，隐藏其他 panel
-    _hideOtherPanels: function _hideOtherPanels() {
-        if (!_isCreatedPanelMenus.length) {
-            return;
-        }
-        _isCreatedPanelMenus.forEach(function (menu) {
-            var panel = menu.panel || {};
-            if (panel.hide) {
-                panel.hide();
-            }
-        });
-    }
-};
-
-/*
-    menu - link
-*/
-// 构造函数
-function Link(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-link"></i></div>');
-    this.type = 'panel';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Link.prototype = {
-    constructor: Link,
-
-    // 点击事件
-    onClick: function onClick(e) {
-        var editor = this.editor;
-        var $linkelem = void 0;
-
-        if (this._active) {
-            // 当前选区在链接里面
-            $linkelem = editor.selection.getSelectionContainerElem();
-            if (!$linkelem) {
-                return;
-            }
-            // 将该元素都包含在选取之内，以便后面整体替换
-            editor.selection.createRangeByElem($linkelem);
-            editor.selection.restoreSelection();
-            // 显示 panel
-            this._createPanel($linkelem.text(), $linkelem.attr('href'));
-        } else {
-            // 当前选区不在链接里面
-            if (editor.selection.isSelectionEmpty()) {
-                // 选区是空的，未选中内容
-                this._createPanel('', '');
-            } else {
-                // 选中内容了
-                this._createPanel(editor.selection.getSelectionText(), '');
-            }
-        }
-    },
-
-    // 创建 panel
-    _createPanel: function _createPanel(text, link) {
-        var _this = this;
-
-        // panel 中需要用到的id
-        var inputLinkId = getRandom('input-link');
-        var inputTextId = getRandom('input-text');
-        var btnOkId = getRandom('btn-ok');
-        var btnDelId = getRandom('btn-del');
-
-        // 是否显示“删除链接”
-        var delBtnDisplay = this._active ? 'inline-block' : 'none';
-
-        // 初始化并显示 panel
-        var panel = new Panel(this, {
-            width: 300,
-            // panel 中可包含多个 tab
-            tabs: [{
-                // tab 的标题
-                title: '链接',
-                // 模板
-                tpl: '<div>\n                            <input id="' + inputTextId + '" type="text" class="block" value="' + text + '" placeholder="\u94FE\u63A5\u6587\u5B57"/></td>\n                            <input id="' + inputLinkId + '" type="text" class="block" value="' + link + '" placeholder="http://..."/></td>\n                            <div class="w-e-button-container">\n                                <button id="' + btnOkId + '" class="right">\u63D2\u5165</button>\n                                <button id="' + btnDelId + '" class="gray right" style="display:' + delBtnDisplay + '">\u5220\u9664\u94FE\u63A5</button>\n                            </div>\n                        </div>',
-                // 事件绑定
-                events: [
-                // 插入链接
-                {
-                    selector: '#' + btnOkId,
-                    type: 'click',
-                    fn: function fn() {
-                        // 执行插入链接
-                        var $link = $('#' + inputLinkId);
-                        var $text = $('#' + inputTextId);
-                        var link = $link.val();
-                        var text = $text.val();
-                        _this._insertLink(text, link);
-
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                },
-                // 删除链接
-                {
-                    selector: '#' + btnDelId,
-                    type: 'click',
-                    fn: function fn() {
-                        // 执行删除链接
-                        _this._delLink();
-
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }]
-            } // tab end
-            ] // tabs end
-        });
-
-        // 显示 panel
-        panel.show();
-
-        // 记录属性
-        this.panel = panel;
-    },
-
-    // 删除当前链接
-    _delLink: function _delLink() {
-        if (!this._active) {
-            return;
-        }
-        var editor = this.editor;
-        var $selectionELem = editor.selection.getSelectionContainerElem();
-        if (!$selectionELem) {
-            return;
-        }
-        var selectionText = editor.selection.getSelectionText();
-        editor.cmd.do('insertHTML', '<span>' + selectionText + '</span>');
-    },
-
-    // 插入链接
-    _insertLink: function _insertLink(text, link) {
-        var editor = this.editor;
-        var config = editor.config;
-        var linkCheck = config.linkCheck;
-        var checkResult = true; // 默认为 true
-        if (linkCheck && typeof linkCheck === 'function') {
-            checkResult = linkCheck(text, link);
-        }
-        if (checkResult === true) {
-            editor.cmd.do('insertHTML', '<a href="' + link + '" target="_blank">' + text + '</a>');
-        } else {
-            alert(checkResult);
-        }
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        var $selectionELem = editor.selection.getSelectionContainerElem();
-        if (!$selectionELem) {
-            return;
-        }
-        if ($selectionELem.getNodeName() === 'A') {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    italic-menu
-*/
-// 构造函数
-function Italic(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-italic"></i>\n        </div>');
-    this.type = 'click';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Italic.prototype = {
-    constructor: Italic,
-
-    // 点击事件
-    onClick: function onClick(e) {
-        // 点击菜单将触发这里
-
-        var editor = this.editor;
-        var isSeleEmpty = editor.selection.isSelectionEmpty();
-
-        if (isSeleEmpty) {
-            // 选区是空的，插入并选中一个“空白”
-            editor.selection.createEmptyRange();
-        }
-
-        // 执行 italic 命令
-        editor.cmd.do('italic');
-
-        if (isSeleEmpty) {
-            // 需要将选取折叠起来
-            editor.selection.collapseRange();
-            editor.selection.restoreSelection();
-        }
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        if (editor.cmd.queryCommandState('italic')) {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    redo-menu
-*/
-// 构造函数
-function Redo(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-redo"></i>\n        </div>');
-    this.type = 'click';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Redo.prototype = {
-    constructor: Redo,
-
-    // 点击事件
-    onClick: function onClick(e) {
-        // 点击菜单将触发这里
-
-        var editor = this.editor;
-
-        // 执行 redo 命令
-        editor.cmd.do('redo');
-    }
-};
-
-/*
-    strikeThrough-menu
-*/
-// 构造函数
-function StrikeThrough(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-strikethrough"></i>\n        </div>');
-    this.type = 'click';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-StrikeThrough.prototype = {
-    constructor: StrikeThrough,
-
-    // 点击事件
-    onClick: function onClick(e) {
-        // 点击菜单将触发这里
-
-        var editor = this.editor;
-        var isSeleEmpty = editor.selection.isSelectionEmpty();
-
-        if (isSeleEmpty) {
-            // 选区是空的，插入并选中一个“空白”
-            editor.selection.createEmptyRange();
-        }
-
-        // 执行 strikeThrough 命令
-        editor.cmd.do('strikeThrough');
-
-        if (isSeleEmpty) {
-            // 需要将选取折叠起来
-            editor.selection.collapseRange();
-            editor.selection.restoreSelection();
-        }
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        if (editor.cmd.queryCommandState('strikeThrough')) {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    underline-menu
-*/
-// 构造函数
-function Underline(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-underline"></i>\n        </div>');
-    this.type = 'click';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Underline.prototype = {
-    constructor: Underline,
-
-    // 点击事件
-    onClick: function onClick(e) {
-        // 点击菜单将触发这里
-
-        var editor = this.editor;
-        var isSeleEmpty = editor.selection.isSelectionEmpty();
-
-        if (isSeleEmpty) {
-            // 选区是空的，插入并选中一个“空白”
-            editor.selection.createEmptyRange();
-        }
-
-        // 执行 underline 命令
-        editor.cmd.do('underline');
-
-        if (isSeleEmpty) {
-            // 需要将选取折叠起来
-            editor.selection.collapseRange();
-            editor.selection.restoreSelection();
-        }
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        if (editor.cmd.queryCommandState('underline')) {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    undo-menu
-*/
-// 构造函数
-function Undo(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-undo"></i>\n        </div>');
-    this.type = 'click';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Undo.prototype = {
-    constructor: Undo,
-
-    // 点击事件
-    onClick: function onClick(e) {
-        // 点击菜单将触发这里
-
-        var editor = this.editor;
-
-        // 执行 undo 命令
-        editor.cmd.do('undo');
-    }
-};
-
-/*
-    menu - list
-*/
-// 构造函数
-function List(editor) {
-    var _this = this;
-
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-list2"></i></div>');
-    this.type = 'droplist';
-
-    // 当前是否 active 状态
-    this._active = false;
-
-    // 初始化 droplist
-    this.droplist = new DropList(this, {
-        width: 120,
-        $title: $('<p>设置列表</p>'),
-        type: 'list', // droplist 以列表形式展示
-        list: [{ $elem: $('<span><i class="w-e-icon-list-numbered"></i> 有序列表</span>'), value: 'insertOrderedList' }, { $elem: $('<span><i class="w-e-icon-list2"></i> 无序列表</span>'), value: 'insertUnorderedList' }],
-        onClick: function onClick(value) {
-            // 注意 this 是指向当前的 List 对象
-            _this._command(value);
-        }
-    });
-}
-
-// 原型
-List.prototype = {
-    constructor: List,
-
-    // 执行命令
-    _command: function _command(value) {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-        editor.selection.restoreSelection();
-        if (editor.cmd.queryCommandState(value)) {
-            return;
-        }
-        editor.cmd.do(value);
-
-        // 验证列表是否被包裹在 <p> 之内
-        var $selectionElem = editor.selection.getSelectionContainerElem();
-        if ($selectionElem.getNodeName() === 'LI') {
-            $selectionElem = $selectionElem.parent();
-        }
-        if (/^ol|ul$/i.test($selectionElem.getNodeName()) === false) {
-            return;
-        }
-        if ($selectionElem.equal($textElem)) {
-            // 证明是顶级标签，没有被 <p> 包裹
-            return;
-        }
-        var $parent = $selectionElem.parent();
-        if ($parent.equal($textElem)) {
-            // $parent 是顶级标签，不能删除
-            return;
-        }
-
-        $selectionElem.insertAfter($parent);
-        $parent.remove();
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        if (editor.cmd.queryCommandState('insertUnOrderedList') || editor.cmd.queryCommandState('insertOrderedList')) {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    menu - justify
-*/
-// 构造函数
-function Justify(editor) {
-    var _this = this;
-
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-paragraph-left"></i></div>');
-    this.type = 'droplist';
-
-    // 当前是否 active 状态
-    this._active = false;
-
-    // 初始化 droplist
-    this.droplist = new DropList(this, {
-        width: 100,
-        $title: $('<p>对齐方式</p>'),
-        type: 'list', // droplist 以列表形式展示
-        list: [{ $elem: $('<span><i class="w-e-icon-paragraph-left"></i> 靠左</span>'), value: 'justifyLeft' }, { $elem: $('<span><i class="w-e-icon-paragraph-center"></i> 居中</span>'), value: 'justifyCenter' }, { $elem: $('<span><i class="w-e-icon-paragraph-right"></i> 靠右</span>'), value: 'justifyRight' }],
-        onClick: function onClick(value) {
-            // 注意 this 是指向当前的 List 对象
-            _this._command(value);
-        }
-    });
-}
-
-// 原型
-Justify.prototype = {
-    constructor: Justify,
-
-    // 执行命令
-    _command: function _command(value) {
-        var editor = this.editor;
-        editor.cmd.do(value);
-    }
-};
-
-/*
-    menu - Forecolor
-*/
-// 构造函数
-function ForeColor(editor) {
-    var _this = this;
-
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-pencil2"></i></div>');
-    this.type = 'droplist';
-
-    // 获取配置的颜色
-    var config = editor.config;
-    var colors = config.colors || [];
-
-    // 当前是否 active 状态
-    this._active = false;
-
-    // 初始化 droplist
-    this.droplist = new DropList(this, {
-        width: 120,
-        $title: $('<p>文字颜色</p>'),
-        type: 'inline-block', // droplist 内容以 block 形式展示
-        list: colors.map(function (color) {
-            return { $elem: $('<i style="color:' + color + ';" class="w-e-icon-pencil2"></i>'), value: color };
-        }),
-        onClick: function onClick(value) {
-            // 注意 this 是指向当前的 ForeColor 对象
-            _this._command(value);
-        }
-    });
-}
-
-// 原型
-ForeColor.prototype = {
-    constructor: ForeColor,
-
-    // 执行命令
-    _command: function _command(value) {
-        var editor = this.editor;
-        editor.cmd.do('foreColor', value);
-    }
-};
-
-/*
-    menu - BackColor
-*/
-// 构造函数
-function BackColor(editor) {
-    var _this = this;
-
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-paint-brush"></i></div>');
-    this.type = 'droplist';
-
-    // 获取配置的颜色
-    var config = editor.config;
-    var colors = config.colors || [];
-
-    // 当前是否 active 状态
-    this._active = false;
-
-    // 初始化 droplist
-    this.droplist = new DropList(this, {
-        width: 120,
-        $title: $('<p>背景色</p>'),
-        type: 'inline-block', // droplist 内容以 block 形式展示
-        list: colors.map(function (color) {
-            return { $elem: $('<i style="color:' + color + ';" class="w-e-icon-paint-brush"></i>'), value: color };
-        }),
-        onClick: function onClick(value) {
-            // 注意 this 是指向当前的 BackColor 对象
-            _this._command(value);
-        }
-    });
-}
-
-// 原型
-BackColor.prototype = {
-    constructor: BackColor,
-
-    // 执行命令
-    _command: function _command(value) {
-        var editor = this.editor;
-        editor.cmd.do('backColor', value);
-    }
-};
-
-/*
-    menu - quote
-*/
-// 构造函数
-function Quote(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-quotes-left"></i>\n        </div>');
-    this.type = 'click';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Quote.prototype = {
-    constructor: Quote,
-
-    onClick: function onClick(e) {
-        var editor = this.editor;
-        var $selectionElem = editor.selection.getSelectionContainerElem();
-        var nodeName = $selectionElem.getNodeName();
-
-        if (!UA.isIE()) {
-            if (nodeName === 'BLOCKQUOTE') {
-                // 撤销 quote
-                editor.cmd.do('formatBlock', '<P>');
-            } else {
-                // 转换为 quote
-                editor.cmd.do('formatBlock', '<BLOCKQUOTE>');
-            }
-            return;
-        }
-
-        // IE 中不支持 formatBlock <BLOCKQUOTE> ，要用其他方式兼容
-        var content = void 0,
-            $targetELem = void 0;
-        if (nodeName === 'P') {
-            // 将 P 转换为 quote
-            content = $selectionElem.text();
-            $targetELem = $('<blockquote>' + content + '</blockquote>');
-            $targetELem.insertAfter($selectionElem);
-            $selectionElem.remove();
-            return;
-        }
-        if (nodeName === 'BLOCKQUOTE') {
-            // 撤销 quote
-            content = $selectionElem.text();
-            $targetELem = $('<p>' + content + '</p>');
-            $targetELem.insertAfter($selectionElem);
-            $selectionElem.remove();
-        }
-    },
-
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        var reg = /^BLOCKQUOTE$/i;
-        var cmdValue = editor.cmd.queryCommandValue('formatBlock');
-        if (reg.test(cmdValue)) {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    menu - code
-*/
-// 构造函数
-function Code(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-terminal"></i>\n        </div>');
-    this.type = 'panel';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Code.prototype = {
-    constructor: Code,
-
-    onClick: function onClick(e) {
-        var editor = this.editor;
-        var $startElem = editor.selection.getSelectionStartElem();
-        var $endElem = editor.selection.getSelectionEndElem();
-        var isSeleEmpty = editor.selection.isSelectionEmpty();
-        var selectionText = editor.selection.getSelectionText();
-        var $code = void 0;
-
-        if (!$startElem.equal($endElem)) {
-            // 跨元素选择，不做处理
-            editor.selection.restoreSelection();
-            return;
-        }
-        if (!isSeleEmpty) {
-            // 选取不是空，用 <code> 包裹即可
-            $code = $('<code>' + selectionText + '</code>');
-            editor.cmd.do('insertElem', $code);
-            editor.selection.createRangeByElem($code, false);
-            editor.selection.restoreSelection();
-            return;
-        }
-
-        // 选取是空，且没有夸元素选择，则插入 <pre><code></code></prev>
-        if (this._active) {
-            // 选中状态，将编辑内容
-            this._createPanel($startElem.html());
-        } else {
-            // 未选中状态，将创建内容
-            this._createPanel();
-        }
-    },
-
-    _createPanel: function _createPanel(value) {
-        var _this = this;
-
-        // value - 要编辑的内容
-        value = value || '';
-        var type = !value ? 'new' : 'edit';
-        var textId = getRandom('texxt');
-        var btnId = getRandom('btn');
-
-        var panel = new Panel(this, {
-            width: 500,
-            // 一个 Panel 包含多个 tab
-            tabs: [{
-                // 标题
-                title: '插入代码',
-                // 模板
-                tpl: '<div>\n                        <textarea id="' + textId + '" style="height:145px;;">' + value + '</textarea>\n                        <div class="w-e-button-container">\n                            <button id="' + btnId + '" class="right">\u63D2\u5165</button>\n                        </div>\n                    <div>',
-                // 事件绑定
-                events: [
-                // 插入代码
-                {
-                    selector: '#' + btnId,
-                    type: 'click',
-                    fn: function fn() {
-                        var $text = $('#' + textId);
-                        var text = $text.val() || $text.html();
-                        text = replaceHtmlSymbol(text);
-                        if (type === 'new') {
-                            // 新插入
-                            _this._insertCode(text);
-                        } else {
-                            // 编辑更新
-                            _this._updateCode(text);
-                        }
-
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }]
-            } // first tab end
-            ] // tabs end
-        }); // new Panel end
-
-        // 显示 panel
-        panel.show();
-
-        // 记录属性
-        this.panel = panel;
-    },
-
-    // 插入代码
-    _insertCode: function _insertCode(value) {
-        var editor = this.editor;
-        editor.cmd.do('insertHTML', '<pre><code>' + value + '</code></pre><p><br></p>');
-    },
-
-    // 更新代码
-    _updateCode: function _updateCode(value) {
-        var editor = this.editor;
-        var $selectionELem = editor.selection.getSelectionContainerElem();
-        if (!$selectionELem) {
-            return;
-        }
-        $selectionELem.html(value);
-        editor.selection.restoreSelection();
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        var $selectionELem = editor.selection.getSelectionContainerElem();
-        if (!$selectionELem) {
-            return;
-        }
-        var $parentElem = $selectionELem.parent();
-        if ($selectionELem.getNodeName() === 'CODE' && $parentElem.getNodeName() === 'PRE') {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    menu - emoticon
-*/
-// 构造函数
-function Emoticon(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-happy"></i>\n        </div>');
-    this.type = 'panel';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Emoticon.prototype = {
-    constructor: Emoticon,
-
-    onClick: function onClick() {
-        this._createPanel();
-    },
-
-    _createPanel: function _createPanel() {
-        var _this = this;
-
-        var editor = this.editor;
-        var config = editor.config;
-        // 获取表情配置
-        var emotions = config.emotions || [];
-
-        // 创建表情 dropPanel 的配置
-        var tabConfig = [];
-        emotions.forEach(function (emotData) {
-            var emotType = emotData.type;
-            var content = emotData.content || [];
-
-            // 这一组表情最终拼接出来的 html
-            var faceHtml = '';
-
-            // emoji 表情
-            if (emotType === 'emoji') {
-                content.forEach(function (item) {
-                    if (item) {
-                        faceHtml += '<span class="w-e-item">' + item + '</span>';
-                    }
-                });
-            }
-            // 图片表情
-            if (emotType === 'image') {
-                content.forEach(function (item) {
-                    var src = item.src;
-                    var alt = item.alt;
-                    if (src) {
-                        // 加一个 data-w-e 属性，点击图片的时候不再提示编辑图片
-                        faceHtml += '<span class="w-e-item"><img src="' + src + '" alt="' + alt + '" data-w-e="1"/></span>';
-                    }
-                });
-            }
-
-            tabConfig.push({
-                title: emotData.title,
-                tpl: '<div class="w-e-emoticon-container">' + faceHtml + '</div>',
-                events: [{
-                    selector: 'span.w-e-item',
-                    type: 'click',
-                    fn: function fn(e) {
-                        var target = e.target;
-                        var $target = $(target);
-                        var nodeName = $target.getNodeName();
-
-                        var insertHtml = void 0;
-                        if (nodeName === 'IMG') {
-                            // 插入图片
-                            insertHtml = $target.parent().html();
-                        } else {
-                            // 插入 emoji
-                            insertHtml = '<span>' + $target.html() + '</span>';
-                        }
-
-                        _this._insert(insertHtml);
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }]
-            });
-        });
-
-        var panel = new Panel(this, {
-            width: 300,
-            height: 200,
-            // 一个 Panel 包含多个 tab
-            tabs: tabConfig
-        });
-
-        // 显示 panel
-        panel.show();
-
-        // 记录属性
-        this.panel = panel;
-    },
-
-    // 插入表情
-    _insert: function _insert(emotHtml) {
-        var editor = this.editor;
-        editor.cmd.do('insertHTML', emotHtml);
-    }
-};
-
-/*
-    menu - table
-*/
-// 构造函数
-function Table(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-table2"></i></div>');
-    this.type = 'panel';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Table.prototype = {
-    constructor: Table,
-
-    onClick: function onClick() {
-        if (this._active) {
-            // 编辑现有表格
-            this._createEditPanel();
-        } else {
-            // 插入新表格
-            this._createInsertPanel();
-        }
-    },
-
-    // 创建插入新表格的 panel
-    _createInsertPanel: function _createInsertPanel() {
-        var _this = this;
-
-        // 用到的 id
-        var btnInsertId = getRandom('btn');
-        var textRowNum = getRandom('row');
-        var textColNum = getRandom('col');
-
-        var panel = new Panel(this, {
-            width: 250,
-            // panel 包含多个 tab
-            tabs: [{
-                // 标题
-                title: '插入表格',
-                // 模板
-                tpl: '<div>\n                        <p style="text-align:left; padding:5px 0;">\n                            \u521B\u5EFA\n                            <input id="' + textRowNum + '" type="text" value="5" style="width:40px;text-align:center;"/>\n                            \u884C\n                            <input id="' + textColNum + '" type="text" value="5" style="width:40px;text-align:center;"/>\n                            \u5217\u7684\u8868\u683C\n                        </p>\n                        <div class="w-e-button-container">\n                            <button id="' + btnInsertId + '" class="right">\u63D2\u5165</button>\n                        </div>\n                    </div>',
-                // 事件绑定
-                events: [{
-                    // 点击按钮，插入表格
-                    selector: '#' + btnInsertId,
-                    type: 'click',
-                    fn: function fn() {
-                        var rowNum = parseInt($('#' + textRowNum).val());
-                        var colNum = parseInt($('#' + textColNum).val());
-
-                        if (rowNum && colNum && rowNum > 0 && colNum > 0) {
-                            // form 数据有效
-                            _this._insert(rowNum, colNum);
-                        }
-
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }]
-            } // first tab end
-            ] // tabs end
-        }); // panel end
-
-        // 展示 panel
-        panel.show();
-
-        // 记录属性
-        this.panel = panel;
-    },
-
-    // 插入表格
-    _insert: function _insert(rowNum, colNum) {
-        // 拼接 table 模板
-        var r = void 0,
-            c = void 0;
-        var html = '<table border="0" width="100%" cellpadding="0" cellspacing="0">';
-        for (r = 0; r < rowNum; r++) {
-            html += '<tr>';
-            if (r === 0) {
-                for (c = 0; c < colNum; c++) {
-                    html += '<th>&nbsp;</th>';
-                }
-            } else {
-                for (c = 0; c < colNum; c++) {
-                    html += '<td>&nbsp;</td>';
-                }
-            }
-            html += '</tr>';
-        }
-        html += '</table><p><br></p>';
-
-        // 执行命令
-        var editor = this.editor;
-        editor.cmd.do('insertHTML', html);
-
-        // 防止 firefox 下出现 resize 的控制点
-        editor.cmd.do('enableObjectResizing', false);
-        editor.cmd.do('enableInlineTableEditing', false);
-    },
-
-    // 创建编辑表格的 panel
-    _createEditPanel: function _createEditPanel() {
-        var _this2 = this;
-
-        // 可用的 id
-        var addRowBtnId = getRandom('add-row');
-        var addColBtnId = getRandom('add-col');
-        var delRowBtnId = getRandom('del-row');
-        var delColBtnId = getRandom('del-col');
-        var delTableBtnId = getRandom('del-table');
-
-        // 创建 panel 对象
-        var panel = new Panel(this, {
-            width: 320,
-            // panel 包含多个 tab
-            tabs: [{
-                // 标题
-                title: '编辑表格',
-                // 模板
-                tpl: '<div>\n                        <div class="w-e-button-container" style="border-bottom:1px solid #f1f1f1;padding-bottom:5px;margin-bottom:5px;">\n                            <button id="' + addRowBtnId + '" class="left">\u589E\u52A0\u884C</button>\n                            <button id="' + delRowBtnId + '" class="red left">\u5220\u9664\u884C</button>\n                            <button id="' + addColBtnId + '" class="left">\u589E\u52A0\u5217</button>\n                            <button id="' + delColBtnId + '" class="red left">\u5220\u9664\u5217</button>\n                        </div>\n                        <div class="w-e-button-container">\n                            <button id="' + delTableBtnId + '" class="gray left">\u5220\u9664\u8868\u683C</button>\n                        </dv>\n                    </div>',
-                // 事件绑定
-                events: [{
-                    // 增加行
-                    selector: '#' + addRowBtnId,
-                    type: 'click',
-                    fn: function fn() {
-                        _this2._addRow();
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }, {
-                    // 增加列
-                    selector: '#' + addColBtnId,
-                    type: 'click',
-                    fn: function fn() {
-                        _this2._addCol();
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }, {
-                    // 删除行
-                    selector: '#' + delRowBtnId,
-                    type: 'click',
-                    fn: function fn() {
-                        _this2._delRow();
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }, {
-                    // 删除列
-                    selector: '#' + delColBtnId,
-                    type: 'click',
-                    fn: function fn() {
-                        _this2._delCol();
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }, {
-                    // 删除表格
-                    selector: '#' + delTableBtnId,
-                    type: 'click',
-                    fn: function fn() {
-                        _this2._delTable();
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }]
-            }]
-        });
-        // 显示 panel
-        panel.show();
-    },
-
-    // 获取选中的单元格的位置信息
-    _getLocationData: function _getLocationData() {
-        var result = {};
-        var editor = this.editor;
-        var $selectionELem = editor.selection.getSelectionContainerElem();
-        if (!$selectionELem) {
-            return;
-        }
-        var nodeName = $selectionELem.getNodeName();
-        if (nodeName !== 'TD' && nodeName !== 'TH') {
-            return;
-        }
-
-        // 获取 td index
-        var $tr = $selectionELem.parent();
-        var $tds = $tr.children();
-        var tdLength = $tds.length;
-        $tds.forEach(function (td, index) {
-            if (td === $selectionELem[0]) {
-                // 记录并跳出循环
-                result.td = {
-                    index: index,
-                    elem: td,
-                    length: tdLength
-                };
-                return false;
-            }
-        });
-
-        // 获取 tr index
-        var $tbody = $tr.parent();
-        var $trs = $tbody.children();
-        var trLength = $trs.length;
-        $trs.forEach(function (tr, index) {
-            if (tr === $tr[0]) {
-                // 记录并跳出循环
-                result.tr = {
-                    index: index,
-                    elem: tr,
-                    length: trLength
-                };
-                return false;
-            }
-        });
-
-        // 返回结果
-        return result;
-    },
-
-    // 增加行
-    _addRow: function _addRow() {
-        // 获取当前单元格的位置信息
-        var locationData = this._getLocationData();
-        if (!locationData) {
-            return;
-        }
-        var trData = locationData.tr;
-        var $currentTr = $(trData.elem);
-        var tdData = locationData.td;
-        var tdLength = tdData.length;
-
-        // 拼接即将插入的字符串
-        var newTr = document.createElement('tr');
-        var tpl = '',
-            i = void 0;
-        for (i = 0; i < tdLength; i++) {
-            tpl += '<td>&nbsp;</td>';
-        }
-        newTr.innerHTML = tpl;
-        // 插入
-        $(newTr).insertAfter($currentTr);
-    },
-
-    // 增加列
-    _addCol: function _addCol() {
-        // 获取当前单元格的位置信息
-        var locationData = this._getLocationData();
-        if (!locationData) {
-            return;
-        }
-        var trData = locationData.tr;
-        var tdData = locationData.td;
-        var tdIndex = tdData.index;
-        var $currentTr = $(trData.elem);
-        var $trParent = $currentTr.parent();
-        var $trs = $trParent.children();
-
-        // 遍历所有行
-        $trs.forEach(function (tr) {
-            var $tr = $(tr);
-            var $tds = $tr.children();
-            var $currentTd = $tds.get(tdIndex);
-            var name = $currentTd.getNodeName().toLowerCase();
-
-            // new 一个 td，并插入
-            var newTd = document.createElement(name);
-            $(newTd).insertAfter($currentTd);
-        });
-    },
-
-    // 删除行
-    _delRow: function _delRow() {
-        // 获取当前单元格的位置信息
-        var locationData = this._getLocationData();
-        if (!locationData) {
-            return;
-        }
-        var trData = locationData.tr;
-        var $currentTr = $(trData.elem);
-        $currentTr.remove();
-    },
-
-    // 删除列
-    _delCol: function _delCol() {
-        // 获取当前单元格的位置信息
-        var locationData = this._getLocationData();
-        if (!locationData) {
-            return;
-        }
-        var trData = locationData.tr;
-        var tdData = locationData.td;
-        var tdIndex = tdData.index;
-        var $currentTr = $(trData.elem);
-        var $trParent = $currentTr.parent();
-        var $trs = $trParent.children();
-
-        // 遍历所有行
-        $trs.forEach(function (tr) {
-            var $tr = $(tr);
-            var $tds = $tr.children();
-            var $currentTd = $tds.get(tdIndex);
-            // 删除
-            $currentTd.remove();
-        });
-    },
-
-    // 删除表格
-    _delTable: function _delTable() {
-        var editor = this.editor;
-        var $selectionELem = editor.selection.getSelectionContainerElem();
-        if (!$selectionELem) {
-            return;
-        }
-        var $table = $selectionELem.parentUntil('table');
-        if (!$table) {
-            return;
-        }
-        $table.remove();
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        var $selectionELem = editor.selection.getSelectionContainerElem();
-        if (!$selectionELem) {
-            return;
-        }
-        var nodeName = $selectionELem.getNodeName();
-        if (nodeName === 'TD' || nodeName === 'TH') {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    menu - video
-*/
-// 构造函数
-function Video(editor) {
-    this.editor = editor;
-    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-play"></i></div>');
-    this.type = 'panel';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Video.prototype = {
-    constructor: Video,
-
-    onClick: function onClick() {
-        this._createPanel();
-    },
-
-    _createPanel: function _createPanel() {
-        var _this = this;
-
-        // 创建 id
-        var textValId = getRandom('text-val');
-        var btnId = getRandom('btn');
-
-        // 创建 panel
-        var panel = new Panel(this, {
-            width: 350,
-            // 一个 panel 多个 tab
-            tabs: [{
-                // 标题
-                title: '插入视频',
-                // 模板
-                tpl: '<div>\n                        <input id="' + textValId + '" type="text" class="block" placeholder="\u683C\u5F0F\u5982\uFF1A<iframe src=... ></iframe>"/>\n                        <div class="w-e-button-container">\n                            <button id="' + btnId + '" class="right">\u63D2\u5165</button>\n                        </div>\n                    </div>',
-                // 事件绑定
-                events: [{
-                    selector: '#' + btnId,
-                    type: 'click',
-                    fn: function fn() {
-                        var $text = $('#' + textValId);
-                        var val = $text.val().trim();
-
-                        // 测试用视频地址
-                        // <iframe height=498 width=510 src='http://player.youku.com/embed/XMjcwMzc3MzM3Mg==' frameborder=0 'allowfullscreen'></iframe>
-
-                        if (val) {
-                            // 插入视频
-                            _this._insert(val);
-                        }
-
-                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                        return true;
-                    }
-                }]
-            } // first tab end
-            ] // tabs end
-        }); // panel end
-
-        // 显示 panel
-        panel.show();
-
-        // 记录属性
-        this.panel = panel;
-    },
-
-    // 插入视频
-    _insert: function _insert(val) {
-        var editor = this.editor;
-        editor.cmd.do('insertHTML', val + '<p><br></p>');
-    }
-};
-
-/*
-    menu - img
-*/
-// 构造函数
-function Image(editor) {
-    this.editor = editor;
-    var imgMenuId = getRandom('w-e-img');
-    this.$elem = $('<div class="w-e-menu" id="' + imgMenuId + '"><i class="w-e-icon-image"></i></div>');
-    editor.imgMenuId = imgMenuId;
-    this.type = 'panel';
-
-    // 当前是否 active 状态
-    this._active = false;
-}
-
-// 原型
-Image.prototype = {
-    constructor: Image,
-
-    onClick: function onClick() {
-        var editor = this.editor;
-        var config = editor.config;
-        if (config.qiniu) {
-            return;
-        }
-        if (this._active) {
-            this._createEditPanel();
-        } else {
-            this._createInsertPanel();
-        }
-    },
-
-    _createEditPanel: function _createEditPanel() {
-        var editor = this.editor;
-
-        // id
-        var width30 = getRandom('width-30');
-        var width50 = getRandom('width-50');
-        var width100 = getRandom('width-100');
-        var delBtn = getRandom('del-btn');
-
-        // tab 配置
-        var tabsConfig = [{
-            title: '编辑图片',
-            tpl: '<div>\n                    <div class="w-e-button-container" style="border-bottom:1px solid #f1f1f1;padding-bottom:5px;margin-bottom:5px;">\n                        <span style="float:left;font-size:14px;margin:4px 5px 0 5px;color:#333;">\u6700\u5927\u5BBD\u5EA6\uFF1A</span>\n                        <button id="' + width30 + '" class="left">30%</button>\n                        <button id="' + width50 + '" class="left">50%</button>\n                        <button id="' + width100 + '" class="left">100%</button>\n                    </div>\n                    <div class="w-e-button-container">\n                        <button id="' + delBtn + '" class="gray left">\u5220\u9664\u56FE\u7247</button>\n                    </dv>\n                </div>',
-            events: [{
-                selector: '#' + width30,
-                type: 'click',
-                fn: function fn() {
-                    var $img = editor._selectedImg;
-                    if ($img) {
-                        $img.css('max-width', '30%');
-                    }
-                    // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                    return true;
-                }
-            }, {
-                selector: '#' + width50,
-                type: 'click',
-                fn: function fn() {
-                    var $img = editor._selectedImg;
-                    if ($img) {
-                        $img.css('max-width', '50%');
-                    }
-                    // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                    return true;
-                }
-            }, {
-                selector: '#' + width100,
-                type: 'click',
-                fn: function fn() {
-                    var $img = editor._selectedImg;
-                    if ($img) {
-                        $img.css('max-width', '100%');
-                    }
-                    // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                    return true;
-                }
-            }, {
-                selector: '#' + delBtn,
-                type: 'click',
-                fn: function fn() {
-                    var $img = editor._selectedImg;
-                    if ($img) {
-                        $img.remove();
-                    }
-                    // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
-                    return true;
-                }
-            }]
-        }];
-
-        // 创建 panel 并显示
-        var panel = new Panel(this, {
-            width: 300,
-            tabs: tabsConfig
-        });
-        panel.show();
-
-        // 记录属性
-        this.panel = panel;
-    },
-
-    _createInsertPanel: function _createInsertPanel() {
-        var editor = this.editor;
-        var uploadImg = editor.uploadImg;
-        var config = editor.config;
-
-        // id
-        var upTriggerId = getRandom('up-trigger');
-        var upFileId = getRandom('up-file');
-        var linkUrlId = getRandom('link-url');
-        var linkBtnId = getRandom('link-btn');
-
-        // tabs 的配置
-        var tabsConfig = [{
-            title: '上传图片',
-            tpl: '<div class="w-e-up-img-container">\n                    <div id="' + upTriggerId + '" class="w-e-up-btn">\n                        <i class="w-e-icon-upload2"></i>\n                    </div>\n                    <div style="display:none;">\n                        <input id="' + upFileId + '" type="file" multiple="multiple" accept="image/jpg,image/jpeg,image/png,image/gif,image/bmp"/>\n                    </div>\n                </div>',
-            events: [{
-                // 触发选择图片
-                selector: '#' + upTriggerId,
-                type: 'click',
-                fn: function fn() {
-                    var $file = $('#' + upFileId);
-                    var fileElem = $file[0];
-                    if (fileElem) {
-                        fileElem.click();
-                    } else {
-                        // 返回 true 可关闭 panel
-                        return true;
-                    }
-                }
-            }, {
-                // 选择图片完毕
-                selector: '#' + upFileId,
-                type: 'change',
-                fn: function fn() {
-                    var $file = $('#' + upFileId);
-                    var fileElem = $file[0];
-                    if (!fileElem) {
-                        // 返回 true 可关闭 panel
-                        return true;
-                    }
-
-                    // 获取选中的 file 对象列表
-                    var fileList = fileElem.files;
-                    if (fileList.length) {
-                        uploadImg.uploadImg(fileList);
-                    }
-
-                    // 返回 true 可关闭 panel
-                    return true;
-                }
-            }]
-        }, // first tab end
-        {
-            title: '网络图片',
-            tpl: '<div>\n                    <input id="' + linkUrlId + '" type="text" class="block" placeholder="\u56FE\u7247\u94FE\u63A5"/></td>\n                    <div class="w-e-button-container">\n                        <button id="' + linkBtnId + '" class="right">\u63D2\u5165</button>\n                    </div>\n                </div>',
-            events: [{
-                selector: '#' + linkBtnId,
-                type: 'click',
-                fn: function fn() {
-                    var $linkUrl = $('#' + linkUrlId);
-                    var url = $linkUrl.val().trim();
-
-                    if (url) {
-                        uploadImg.insertLinkImg(url);
-                    }
-
-                    // 返回 true 表示函数执行结束之后关闭 panel
-                    return true;
-                }
-            }]
-        } // second tab end
-        ]; // tabs end
-
-        // 判断 tabs 的显示
-        var tabsConfigResult = [];
-        if ((config.uploadImgShowBase64 || config.uploadImgServer || config.customUploadImg) && window.FileReader) {
-            // 显示“上传图片”
-            tabsConfigResult.push(tabsConfig[0]);
-        }
-        if (config.showLinkImg) {
-            // 显示“网络图片”
-            tabsConfigResult.push(tabsConfig[1]);
-        }
-
-        // 创建 panel 并显示
-        var panel = new Panel(this, {
-            width: 300,
-            tabs: tabsConfigResult
-        });
-        panel.show();
-
-        // 记录属性
-        this.panel = panel;
-    },
-
-    // 试图改变 active 状态
-    tryChangeActive: function tryChangeActive(e) {
-        var editor = this.editor;
-        var $elem = this.$elem;
-        if (editor._selectedImg) {
-            this._active = true;
-            $elem.addClass('w-e-active');
-        } else {
-            this._active = false;
-            $elem.removeClass('w-e-active');
-        }
-    }
-};
-
-/*
-    所有菜单的汇总
-*/
-
-// 存储菜单的构造函数
-var MenuConstructors = {};
-
-MenuConstructors.bold = Bold;
-
-MenuConstructors.head = Head;
-
-MenuConstructors.fontSize = FontSize;
-
-MenuConstructors.fontName = FontName;
-
-MenuConstructors.link = Link;
-
-MenuConstructors.italic = Italic;
-
-MenuConstructors.redo = Redo;
-
-MenuConstructors.strikeThrough = StrikeThrough;
-
-MenuConstructors.underline = Underline;
-
-MenuConstructors.undo = Undo;
-
-MenuConstructors.list = List;
-
-MenuConstructors.justify = Justify;
-
-MenuConstructors.foreColor = ForeColor;
-
-MenuConstructors.backColor = BackColor;
-
-MenuConstructors.quote = Quote;
-
-MenuConstructors.code = Code;
-
-MenuConstructors.emoticon = Emoticon;
-
-MenuConstructors.table = Table;
-
-MenuConstructors.video = Video;
-
-MenuConstructors.image = Image;
-
-/*
-    菜单集合
-*/
-// 构造函数
-function Menus(editor) {
-    this.editor = editor;
-    this.menus = {};
-}
-
-// 修改原型
-Menus.prototype = {
-    constructor: Menus,
-
-    // 初始化菜单
-    init: function init() {
-        var _this = this;
-
-        var editor = this.editor;
-        var config = editor.config || {};
-        var configMenus = config.menus || []; // 获取配置中的菜单
-
-        // 根据配置信息，创建菜单
-        configMenus.forEach(function (menuKey) {
-            var MenuConstructor = MenuConstructors[menuKey];
-            if (MenuConstructor && typeof MenuConstructor === 'function') {
-                // 创建单个菜单
-                _this.menus[menuKey] = new MenuConstructor(editor);
-            }
-        });
-
-        // 添加到菜单栏
-        this._addToToolbar();
-
-        // 绑定事件
-        this._bindEvent();
-    },
-
-    // 添加到菜单栏
-    _addToToolbar: function _addToToolbar() {
-        var editor = this.editor;
-        var $toolbarElem = editor.$toolbarElem;
-        var menus = this.menus;
-        var config = editor.config;
-        // config.zIndex 是配置的编辑区域的 z-index，菜单的 z-index 得在其基础上 +1
-        var zIndex = config.zIndex + 1;
-        objForEach(menus, function (key, menu) {
-            var $elem = menu.$elem;
-            if ($elem) {
-                // 设置 z-index
-                $elem.css('z-index', zIndex);
-                $toolbarElem.append($elem);
-            }
-        });
-    },
-
-    // 绑定菜单 click mouseenter 事件
-    _bindEvent: function _bindEvent() {
-        var menus = this.menus;
-        var editor = this.editor;
-        objForEach(menus, function (key, menu) {
-            var type = menu.type;
-            if (!type) {
-                return;
-            }
-            var $elem = menu.$elem;
-            var droplist = menu.droplist;
-            var panel = menu.panel;
-
-            // 点击类型，例如 bold
-            if (type === 'click' && menu.onClick) {
-                $elem.on('click', function (e) {
-                    if (editor.selection.getRange() == null) {
-                        return;
-                    }
-                    menu.onClick(e);
-                });
-            }
-
-            // 下拉框，例如 head
-            if (type === 'droplist' && droplist) {
-                $elem.on('mouseenter', function (e) {
-                    if (editor.selection.getRange() == null) {
-                        return;
-                    }
-                    // 显示
-                    droplist.showTimeoutId = setTimeout(function () {
-                        droplist.show();
-                    }, 200);
-                }).on('mouseleave', function (e) {
-                    // 隐藏
-                    droplist.hideTimeoutId = setTimeout(function () {
-                        droplist.hide();
-                    }, 0);
-                });
-            }
-
-            // 弹框类型，例如 link
-            if (type === 'panel' && menu.onClick) {
-                $elem.on('click', function (e) {
-                    e.stopPropagation();
-                    if (editor.selection.getRange() == null) {
-                        return;
-                    }
-                    // 在自定义事件中显示 panel
-                    menu.onClick(e);
-                });
-            }
-        });
-    },
-
-    // 尝试修改菜单状态
-    changeActive: function changeActive() {
-        var menus = this.menus;
-        objForEach(menus, function (key, menu) {
-            if (menu.tryChangeActive) {
-                setTimeout(function () {
-                    menu.tryChangeActive();
-                }, 100);
-            }
-        });
-    }
-};
-
-/*
-    粘贴信息的处理
-*/
-
-// 获取粘贴的纯文本
-function getPasteText(e) {
-    var clipboardData = e.clipboardData || e.originalEvent && e.originalEvent.clipboardData;
-    var pasteText = void 0;
-    if (clipboardData == null) {
-        pasteText = window.clipboardData && window.clipboardData.getData('text');
-    } else {
-        pasteText = clipboardData.getData('text/plain');
-    }
-
-    return replaceHtmlSymbol(pasteText);
-}
-
-// 获取粘贴的html
-function getPasteHtml(e, filterStyle, ignoreImg) {
-    var clipboardData = e.clipboardData || e.originalEvent && e.originalEvent.clipboardData;
-    var pasteText = void 0,
-        pasteHtml = void 0;
-    if (clipboardData == null) {
-        pasteText = window.clipboardData && window.clipboardData.getData('text');
-    } else {
-        pasteText = clipboardData.getData('text/plain');
-        pasteHtml = clipboardData.getData('text/html');
-    }
-    if (!pasteHtml && pasteText) {
-        pasteHtml = '<p>' + replaceHtmlSymbol(pasteText) + '</p>';
-    }
-    if (!pasteHtml) {
-        return;
-    }
-
-    // 过滤word中状态过来的无用字符
-    var docSplitHtml = pasteHtml.split('</html>');
-    if (docSplitHtml.length === 2) {
-        pasteHtml = docSplitHtml[0];
-    }
-
-    // 过滤无用标签
-    pasteHtml = pasteHtml.replace(/<(meta|script|link).+?>/igm, '');
-    // 去掉注释
-    pasteHtml = pasteHtml.replace(/<!--.*?-->/mg, '');
-    // 过滤 data-xxx 属性
-    pasteHtml = pasteHtml.replace(/\s?data-.+?=('|").+?('|")/igm, '');
-
-    if (ignoreImg) {
-        // 忽略图片
-        pasteHtml = pasteHtml.replace(/<img.+?>/igm, '');
-    }
-
-    if (filterStyle) {
-        // 过滤样式
-        pasteHtml = pasteHtml.replace(/\s?(class|style)=('|").*?('|")/igm, '');
-    } else {
-        // 保留样式
-        pasteHtml = pasteHtml.replace(/\s?class=('|").*?('|")/igm, '');
-    }
-
-    return pasteHtml;
-}
-
-// 获取粘贴的图片文件
-function getPasteImgs(e) {
-    var result = [];
-    var txt = getPasteText(e);
-    if (txt) {
-        // 有文字，就忽略图片
-        return result;
-    }
-
-    var clipboardData = e.clipboardData || e.originalEvent && e.originalEvent.clipboardData || {};
-    var items = clipboardData.items;
-    if (!items) {
-        return result;
-    }
-
-    objForEach(items, function (key, value) {
-        var type = value.type;
-        if (/image/i.test(type)) {
-            result.push(value.getAsFile());
-        }
-    });
-
-    return result;
-}
-
-/*
-    编辑区域
-*/
-
-// 获取一个 elem.childNodes 的 JSON 数据
-function getChildrenJSON($elem) {
-    var result = [];
-    var $children = $elem.childNodes() || []; // 注意 childNodes() 可以获取文本节点
-    $children.forEach(function (curElem) {
-        var elemResult = void 0;
-        var nodeType = curElem.nodeType;
-
-        // 文本节点
-        if (nodeType === 3) {
-            elemResult = curElem.textContent;
-            elemResult = replaceHtmlSymbol(elemResult);
-        }
-
-        // 普通 DOM 节点
-        if (nodeType === 1) {
-            elemResult = {};
-
-            // tag
-            elemResult.tag = curElem.nodeName.toLowerCase();
-            // attr
-            var attrData = [];
-            var attrList = curElem.attributes || {};
-            var attrListLength = attrList.length || 0;
-            for (var i = 0; i < attrListLength; i++) {
-                var attr = attrList[i];
-                attrData.push({
-                    name: attr.name,
-                    value: attr.value
-                });
-            }
-            elemResult.attrs = attrData;
-            // children（递归）
-            elemResult.children = getChildrenJSON($(curElem));
-        }
-
-        result.push(elemResult);
-    });
-    return result;
-}
-
-// 构造函数
-function Text(editor) {
-    this.editor = editor;
-}
-
-// 修改原型
-Text.prototype = {
-    constructor: Text,
-
-    // 初始化
-    init: function init() {
-        // 绑定事件
-        this._bindEvent();
-    },
-
-    // 清空内容
-    clear: function clear() {
-        this.html('<p><br></p>');
-    },
-
-    // 获取 设置 html
-    html: function html(val) {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-        var html = void 0;
-        if (val == null) {
-            html = $textElem.html();
-            // 未选中任何内容的时候点击“加粗”或者“斜体”等按钮，就得需要一个空的占位符 &#8203 ，这里替换掉
-            html = html.replace(/\u200b/gm, '');
-            return html;
-        } else {
-            $textElem.html(val);
-
-            // 初始化选取，将光标定位到内容尾部
-            editor.initSelection();
-        }
-    },
-
-    // 获取 JSON
-    getJSON: function getJSON() {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-        return getChildrenJSON($textElem);
-    },
-
-    // 获取 设置 text
-    text: function text(val) {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-        var text = void 0;
-        if (val == null) {
-            text = $textElem.text();
-            // 未选中任何内容的时候点击“加粗”或者“斜体”等按钮，就得需要一个空的占位符 &#8203 ，这里替换掉
-            text = text.replace(/\u200b/gm, '');
-            return text;
-        } else {
-            $textElem.text('<p>' + val + '</p>');
-
-            // 初始化选取，将光标定位到内容尾部
-            editor.initSelection();
-        }
-    },
-
-    // 追加内容
-    append: function append(html) {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-        $textElem.append($(html));
-
-        // 初始化选取，将光标定位到内容尾部
-        editor.initSelection();
-    },
-
-    // 绑定事件
-    _bindEvent: function _bindEvent() {
-        // 实时保存选取
-        this._saveRangeRealTime();
-
-        // 按回车建时的特殊处理
-        this._enterKeyHandle();
-
-        // 清空时保留 <p><br></p>
-        this._clearHandle();
-
-        // 粘贴事件（粘贴文字，粘贴图片）
-        this._pasteHandle();
-
-        // tab 特殊处理
-        this._tabHandle();
-
-        // img 点击
-        this._imgHandle();
-
-        // 拖拽事件
-        this._dragHandle();
-    },
-
-    // 实时保存选取
-    _saveRangeRealTime: function _saveRangeRealTime() {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-
-        // 保存当前的选区
-        function saveRange(e) {
-            // 随时保存选区
-            editor.selection.saveRange();
-            // 更新按钮 ative 状态
-            editor.menus.changeActive();
-        }
-        // 按键后保存
-        $textElem.on('keyup', saveRange);
-        $textElem.on('mousedown', function (e) {
-            // mousedown 状态下，鼠标滑动到编辑区域外面，也需要保存选区
-            $textElem.on('mouseleave', saveRange);
-        });
-        $textElem.on('mouseup', function (e) {
-            saveRange();
-            // 在编辑器区域之内完成点击，取消鼠标滑动到编辑区外面的事件
-            $textElem.off('mouseleave', saveRange);
-        });
-    },
-
-    // 按回车键时的特殊处理
-    _enterKeyHandle: function _enterKeyHandle() {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-
-        function insertEmptyP($selectionElem) {
-            var $p = $('<p><br></p>');
-            $p.insertBefore($selectionElem);
-            editor.selection.createRangeByElem($p, true);
-            editor.selection.restoreSelection();
-            $selectionElem.remove();
-        }
-
-        // 将回车之后生成的非 <p> 的顶级标签，改为 <p>
-        function pHandle(e) {
-            var $selectionElem = editor.selection.getSelectionContainerElem();
-            var $parentElem = $selectionElem.parent();
-
-            if ($parentElem.html() === '<code><br></code>') {
-                // 回车之前光标所在一个 <p><code>.....</code></p> ，忽然回车生成一个空的 <p><code><br></code></p>
-                // 而且继续回车跳不出去，因此只能特殊处理
-                insertEmptyP($selectionElem);
-                return;
-            }
-
-            if (!$parentElem.equal($textElem)) {
-                // 不是顶级标签
-                return;
-            }
-
-            var nodeName = $selectionElem.getNodeName();
-            if (nodeName === 'P') {
-                // 当前的标签是 P ，不用做处理
-                return;
-            }
-
-            if ($selectionElem.text()) {
-                // 有内容，不做处理
-                return;
-            }
-
-            // 插入 <p> ，并将选取定位到 <p>，删除当前标签
-            insertEmptyP($selectionElem);
-        }
-
-        $textElem.on('keyup', function (e) {
-            if (e.keyCode !== 13) {
-                // 不是回车键
-                return;
-            }
-            // 将回车之后生成的非 <p> 的顶级标签，改为 <p>
-            pHandle(e);
-        });
-
-        // <pre><code></code></pre> 回车时 特殊处理
-        function codeHandle(e) {
-            var $selectionElem = editor.selection.getSelectionContainerElem();
-            if (!$selectionElem) {
-                return;
-            }
-            var $parentElem = $selectionElem.parent();
-            var selectionNodeName = $selectionElem.getNodeName();
-            var parentNodeName = $parentElem.getNodeName();
-
-            if (selectionNodeName !== 'CODE' || parentNodeName !== 'PRE') {
-                // 不符合要求 忽略
-                return;
-            }
-
-            if (!editor.cmd.queryCommandSupported('insertHTML')) {
-                // 必须原生支持 insertHTML 命令
-                return;
-            }
-
-            // 处理：光标定位到代码末尾，联系点击两次回车，即跳出代码块
-            if (editor._willBreakCode === true) {
-                // 此时可以跳出代码块
-                // 插入 <p> ，并将选取定位到 <p>
-                var $p = $('<p><br></p>');
-                $p.insertAfter($parentElem);
-                editor.selection.createRangeByElem($p, true);
-                editor.selection.restoreSelection();
-
-                // 修改状态
-                editor._willBreakCode = false;
-
-                e.preventDefault();
-                return;
-            }
-
-            var _startOffset = editor.selection.getRange().startOffset;
-
-            // 处理：回车时，不能插入 <br> 而是插入 \n ，因为是在 pre 标签里面
-            editor.cmd.do('insertHTML', '\n');
-            editor.selection.saveRange();
-            if (editor.selection.getRange().startOffset === _startOffset) {
-                // 没起作用，再来一遍
-                editor.cmd.do('insertHTML', '\n');
-            }
-
-            var codeLength = $selectionElem.html().length;
-            if (editor.selection.getRange().startOffset + 1 === codeLength) {
-                // 说明光标在代码最后的位置，执行了回车操作
-                // 记录下来，以便下次回车时候跳出 code
-                editor._willBreakCode = true;
-            }
-
-            // 阻止默认行为
-            e.preventDefault();
-        }
-
-        $textElem.on('keydown', function (e) {
-            if (e.keyCode !== 13) {
-                // 不是回车键
-                // 取消即将跳转代码块的记录
-                editor._willBreakCode = false;
-                return;
-            }
-            // <pre><code></code></pre> 回车时 特殊处理
-            codeHandle(e);
-        });
-    },
-
-    // 清空时保留 <p><br></p>
-    _clearHandle: function _clearHandle() {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-
-        $textElem.on('keydown', function (e) {
-            if (e.keyCode !== 8) {
-                return;
-            }
-            var txtHtml = $textElem.html().toLowerCase().trim();
-            if (txtHtml === '<p><br></p>') {
-                // 最后剩下一个空行，就不再删除了
-                e.preventDefault();
-                return;
-            }
-        });
-
-        $textElem.on('keyup', function (e) {
-            if (e.keyCode !== 8) {
-                return;
-            }
-            var $p = void 0;
-            var txtHtml = $textElem.html().toLowerCase().trim();
-
-            // firefox 时用 txtHtml === '<br>' 判断，其他用 !txtHtml 判断
-            if (!txtHtml || txtHtml === '<br>') {
-                // 内容空了
-                $p = $('<p><br/></p>');
-                $textElem.html(''); // 一定要先清空，否则在 firefox 下有问题
-                $textElem.append($p);
-                editor.selection.createRangeByElem($p, false, true);
-                editor.selection.restoreSelection();
-            }
-        });
-    },
-
-    // 粘贴事件（粘贴文字 粘贴图片）
-    _pasteHandle: function _pasteHandle() {
-        var editor = this.editor;
-        var config = editor.config;
-        var pasteFilterStyle = config.pasteFilterStyle;
-        var pasteTextHandle = config.pasteTextHandle;
-        var ignoreImg = config.pasteIgnoreImg;
-        var $textElem = editor.$textElem;
-
-        // 粘贴图片、文本的事件，每次只能执行一个
-        // 判断该次粘贴事件是否可以执行
-        var pasteTime = 0;
-        function canDo() {
-            var now = Date.now();
-            var flag = false;
-            if (now - pasteTime >= 100) {
-                // 间隔大于 100 ms ，可以执行
-                flag = true;
-            }
-            pasteTime = now;
-            return flag;
-        }
-        function resetTime() {
-            pasteTime = 0;
-        }
-
-        // 粘贴文字
-        $textElem.on('paste', function (e) {
-            if (UA.isIE()) {
-                return;
-            } else {
-                // 阻止默认行为，使用 execCommand 的粘贴命令
-                e.preventDefault();
-            }
-
-            // 粘贴图片和文本，只能同时使用一个
-            if (!canDo()) {
-                return;
-            }
-
-            // 获取粘贴的文字
-            var pasteHtml = getPasteHtml(e, pasteFilterStyle, ignoreImg);
-            var pasteText = getPasteText(e);
-            pasteText = pasteText.replace(/\n/gm, '<br>');
-
-            var $selectionElem = editor.selection.getSelectionContainerElem();
-            if (!$selectionElem) {
-                return;
-            }
-            var nodeName = $selectionElem.getNodeName();
-
-            // code 中只能粘贴纯文本
-            if (nodeName === 'CODE' || nodeName === 'PRE') {
-                if (pasteTextHandle && isFunction(pasteTextHandle)) {
-                    // 用户自定义过滤处理粘贴内容
-                    pasteText = '' + (pasteTextHandle(pasteText) || '');
-                }
-                editor.cmd.do('insertHTML', '<p>' + pasteText + '</p>');
-                return;
-            }
-
-            // 先放开注释，有问题再追查 ————
-            // // 表格中忽略，可能会出现异常问题
-            // if (nodeName === 'TD' || nodeName === 'TH') {
-            //     return
-            // }
-
-            if (!pasteHtml) {
-                // 没有内容，可继续执行下面的图片粘贴
-                resetTime();
-                return;
-            }
-            try {
-                // firefox 中，获取的 pasteHtml 可能是没有 <ul> 包裹的 <li>
-                // 因此执行 insertHTML 会报错
-                if (pasteTextHandle && isFunction(pasteTextHandle)) {
-                    // 用户自定义过滤处理粘贴内容
-                    pasteHtml = '' + (pasteTextHandle(pasteHtml) || '');
-                }
-                editor.cmd.do('insertHTML', pasteHtml);
-            } catch (ex) {
-                // 此时使用 pasteText 来兼容一下
-                if (pasteTextHandle && isFunction(pasteTextHandle)) {
-                    // 用户自定义过滤处理粘贴内容
-                    pasteText = '' + (pasteTextHandle(pasteText) || '');
-                }
-                editor.cmd.do('insertHTML', '<p>' + pasteText + '</p>');
-            }
-        });
-
-        // 粘贴图片
-        $textElem.on('paste', function (e) {
-            if (UA.isIE()) {
-                return;
-            } else {
-                e.preventDefault();
-            }
-
-            // 粘贴图片和文本，只能同时使用一个
-            if (!canDo()) {
-                return;
-            }
-
-            // 获取粘贴的图片
-            var pasteFiles = getPasteImgs(e);
-            if (!pasteFiles || !pasteFiles.length) {
-                return;
-            }
-
-            // 获取当前的元素
-            var $selectionElem = editor.selection.getSelectionContainerElem();
-            if (!$selectionElem) {
-                return;
-            }
-            var nodeName = $selectionElem.getNodeName();
-
-            // code 中粘贴忽略
-            if (nodeName === 'CODE' || nodeName === 'PRE') {
-                return;
-            }
-
-            // 上传图片
-            var uploadImg = editor.uploadImg;
-            uploadImg.uploadImg(pasteFiles);
-        });
-    },
-
-    // tab 特殊处理
-    _tabHandle: function _tabHandle() {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-
-        $textElem.on('keydown', function (e) {
-            if (e.keyCode !== 9) {
-                return;
-            }
-            if (!editor.cmd.queryCommandSupported('insertHTML')) {
-                // 必须原生支持 insertHTML 命令
-                return;
-            }
-            var $selectionElem = editor.selection.getSelectionContainerElem();
-            if (!$selectionElem) {
-                return;
-            }
-            var $parentElem = $selectionElem.parent();
-            var selectionNodeName = $selectionElem.getNodeName();
-            var parentNodeName = $parentElem.getNodeName();
-
-            if (selectionNodeName === 'CODE' && parentNodeName === 'PRE') {
-                // <pre><code> 里面
-                editor.cmd.do('insertHTML', '    ');
-            } else {
-                // 普通文字
-                editor.cmd.do('insertHTML', '&nbsp;&nbsp;&nbsp;&nbsp;');
-            }
-
-            e.preventDefault();
-        });
-    },
-
-    // img 点击
-    _imgHandle: function _imgHandle() {
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-
-        // 为图片增加 selected 样式
-        $textElem.on('click', 'img', function (e) {
-            var img = this;
-            var $img = $(img);
-
-            if ($img.attr('data-w-e') === '1') {
-                // 是表情图片，忽略
-                return;
-            }
-
-            // 记录当前点击过的图片
-            editor._selectedImg = $img;
-
-            // 修改选区并 restore ，防止用户此时点击退格键，会删除其他内容
-            editor.selection.createRangeByElem($img);
-            editor.selection.restoreSelection();
-        });
-
-        // 去掉图片的 selected 样式
-        $textElem.on('click  keyup', function (e) {
-            if (e.target.matches('img')) {
-                // 点击的是图片，忽略
-                return;
-            }
-            // 删除记录
-            editor._selectedImg = null;
-        });
-    },
-
-    // 拖拽事件
-    _dragHandle: function _dragHandle() {
-        var editor = this.editor;
-
-        // 禁用 document 拖拽事件
-        var $document = $(document);
-        $document.on('dragleave drop dragenter dragover', function (e) {
-            e.preventDefault();
-        });
-
-        // 添加编辑区域拖拽事件
-        var $textElem = editor.$textElem;
-        $textElem.on('drop', function (e) {
-            e.preventDefault();
-            var files = e.dataTransfer && e.dataTransfer.files;
-            if (!files || !files.length) {
-                return;
-            }
-
-            // 上传图片
-            var uploadImg = editor.uploadImg;
-            uploadImg.uploadImg(files);
-        });
-    }
-};
-
-/*
-    命令，封装 document.execCommand
-*/
-
-// 构造函数
-function Command(editor) {
-    this.editor = editor;
-}
-
-// 修改原型
-Command.prototype = {
-    constructor: Command,
-
-    // 执行命令
-    do: function _do(name, value) {
-        var editor = this.editor;
-
-        // 使用 styleWithCSS
-        if (!editor._useStyleWithCSS) {
-            document.execCommand('styleWithCSS', null, true);
-            editor._useStyleWithCSS = true;
-        }
-
-        // 如果无选区，忽略
-        if (!editor.selection.getRange()) {
-            return;
-        }
-
-        // 恢复选取
-        editor.selection.restoreSelection();
-
-        // 执行
-        var _name = '_' + name;
-        if (this[_name]) {
-            // 有自定义事件
-            this[_name](value);
-        } else {
-            // 默认 command
-            this._execCommand(name, value);
-        }
-
-        // 修改菜单状态
-        editor.menus.changeActive();
-
-        // 最后，恢复选取保证光标在原来的位置闪烁
-        editor.selection.saveRange();
-        editor.selection.restoreSelection();
-
-        // 触发 onchange
-        editor.change && editor.change();
-    },
-
-    // 自定义 insertHTML 事件
-    _insertHTML: function _insertHTML(html) {
-        var editor = this.editor;
-        var range = editor.selection.getRange();
-
-        if (this.queryCommandSupported('insertHTML')) {
-            // W3C
-            this._execCommand('insertHTML', html);
-        } else if (range.insertNode) {
-            // IE
-            range.deleteContents();
-            range.insertNode($(html)[0]);
-        } else if (range.pasteHTML) {
-            // IE <= 10
-            range.pasteHTML(html);
-        }
-    },
-
-    // 插入 elem
-    _insertElem: function _insertElem($elem) {
-        var editor = this.editor;
-        var range = editor.selection.getRange();
-
-        if (range.insertNode) {
-            range.deleteContents();
-            range.insertNode($elem[0]);
-        }
-    },
-
-    // 封装 execCommand
-    _execCommand: function _execCommand(name, value) {
-        document.execCommand(name, false, value);
-    },
-
-    // 封装 document.queryCommandValue
-    queryCommandValue: function queryCommandValue(name) {
-        return document.queryCommandValue(name);
-    },
-
-    // 封装 document.queryCommandState
-    queryCommandState: function queryCommandState(name) {
-        return document.queryCommandState(name);
-    },
-
-    // 封装 document.queryCommandSupported
-    queryCommandSupported: function queryCommandSupported(name) {
-        return document.queryCommandSupported(name);
-    }
-};
-
-/*
-    selection range API
-*/
-
-// 构造函数
-function API(editor) {
-    this.editor = editor;
-    this._currentRange = null;
-}
-
-// 修改原型
-API.prototype = {
-    constructor: API,
-
-    // 获取 range 对象
-    getRange: function getRange() {
-        return this._currentRange;
-    },
-
-    // 保存选区
-    saveRange: function saveRange(_range) {
-        if (_range) {
-            // 保存已有选区
-            this._currentRange = _range;
-            return;
-        }
-
-        // 获取当前的选区
-        var selection = window.getSelection();
-        if (selection.rangeCount === 0) {
-            return;
-        }
-        var range = selection.getRangeAt(0);
-
-        // 判断选区内容是否在编辑内容之内
-        var $containerElem = this.getSelectionContainerElem(range);
-        if (!$containerElem) {
-            return;
-        }
-
-        // 判断选区内容是否在不可编辑区域之内
-        if ($containerElem.attr('contenteditable') === 'false' || $containerElem.parentUntil('[contenteditable=false]')) {
-            return;
-        }
-
-        var editor = this.editor;
-        var $textElem = editor.$textElem;
-        if ($textElem.isContain($containerElem)) {
-            // 是编辑内容之内的
-            this._currentRange = range;
-        }
-    },
-
-    // 折叠选区
-    collapseRange: function collapseRange(toStart) {
-        if (toStart == null) {
-            // 默认为 false
-            toStart = false;
-        }
-        var range = this._currentRange;
-        if (range) {
-            range.collapse(toStart);
-        }
-    },
-
-    // 选中区域的文字
-    getSelectionText: function getSelectionText() {
-        var range = this._currentRange;
-        if (range) {
-            return this._currentRange.toString();
-        } else {
-            return '';
-        }
-    },
-
-    // 选区的 $Elem
-    getSelectionContainerElem: function getSelectionContainerElem(range) {
-        range = range || this._currentRange;
-        var elem = void 0;
-        if (range) {
-            elem = range.commonAncestorContainer;
-            return $(elem.nodeType === 1 ? elem : elem.parentNode);
-        }
-    },
-    getSelectionStartElem: function getSelectionStartElem(range) {
-        range = range || this._currentRange;
-        var elem = void 0;
-        if (range) {
-            elem = range.startContainer;
-            return $(elem.nodeType === 1 ? elem : elem.parentNode);
-        }
-    },
-    getSelectionEndElem: function getSelectionEndElem(range) {
-        range = range || this._currentRange;
-        var elem = void 0;
-        if (range) {
-            elem = range.endContainer;
-            return $(elem.nodeType === 1 ? elem : elem.parentNode);
-        }
-    },
-
-    // 选区是否为空
-    isSelectionEmpty: function isSelectionEmpty() {
-        var range = this._currentRange;
-        if (range && range.startContainer) {
-            if (range.startContainer === range.endContainer) {
-                if (range.startOffset === range.endOffset) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    },
-
-    // 恢复选区
-    restoreSelection: function restoreSelection() {
-        var selection = window.getSelection();
-        selection.removeAllRanges();
-        selection.addRange(this._currentRange);
-    },
-
-    // 创建一个空白（即 &#8203 字符）选区
-    createEmptyRange: function createEmptyRange() {
-        var editor = this.editor;
-        var range = this.getRange();
-        var $elem = void 0;
-
-        if (!range) {
-            // 当前无 range
-            return;
-        }
-        if (!this.isSelectionEmpty()) {
-            // 当前选区必须没有内容才可以
-            return;
-        }
-
-        try {
-            // 目前只支持 webkit 内核
-            if (UA.isWebkit()) {
-                // 插入 &#8203
-                editor.cmd.do('insertHTML', '&#8203;');
-                // 修改 offset 位置
-                range.setEnd(range.endContainer, range.endOffset + 1);
-                // 存储
-                this.saveRange(range);
-            } else {
-                $elem = $('<strong>&#8203;</strong>');
-                editor.cmd.do('insertElem', $elem);
-                this.createRangeByElem($elem, true);
-            }
-        } catch (ex) {
-            // 部分情况下会报错，兼容一下
-        }
-    },
-
-    // 根据 $Elem 设置选区
-    createRangeByElem: function createRangeByElem($elem, toStart, isContent) {
-        // $elem - 经过封装的 elem
-        // toStart - true 开始位置，false 结束位置
-        // isContent - 是否选中Elem的内容
-        if (!$elem.length) {
-            return;
-        }
-
-        var elem = $elem[0];
-        var range = document.createRange();
-
-        if (isContent) {
-            range.selectNodeContents(elem);
-        } else {
-            range.selectNode(elem);
-        }
-
-        if (typeof toStart === 'boolean') {
-            range.collapse(toStart);
-        }
-
-        // 存储 range
-        this.saveRange(range);
-    }
-};
-
-/*
-    上传进度条
-*/
-
-function Progress(editor) {
-    this.editor = editor;
-    this._time = 0;
-    this._isShow = false;
-    this._isRender = false;
-    this._timeoutId = 0;
-    this.$textContainer = editor.$textContainerElem;
-    this.$bar = $('<div class="w-e-progress"></div>');
-}
-
-Progress.prototype = {
-    constructor: Progress,
-
-    show: function show(progress) {
-        var _this = this;
-
-        // 状态处理
-        if (this._isShow) {
-            return;
-        }
-        this._isShow = true;
-
-        // 渲染
-        var $bar = this.$bar;
-        if (!this._isRender) {
-            var $textContainer = this.$textContainer;
-            $textContainer.append($bar);
-        } else {
-            this._isRender = true;
-        }
-
-        // 改变进度（节流，100ms 渲染一次）
-        if (Date.now() - this._time > 100) {
-            if (progress <= 1) {
-                $bar.css('width', progress * 100 + '%');
-                this._time = Date.now();
-            }
-        }
-
-        // 隐藏
-        var timeoutId = this._timeoutId;
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
-        timeoutId = setTimeout(function () {
-            _this._hide();
-        }, 500);
-    },
-
-    _hide: function _hide() {
-        var $bar = this.$bar;
-        $bar.remove();
-
-        // 修改状态
-        this._time = 0;
-        this._isShow = false;
-        this._isRender = false;
-    }
-};
-
-var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
-  return typeof obj;
-} : function (obj) {
-  return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
-};
-
-/*
-    上传图片
-*/
-
-// 构造函数
-function UploadImg(editor) {
-    this.editor = editor;
-}
-
-// 原型
-UploadImg.prototype = {
-    constructor: UploadImg,
-
-    // 根据 debug 弹出不同的信息
-    _alert: function _alert(alertInfo, debugInfo) {
-        var editor = this.editor;
-        var debug = editor.config.debug;
-        var customAlert = editor.config.customAlert;
-
-        if (debug) {
-            throw new Error('wangEditor: ' + (debugInfo || alertInfo));
-        } else {
-            if (customAlert && typeof customAlert === 'function') {
-                customAlert(alertInfo);
-            } else {
-                alert(alertInfo);
-            }
-        }
-    },
-
-    // 根据链接插入图片
-    insertLinkImg: function insertLinkImg(link) {
-        var _this2 = this;
-
-        if (!link) {
-            return;
-        }
-        var editor = this.editor;
-        var config = editor.config;
-
-        // 校验格式
-        var linkImgCheck = config.linkImgCheck;
-        var checkResult = void 0;
-        if (linkImgCheck && typeof linkImgCheck === 'function') {
-            checkResult = linkImgCheck(link);
-            if (typeof checkResult === 'string') {
-                // 校验失败，提示信息
-                alert(checkResult);
-                return;
-            }
-        }
-
-        editor.cmd.do('insertHTML', '<img src="' + link + '" style="max-width:100%;"/>');
-
-        // 验证图片 url 是否有效，无效的话给出提示
-        var img = document.createElement('img');
-        img.onload = function () {
-            var callback = config.linkImgCallback;
-            if (callback && typeof callback === 'function') {
-                callback(link);
-            }
-
-            img = null;
-        };
-        img.onerror = function () {
-            img = null;
-            // 无法成功下载图片
-            _this2._alert('插入图片错误', 'wangEditor: \u63D2\u5165\u56FE\u7247\u51FA\u9519\uFF0C\u56FE\u7247\u94FE\u63A5\u662F "' + link + '"\uFF0C\u4E0B\u8F7D\u8BE5\u94FE\u63A5\u5931\u8D25');
-            return;
-        };
-        img.onabort = function () {
-            img = null;
-        };
-        img.src = link;
-    },
-
-    // 上传图片
-    uploadImg: function uploadImg(files) {
-        var _this3 = this;
-
-        if (!files || !files.length) {
-            return;
-        }
-
-        // ------------------------------ 获取配置信息 ------------------------------
-        var editor = this.editor;
-        var config = editor.config;
-        var uploadImgServer = config.uploadImgServer;
-        var uploadImgShowBase64 = config.uploadImgShowBase64;
-
-        var maxSize = config.uploadImgMaxSize;
-        var maxSizeM = maxSize / 1024 / 1024;
-        var maxLength = config.uploadImgMaxLength || 10000;
-        var uploadFileName = config.uploadFileName || '';
-        var uploadImgParams = config.uploadImgParams || {};
-        var uploadImgParamsWithUrl = config.uploadImgParamsWithUrl;
-        var uploadImgHeaders = config.uploadImgHeaders || {};
-        var hooks = config.uploadImgHooks || {};
-        var timeout = config.uploadImgTimeout || 3000;
-        var withCredentials = config.withCredentials;
-        if (withCredentials == null) {
-            withCredentials = false;
-        }
-        var customUploadImg = config.customUploadImg;
-
-        if (!customUploadImg) {
-            // 没有 customUploadImg 的情况下，需要如下两个配置才能继续进行图片上传
-            if (!uploadImgServer && !uploadImgShowBase64) {
-                return;
-            }
-        }
-
-        // ------------------------------ 验证文件信息 ------------------------------
-        var resultFiles = [];
-        var errInfo = [];
-        arrForEach(files, function (file) {
-            var name = file.name;
-            var size = file.size;
-
-            // chrome 低版本 name === undefined
-            if (!name || !size) {
-                return;
-            }
-
-            if (/\.(jpg|jpeg|png|bmp|gif|webp)$/i.test(name) === false) {
-                // 后缀名不合法，不是图片
-                errInfo.push('\u3010' + name + '\u3011\u4E0D\u662F\u56FE\u7247');
-                return;
-            }
-            if (maxSize < size) {
-                // 上传图片过大
-                errInfo.push('\u3010' + name + '\u3011\u5927\u4E8E ' + maxSizeM + 'M');
-                return;
-            }
-
-            // 验证通过的加入结果列表
-            resultFiles.push(file);
-        });
-        // 抛出验证信息
-        if (errInfo.length) {
-            this._alert('图片验证未通过: \n' + errInfo.join('\n'));
-            return;
-        }
-        if (resultFiles.length > maxLength) {
-            this._alert('一次最多上传' + maxLength + '张图片');
-            return;
-        }
-
-        // ------------------------------ 自定义上传 ------------------------------
-        if (customUploadImg && typeof customUploadImg === 'function') {
-            customUploadImg(resultFiles, this.insertLinkImg.bind(this));
-
-            // 阻止以下代码执行
-            return;
-        }
-
-        // 添加图片数据
-        var formdata = new FormData();
-        arrForEach(resultFiles, function (file) {
-            var name = uploadFileName || file.name;
-            formdata.append(name, file);
-        });
-
-        // ------------------------------ 上传图片 ------------------------------
-        if (uploadImgServer && typeof uploadImgServer === 'string') {
-            // 添加参数
-            var uploadImgServerArr = uploadImgServer.split('#');
-            uploadImgServer = uploadImgServerArr[0];
-            var uploadImgServerHash = uploadImgServerArr[1] || '';
-            objForEach(uploadImgParams, function (key, val) {
-                // 因使用者反应，自定义参数不能默认 encode ，由 v3.1.1 版本开始注释掉
-                // val = encodeURIComponent(val)
-
-                // 第一，将参数拼接到 url 中
-                if (uploadImgParamsWithUrl) {
-                    if (uploadImgServer.indexOf('?') > 0) {
-                        uploadImgServer += '&';
-                    } else {
-                        uploadImgServer += '?';
-                    }
-                    uploadImgServer = uploadImgServer + key + '=' + val;
-                }
-
-                // 第二，将参数添加到 formdata 中
-                formdata.append(key, val);
-            });
-            if (uploadImgServerHash) {
-                uploadImgServer += '#' + uploadImgServerHash;
-            }
-
-            // 定义 xhr
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', uploadImgServer);
-
-            // 设置超时
-            xhr.timeout = timeout;
-            xhr.ontimeout = function () {
-                // hook - timeout
-                if (hooks.timeout && typeof hooks.timeout === 'function') {
-                    hooks.timeout(xhr, editor);
-                }
-
-                _this3._alert('上传图片超时');
-            };
-
-            // 监控 progress
-            if (xhr.upload) {
-                xhr.upload.onprogress = function (e) {
-                    var percent = void 0;
-                    // 进度条
-                    var progressBar = new Progress(editor);
-                    if (e.lengthComputable) {
-                        percent = e.loaded / e.total;
-                        progressBar.show(percent);
-                    }
-                };
-            }
-
-            // 返回数据
-            xhr.onreadystatechange = function () {
-                var result = void 0;
-                if (xhr.readyState === 4) {
-                    if (xhr.status < 200 || xhr.status >= 300) {
-                        // hook - error
-                        if (hooks.error && typeof hooks.error === 'function') {
-                            hooks.error(xhr, editor);
-                        }
-
-                        // xhr 返回状态错误
-                        _this3._alert('上传图片发生错误', '\u4E0A\u4F20\u56FE\u7247\u53D1\u751F\u9519\u8BEF\uFF0C\u670D\u52A1\u5668\u8FD4\u56DE\u72B6\u6001\u662F ' + xhr.status);
-                        return;
-                    }
-
-                    result = xhr.responseText;
-                    if ((typeof result === 'undefined' ? 'undefined' : _typeof(result)) !== 'object') {
-                        try {
-                            result = JSON.parse(result);
-                        } catch (ex) {
-                            // hook - fail
-                            if (hooks.fail && typeof hooks.fail === 'function') {
-                                hooks.fail(xhr, editor, result);
-                            }
-
-                            _this3._alert('上传图片失败', '上传图片返回结果错误，返回结果是: ' + result);
-                            return;
-                        }
-                    }
-                    if (!hooks.customInsert && result.errno != '0') {
-                        // hook - fail
-                        if (hooks.fail && typeof hooks.fail === 'function') {
-                            hooks.fail(xhr, editor, result);
-                        }
-
-                        // 数据错误
-                        _this3._alert('上传图片失败', '上传图片返回结果错误，返回结果 errno=' + result.errno);
-                    } else {
-                        if (hooks.customInsert && typeof hooks.customInsert === 'function') {
-                            // 使用者自定义插入方法
-                            hooks.customInsert(_this3.insertLinkImg.bind(_this3), result, editor);
-                        } else {
-                            // 将图片插入编辑器
-                            var data = result.data || [];
-                            data.forEach(function (link) {
-                                _this3.insertLinkImg(link);
-                            });
-                        }
-
-                        // hook - success
-                        if (hooks.success && typeof hooks.success === 'function') {
-                            hooks.success(xhr, editor, result);
-                        }
-                    }
-                }
-            };
-
-            // hook - before
-            if (hooks.before && typeof hooks.before === 'function') {
-                var beforeResult = hooks.before(xhr, editor, resultFiles);
-                if (beforeResult && (typeof beforeResult === 'undefined' ? 'undefined' : _typeof(beforeResult)) === 'object') {
-                    if (beforeResult.prevent) {
-                        // 如果返回的结果是 {prevent: true, msg: 'xxxx'} 则表示用户放弃上传
-                        this._alert(beforeResult.msg);
-                        return;
-                    }
-                }
-            }
-
-            // 自定义 headers
-            objForEach(uploadImgHeaders, function (key, val) {
-                xhr.setRequestHeader(key, val);
-            });
-
-            // 跨域传 cookie
-            xhr.withCredentials = withCredentials;
-
-            // 发送请求
-            xhr.send(formdata);
-
-            // 注意，要 return 。不去操作接下来的 base64 显示方式
-            return;
-        }
-
-        // ------------------------------ 显示 base64 格式 ------------------------------
-        if (uploadImgShowBase64) {
-            arrForEach(files, function (file) {
-                var _this = _this3;
-                var reader = new FileReader();
-                reader.readAsDataURL(file);
-                reader.onload = function () {
-                    _this.insertLinkImg(this.result);
-                };
-            });
-        }
-    }
-};
-
-/*
-    编辑器构造函数
-*/
-
-// id，累加
-var editorId = 1;
-
-// 构造函数
-function Editor(toolbarSelector, textSelector) {
-    if (toolbarSelector == null) {
-        // 没有传入任何参数，报错
-        throw new Error('错误：初始化编辑器时候未传入任何参数，请查阅文档');
-    }
-    // id，用以区分单个页面不同的编辑器对象
-    this.id = 'wangEditor-' + editorId++;
-
-    this.toolbarSelector = toolbarSelector;
-    this.textSelector = textSelector;
-
-    // 自定义配置
-    this.customConfig = {};
-}
-
-// 修改原型
-Editor.prototype = {
-    constructor: Editor,
-
-    // 初始化配置
-    _initConfig: function _initConfig() {
-        // _config 是默认配置，this.customConfig 是用户自定义配置，将它们 merge 之后再赋值
-        var target = {};
-        this.config = Object.assign(target, config, this.customConfig);
-
-        // 将语言配置，生成正则表达式
-        var langConfig = this.config.lang || {};
-        var langArgs = [];
-        objForEach(langConfig, function (key, val) {
-            // key 即需要生成正则表达式的规则，如“插入链接”
-            // val 即需要被替换成的语言，如“insert link”
-            langArgs.push({
-                reg: new RegExp(key, 'img'),
-                val: val
-
-            });
-        });
-        this.config.langArgs = langArgs;
-    },
-
-    // 初始化 DOM
-    _initDom: function _initDom() {
-        var _this = this;
-
-        var toolbarSelector = this.toolbarSelector;
-        var $toolbarSelector = $(toolbarSelector);
-        var textSelector = this.textSelector;
-
-        var config$$1 = this.config;
-        var zIndex = config$$1.zIndex;
-
-        // 定义变量
-        var $toolbarElem = void 0,
-            $textContainerElem = void 0,
-            $textElem = void 0,
-            $children = void 0;
-
-        if (textSelector == null) {
-            // 只传入一个参数，即是容器的选择器或元素，toolbar 和 text 的元素自行创建
-            $toolbarElem = $('<div></div>');
-            $textContainerElem = $('<div></div>');
-
-            // 将编辑器区域原有的内容，暂存起来
-            $children = $toolbarSelector.children();
-
-            // 添加到 DOM 结构中
-            $toolbarSelector.append($toolbarElem).append($textContainerElem);
-
-            // 自行创建的，需要配置默认的样式
-            $toolbarElem.css('background-color', '#f1f1f1').css('border', '1px solid #ccc');
-            $textContainerElem.css('border', '1px solid #ccc').css('border-top', 'none').css('height', '300px');
-        } else {
-            // toolbar 和 text 的选择器都有值，记录属性
-            $toolbarElem = $toolbarSelector;
-            $textContainerElem = $(textSelector);
-            // 将编辑器区域原有的内容，暂存起来
-            $children = $textContainerElem.children();
-        }
-
-        // 编辑区域
-        $textElem = $('<div></div>');
-        $textElem.attr('contenteditable', 'true').css('width', '100%').css('height', '100%');
-
-        // 初始化编辑区域内容
-        if ($children && $children.length) {
-            $textElem.append($children);
-        } else {
-            $textElem.append($('<p><br></p>'));
-        }
-
-        // 编辑区域加入DOM
-        $textContainerElem.append($textElem);
-
-        // 设置通用的 class
-        $toolbarElem.addClass('w-e-toolbar');
-        $textContainerElem.addClass('w-e-text-container');
-        $textContainerElem.css('z-index', zIndex);
-        $textElem.addClass('w-e-text');
-
-        // 添加 ID
-        var toolbarElemId = getRandom('toolbar-elem');
-        $toolbarElem.attr('id', toolbarElemId);
-        var textElemId = getRandom('text-elem');
-        $textElem.attr('id', textElemId);
-
-        // 记录属性
-        this.$toolbarElem = $toolbarElem;
-        this.$textContainerElem = $textContainerElem;
-        this.$textElem = $textElem;
-        this.toolbarElemId = toolbarElemId;
-        this.textElemId = textElemId;
-
-        // 记录输入法的开始和结束
-        var compositionEnd = true;
-        $textContainerElem.on('compositionstart', function () {
-            // 输入法开始输入
-            compositionEnd = false;
-        });
-        $textContainerElem.on('compositionend', function () {
-            // 输入法结束输入
-            compositionEnd = true;
-        });
-
-        // 绑定 onchange
-        $textContainerElem.on('click keyup', function () {
-            // 输入法结束才出发 onchange
-            compositionEnd && _this.change && _this.change();
-        });
-        $toolbarElem.on('click', function () {
-            this.change && this.change();
-        });
-
-        //绑定 onfocus 与 onblur 事件
-        if (config$$1.onfocus || config$$1.onblur) {
-            // 当前编辑器是否是焦点状态
-            this.isFocus = false;
-
-            $(document).on('click', function (e) {
-                //判断当前点击元素是否在编辑器内
-                var isChild = $textElem.isContain($(e.target));
-
-                //判断当前点击元素是否为工具栏
-                var isToolbar = $toolbarElem.isContain($(e.target));
-                var isMenu = $toolbarElem[0] == e.target ? true : false;
-
-                if (!isChild) {
-                    //若为选择工具栏中的功能，则不视为成blur操作
-                    if (isToolbar && !isMenu) {
-                        return;
-                    }
-
-                    if (_this.isFocus) {
-                        _this.onblur && _this.onblur();
-                    }
-                    _this.isFocus = false;
-                } else {
-                    if (!_this.isFocus) {
-                        _this.onfocus && _this.onfocus();
-                    }
-                    _this.isFocus = true;
-                }
-            });
-        }
-    },
-
-    // 封装 command
-    _initCommand: function _initCommand() {
-        this.cmd = new Command(this);
-    },
-
-    // 封装 selection range API
-    _initSelectionAPI: function _initSelectionAPI() {
-        this.selection = new API(this);
-    },
-
-    // 添加图片上传
-    _initUploadImg: function _initUploadImg() {
-        this.uploadImg = new UploadImg(this);
-    },
-
-    // 初始化菜单
-    _initMenus: function _initMenus() {
-        this.menus = new Menus(this);
-        this.menus.init();
-    },
-
-    // 添加 text 区域
-    _initText: function _initText() {
-        this.txt = new Text(this);
-        this.txt.init();
-    },
-
-    // 初始化选区，将光标定位到内容尾部
-    initSelection: function initSelection(newLine) {
-        var $textElem = this.$textElem;
-        var $children = $textElem.children();
-        if (!$children.length) {
-            // 如果编辑器区域无内容，添加一个空行，重新设置选区
-            $textElem.append($('<p><br></p>'));
-            this.initSelection();
-            return;
-        }
-
-        var $last = $children.last();
-
-        if (newLine) {
-            // 新增一个空行
-            var html = $last.html().toLowerCase();
-            var nodeName = $last.getNodeName();
-            if (html !== '<br>' && html !== '<br\/>' || nodeName !== 'P') {
-                // 最后一个元素不是 <p><br></p>，添加一个空行，重新设置选区
-                $textElem.append($('<p><br></p>'));
-                this.initSelection();
-                return;
-            }
-        }
-
-        this.selection.createRangeByElem($last, false, true);
-        this.selection.restoreSelection();
-    },
-
-    // 绑定事件
-    _bindEvent: function _bindEvent() {
-        // -------- 绑定 onchange 事件 --------
-        var onChangeTimeoutId = 0;
-        var beforeChangeHtml = this.txt.html();
-        var config$$1 = this.config;
-
-        // onchange 触发延迟时间
-        var onchangeTimeout = config$$1.onchangeTimeout;
-        onchangeTimeout = parseInt(onchangeTimeout, 10);
-        if (!onchangeTimeout || onchangeTimeout <= 0) {
-            onchangeTimeout = 200;
-        }
-
-        var onchange = config$$1.onchange;
-        if (onchange && typeof onchange === 'function') {
-            // 触发 change 的有三个场景：
-            // 1. $textContainerElem.on('click keyup')
-            // 2. $toolbarElem.on('click')
-            // 3. editor.cmd.do()
-            this.change = function () {
-                // 判断是否有变化
-                var currentHtml = this.txt.html();
-
-                if (currentHtml.length === beforeChangeHtml.length) {
-                    // 需要比较每一个字符
-                    if (currentHtml === beforeChangeHtml) {
-                        return;
-                    }
-                }
-
-                // 执行，使用节流
-                if (onChangeTimeoutId) {
-                    clearTimeout(onChangeTimeoutId);
-                }
-                onChangeTimeoutId = setTimeout(function () {
-                    // 触发配置的 onchange 函数
-                    onchange(currentHtml);
-                    beforeChangeHtml = currentHtml;
-                }, onchangeTimeout);
-            };
-        }
-
-        // -------- 绑定 onblur 事件 --------
-        var onblur = config$$1.onblur;
-        if (onblur && typeof onblur === 'function') {
-            this.onblur = function () {
-                var currentHtml = this.txt.html();
-                onblur(currentHtml);
-            };
-        }
-
-        // -------- 绑定 onfocus 事件 --------
-        var onfocus = config$$1.onfocus;
-        if (onfocus && typeof onfocus === 'function') {
-            this.onfocus = function () {
-                onfocus();
-            };
-        }
-    },
-
-    // 创建编辑器
-    create: function create() {
-        // 初始化配置信息
-        this._initConfig();
-
-        // 初始化 DOM
-        this._initDom();
-
-        // 封装 command API
-        this._initCommand();
-
-        // 封装 selection range API
-        this._initSelectionAPI();
-
-        // 添加 text
-        this._initText();
-
-        // 初始化菜单
-        this._initMenus();
-
-        // 添加 图片上传
-        this._initUploadImg();
-
-        // 初始化选区，将光标定位到内容尾部
-        this.initSelection(true);
-
-        // 绑定事件
-        this._bindEvent();
-    },
-
-    // 解绑所有事件（暂时不对外开放）
-    _offAllEvent: function _offAllEvent() {
-        $.offAll();
-    }
-};
-
-// 检验是否浏览器环境
-try {
-    document;
-} catch (ex) {
-    throw new Error('请在浏览器环境下运行');
-}
-
-// polyfill
-polyfill();
-
-// 这里的 `inlinecss` 将被替换成 css 代码的内容，详情可去 ./gulpfile.js 中搜索 `inlinecss` 关键字
-var inlinecss = '.w-e-toolbar,.w-e-text-container,.w-e-menu-panel {  padding: 0;  margin: 0;  box-sizing: border-box;}.w-e-toolbar *,.w-e-text-container *,.w-e-menu-panel * {  padding: 0;  margin: 0;  box-sizing: border-box;}.w-e-clear-fix:after {  content: "";  display: table;  clear: both;}.w-e-toolbar .w-e-droplist {  position: absolute;  left: 0;  top: 0;  background-color: #fff;  border: 1px solid #f1f1f1;  border-right-color: #ccc;  border-bottom-color: #ccc;}.w-e-toolbar .w-e-droplist .w-e-dp-title {  text-align: center;  color: #999;  line-height: 2;  border-bottom: 1px solid #f1f1f1;  font-size: 13px;}.w-e-toolbar .w-e-droplist ul.w-e-list {  list-style: none;  line-height: 1;}.w-e-toolbar .w-e-droplist ul.w-e-list li.w-e-item {  color: #333;  padding: 5px 0;}.w-e-toolbar .w-e-droplist ul.w-e-list li.w-e-item:hover {  background-color: #f1f1f1;}.w-e-toolbar .w-e-droplist ul.w-e-block {  list-style: none;  text-align: left;  padding: 5px;}.w-e-toolbar .w-e-droplist ul.w-e-block li.w-e-item {  display: inline-block;  *display: inline;  *zoom: 1;  padding: 3px 5px;}.w-e-toolbar .w-e-droplist ul.w-e-block li.w-e-item:hover {  background-color: #f1f1f1;}@font-face {  font-family: \'w-e-icon\';  src: url(data:application/x-font-woff;charset=utf-8;base64,d09GRgABAAAAABhQAAsAAAAAGAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABPUy8yAAABCAAAAGAAAABgDxIPBGNtYXAAAAFoAAABBAAAAQQrSf4BZ2FzcAAAAmwAAAAIAAAACAAAABBnbHlmAAACdAAAEvAAABLwfpUWUWhlYWQAABVkAAAANgAAADYQp00kaGhlYQAAFZwAAAAkAAAAJAfEA+FobXR4AAAVwAAAAIQAAACEeAcD7GxvY2EAABZEAAAARAAAAERBSEX+bWF4cAAAFogAAAAgAAAAIAAsALZuYW1lAAAWqAAAAYYAAAGGmUoJ+3Bvc3QAABgwAAAAIAAAACAAAwAAAAMD3gGQAAUAAAKZAswAAACPApkCzAAAAesAMwEJAAAAAAAAAAAAAAAAAAAAARAAAAAAAAAAAAAAAAAAAAAAQAAA8fwDwP/AAEADwABAAAAAAQAAAAAAAAAAAAAAIAAAAAAAAwAAAAMAAAAcAAEAAwAAABwAAwABAAAAHAAEAOgAAAA2ACAABAAWAAEAIOkG6Q3pEulH6Wbpd+m56bvpxunL6d/qDepc6l/qZepo6nHqefAN8BTxIPHc8fz//f//AAAAAAAg6QbpDekS6UfpZel36bnpu+nG6cvp3+oN6lzqX+pi6mjqcep38A3wFPEg8dzx/P/9//8AAf/jFv4W+Bb0FsAWoxaTFlIWURZHFkMWMBYDFbUVsxWxFa8VpxWiEA8QCQ7+DkMOJAADAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAB//8ADwABAAAAAAAAAAAAAgAANzkBAAAAAAEAAAAAAAAAAAACAAA3OQEAAAAAAQAAAAAAAAAAAAIAADc5AQAAAAACAAD/wAQAA8AABAATAAABNwEnAQMuAScTNwEjAQMlATUBBwGAgAHAQP5Anxc7MmOAAYDA/oDAAoABgP6ATgFAQAHAQP5A/p0yOxcBEU4BgP6A/YDAAYDA/oCAAAQAAAAABAADgAAQACEALQA0AAABOAExETgBMSE4ATEROAExITUhIgYVERQWMyEyNjURNCYjBxQGIyImNTQ2MzIWEyE1EwEzNwPA/IADgPyAGiYmGgOAGiYmGoA4KCg4OCgoOED9AOABAEDgA0D9AAMAQCYa/QAaJiYaAwAaJuAoODgoKDg4/biAAYD+wMAAAAIAAABABAADQAA4ADwAAAEmJy4BJyYjIgcOAQcGBwYHDgEHBhUUFx4BFxYXFhceARcWMzI3PgE3Njc2Nz4BNzY1NCcuAScmJwERDQED1TY4OXY8PT8/PTx2OTg2CwcICwMDAwMLCAcLNjg5djw9Pz89PHY5ODYLBwgLAwMDAwsIBwv9qwFA/sADIAgGBggCAgICCAYGCCkqKlktLi8vLi1ZKiopCAYGCAICAgIIBgYIKSoqWS0uLy8uLVkqKin94AGAwMAAAAAAAgDA/8ADQAPAABsAJwAAASIHDgEHBhUUFx4BFxYxMDc+ATc2NTQnLgEnJgMiJjU0NjMyFhUUBgIAQjs6VxkZMjJ4MjIyMngyMhkZVzo7QlBwcFBQcHADwBkZVzo7Qnh9fcxBQUFBzH19eEI7OlcZGf4AcFBQcHBQUHAAAAEAAAAABAADgAArAAABIgcOAQcGBycRISc+ATMyFx4BFxYVFAcOAQcGBxc2Nz4BNzY1NCcuAScmIwIANTIyXCkpI5YBgJA1i1BQRUZpHh4JCSIYGB5VKCAgLQwMKCiLXl1qA4AKCycbHCOW/oCQNDweHmlGRVArKClJICEaYCMrK2I2NjlqXV6LKCgAAQAAAAAEAAOAACoAABMUFx4BFxYXNyYnLgEnJjU0Nz4BNzYzMhYXByERByYnLgEnJiMiBw4BBwYADAwtICAoVR4YGCIJCR4eaUZFUFCLNZABgJYjKSlcMjI1al1eiygoAYA5NjZiKysjYBohIEkpKCtQRUZpHh48NJABgJYjHBsnCwooKIteXQAAAAACAAAAQAQBAwAAJgBNAAATMhceARcWFRQHDgEHBiMiJy4BJyY1JzQ3PgE3NjMVIgYHDgEHPgEhMhceARcWFRQHDgEHBiMiJy4BJyY1JzQ3PgE3NjMVIgYHDgEHPgHhLikpPRESEhE9KSkuLikpPRESASMjelJRXUB1LQkQBwgSAkkuKSk9ERISET0pKS4uKSk9ERIBIyN6UlFdQHUtCRAHCBICABIRPSkpLi4pKT0REhIRPSkpLiBdUVJ6IyOAMC4IEwoCARIRPSkpLi4pKT0REhIRPSkpLiBdUVJ6IyOAMC4IEwoCAQAABgBA/8AEAAPAAAMABwALABEAHQApAAAlIRUhESEVIREhFSEnESM1IzUTFTMVIzU3NSM1MxUVESM1MzUjNTM1IzUBgAKA/YACgP2AAoD9gMBAQECAwICAwMCAgICAgIACAIACAIDA/wDAQP3yMkCSPDJAku7+wEBAQEBAAAYAAP/ABAADwAADAAcACwAXACMALwAAASEVIREhFSERIRUhATQ2MzIWFRQGIyImETQ2MzIWFRQGIyImETQ2MzIWFRQGIyImAYACgP2AAoD9gAKA/YD+gEs1NUtLNTVLSzU1S0s1NUtLNTVLSzU1SwOAgP8AgP8AgANANUtLNTVLS/61NUtLNTVLS/61NUtLNTVLSwADAAAAAAQAA6AAAwANABQAADchFSElFSE1EyEVITUhJQkBIxEjEQAEAPwABAD8AIABAAEAAQD9YAEgASDggEBAwEBAAQCAgMABIP7g/wABAAAAAAACAB7/zAPiA7QAMwBkAAABIiYnJicmNDc2PwE+ATMyFhcWFxYUBwYPAQYiJyY0PwE2NCcuASMiBg8BBhQXFhQHDgEjAyImJyYnJjQ3Nj8BNjIXFhQPAQYUFx4BMzI2PwE2NCcmNDc2MhcWFxYUBwYPAQ4BIwG4ChMIIxISEhIjwCNZMTFZIyMSEhISI1gPLA8PD1gpKRQzHBwzFMApKQ8PCBMKuDFZIyMSEhISI1gPLA8PD1gpKRQzHBwzFMApKQ8PDysQIxISEhIjwCNZMQFECAckLS1eLS0kwCIlJSIkLS1eLS0kVxAQDysPWCl0KRQVFRTAKXQpDysQBwj+iCUiJC0tXi0tJFcQEA8rD1gpdCkUFRUUwCl0KQ8rEA8PJC0tXi0tJMAiJQAAAAAFAAD/wAQAA8AAGwA3AFMAXwBrAAAFMjc+ATc2NTQnLgEnJiMiBw4BBwYVFBceARcWEzIXHgEXFhUUBw4BBwYjIicuAScmNTQ3PgE3NhMyNz4BNzY3BgcOAQcGIyInLgEnJicWFx4BFxYnNDYzMhYVFAYjIiYlNDYzMhYVFAYjIiYCAGpdXosoKCgoi15dampdXosoKCgoi15dalZMTHEgISEgcUxMVlZMTHEgISEgcUxMVisrKlEmJiMFHBtWODc/Pzc4VhscBSMmJlEqK9UlGxslJRsbJQGAJRsbJSUbGyVAKCiLXl1qal1eiygoKCiLXl1qal1eiygoA6AhIHFMTFZWTExxICEhIHFMTFZWTExxICH+CQYGFRAQFEM6OlYYGRkYVjo6QxQQEBUGBvcoODgoKDg4KCg4OCgoODgAAAMAAP/ABAADwAAbADcAQwAAASIHDgEHBhUUFx4BFxYzMjc+ATc2NTQnLgEnJgMiJy4BJyY1NDc+ATc2MzIXHgEXFhUUBw4BBwYTBycHFwcXNxc3JzcCAGpdXosoKCgoi15dampdXosoKCgoi15dalZMTHEgISEgcUxMVlZMTHEgISEgcUxMSqCgYKCgYKCgYKCgA8AoKIteXWpqXV6LKCgoKIteXWpqXV6LKCj8YCEgcUxMVlZMTHEgISEgcUxMVlZMTHEgIQKgoKBgoKBgoKBgoKAAAQBl/8ADmwPAACkAAAEiJiMiBw4BBwYVFBYzLgE1NDY3MAcGAgcGBxUhEzM3IzceATMyNjcOAQMgRGhGcVNUbRobSUgGDWVKEBBLPDxZAT1sxizXNC1VJi5QGB09A7AQHh1hPj9BTTsLJjeZbwN9fv7Fj5AjGQIAgPYJDzdrCQcAAAAAAgAAAAAEAAOAAAkAFwAAJTMHJzMRIzcXIyURJyMRMxUhNTMRIwcRA4CAoKCAgKCggP8AQMCA/oCAwEDAwMACAMDAwP8AgP1AQEACwIABAAADAMAAAANAA4AAFgAfACgAAAE+ATU0Jy4BJyYjIREhMjc+ATc2NTQmATMyFhUUBisBEyMRMzIWFRQGAsQcIBQURi4vNf7AAYA1Ly5GFBRE/oRlKjw8KWafn58sPj4B2yJULzUvLkYUFPyAFBRGLi81RnQBRks1NUv+gAEASzU1SwAAAAACAMAAAANAA4AAHwAjAAABMxEUBw4BBwYjIicuAScmNREzERQWFx4BMzI2Nz4BNQEhFSECwIAZGVc6O0JCOzpXGRmAGxgcSSgoSRwYG/4AAoD9gAOA/mA8NDVOFhcXFk41NDwBoP5gHjgXGBsbGBc4Hv6ggAAAAAABAIAAAAOAA4AACwAAARUjATMVITUzASM1A4CA/sCA/kCAAUCAA4BA/QBAQAMAQAABAAAAAAQAA4AAPQAAARUjHgEVFAYHDgEjIiYnLgE1MxQWMzI2NTQmIyE1IS4BJy4BNTQ2Nz4BMzIWFx4BFSM0JiMiBhUUFjMyFhcEAOsVFjUwLHE+PnEsMDWAck5OcnJO/gABLAIEATA1NTAscT4+cSwwNYByTk5yck47bisBwEAdQSI1YiQhJCQhJGI1NExMNDRMQAEDASRiNTViJCEkJCEkYjU0TEw0NEwhHwAAAAcAAP/ABAADwAADAAcACwAPABMAGwAjAAATMxUjNzMVIyUzFSM3MxUjJTMVIwMTIRMzEyETAQMhAyMDIQMAgIDAwMABAICAwMDAAQCAgBAQ/QAQIBACgBD9QBADABAgEP2AEAHAQEBAQEBAQEBAAkD+QAHA/oABgPwAAYD+gAFA/sAAAAoAAAAABAADgAADAAcACwAPABMAFwAbAB8AIwAnAAATESERATUhFR0BITUBFSE1IxUhNREhFSElIRUhETUhFQEhFSEhNSEVAAQA/YABAP8AAQD/AED/AAEA/wACgAEA/wABAPyAAQD/AAKAAQADgPyAA4D9wMDAQMDAAgDAwMDA/wDAwMABAMDA/sDAwMAAAAUAAAAABAADgAADAAcACwAPABMAABMhFSEVIRUhESEVIREhFSERIRUhAAQA/AACgP2AAoD9gAQA/AAEAPwAA4CAQID/AIABQID/AIAAAAAABQAAAAAEAAOAAAMABwALAA8AEwAAEyEVIRchFSERIRUhAyEVIREhFSEABAD8AMACgP2AAoD9gMAEAPwABAD8AAOAgECA/wCAAUCA/wCAAAAFAAAAAAQAA4AAAwAHAAsADwATAAATIRUhBSEVIREhFSEBIRUhESEVIQAEAPwAAYACgP2AAoD9gP6ABAD8AAQA/AADgIBAgP8AgAFAgP8AgAAAAAABAD8APwLmAuYALAAAJRQPAQYjIi8BBwYjIi8BJjU0PwEnJjU0PwE2MzIfATc2MzIfARYVFA8BFxYVAuYQThAXFxCoqBAXFhBOEBCoqBAQThAWFxCoqBAXFxBOEBCoqBDDFhBOEBCoqBAQThAWFxCoqBAXFxBOEBCoqBAQThAXFxCoqBAXAAAABgAAAAADJQNuABQAKAA8AE0AVQCCAAABERQHBisBIicmNRE0NzY7ATIXFhUzERQHBisBIicmNRE0NzY7ATIXFhcRFAcGKwEiJyY1ETQ3NjsBMhcWExEhERQXFhcWMyEyNzY3NjUBIScmJyMGBwUVFAcGKwERFAcGIyEiJyY1ESMiJyY9ATQ3NjsBNzY3NjsBMhcWHwEzMhcWFQElBgUIJAgFBgYFCCQIBQaSBQUIJQgFBQUFCCUIBQWSBQUIJQgFBQUFCCUIBQVJ/gAEBAUEAgHbAgQEBAT+gAEAGwQGtQYEAfcGBQg3Ghsm/iUmGxs3CAUFBQUIsSgIFxYXtxcWFgkosAgFBgIS/rcIBQUFBQgBSQgFBgYFCP63CAUFBQUIAUkIBQYGBQj+twgFBQUFCAFJCAUGBgX+WwId/eMNCwoFBQUFCgsNAmZDBQICBVUkCAYF/eMwIiMhIi8CIAUGCCQIBQVgFQ8PDw8VYAUFCAACAAcASQO3Aq8AGgAuAAAJAQYjIi8BJjU0PwEnJjU0PwE2MzIXARYVFAcBFRQHBiMhIicmPQE0NzYzITIXFgFO/vYGBwgFHQYG4eEGBh0FCAcGAQoGBgJpBQUI/dsIBQUFBQgCJQgFBQGF/vYGBhwGCAcG4OEGBwcGHQUF/vUFCAcG/vslCAUFBQUIJQgFBQUFAAAAAQAjAAAD3QNuALMAACUiJyYjIgcGIyInJjU0NzY3Njc2NzY9ATQnJiMhIgcGHQEUFxYXFjMWFxYVFAcGIyInJiMiBwYjIicmNTQ3Njc2NzY3Nj0BETQ1NDU0JzQnJicmJyYnJicmIyInJjU0NzYzMhcWMzI3NjMyFxYVFAcGIwYHBgcGHQEUFxYzITI3Nj0BNCcmJyYnJjU0NzYzMhcWMzI3NjMyFxYVFAcGByIHBgcGFREUFxYXFhcyFxYVFAcGIwPBGTMyGhkyMxkNCAcJCg0MERAKEgEHFf5+FgcBFQkSEw4ODAsHBw4bNTUaGDExGA0HBwkJCwwQDwkSAQIBAgMEBAUIEhENDQoLBwcOGjU1GhgwMRgOBwcJCgwNEBAIFAEHDwGQDgcBFAoXFw8OBwcOGTMyGRkxMRkOBwcKCg0NEBEIFBQJEREODQoLBwcOAAICAgIMCw8RCQkBAQMDBQxE4AwFAwMFDNRRDQYBAgEICBIPDA0CAgICDAwOEQgJAQIDAwUNRSEB0AINDQgIDg4KCgsLBwcDBgEBCAgSDwwNAgICAg0MDxEICAECAQYMULYMBwEBBwy2UAwGAQEGBxYPDA0CAgICDQwPEQgIAQECBg1P/eZEDAYCAgEJCBEPDA0AAAIAAP+3A/8DtwATADkAAAEyFxYVFAcCBwYjIicmNTQ3ATYzARYXFh8BFgcGIyInJicmJyY1FhcWFxYXFjMyNzY3Njc2NzY3NjcDmygeHhq+TDdFSDQ0NQFtISn9+BcmJy8BAkxMe0c2NiEhEBEEExQQEBIRCRcIDxITFRUdHR4eKQO3GxooJDP+mUY0NTRJSTABSx/9sSsfHw0oek1MGhsuLzo6RAMPDgsLCgoWJRsaEREKCwQEAgABAAAAAAAA9evv618PPPUACwQAAAAAANbEBFgAAAAA1sQEWAAA/7cEAQPAAAAACAACAAAAAAAAAAEAAAPA/8AAAAQAAAD//wQBAAEAAAAAAAAAAAAAAAAAAAAhBAAAAAAAAAAAAAAAAgAAAAQAAAAEAAAABAAAAAQAAMAEAAAABAAAAAQAAAAEAABABAAAAAQAAAAEAAAeBAAAAAQAAAAEAABlBAAAAAQAAMAEAADABAAAgAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAMlAD8DJQAAA74ABwQAACMD/wAAAAAAAAAKABQAHgBMAJQA+AE2AXwBwgI2AnQCvgLoA34EHgSIBMoE8gU0BXAFiAXgBiIGagaSBroG5AcoB+AIKgkcCXgAAQAAACEAtAAKAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAA4ArgABAAAAAAABAAcAAAABAAAAAAACAAcAYAABAAAAAAADAAcANgABAAAAAAAEAAcAdQABAAAAAAAFAAsAFQABAAAAAAAGAAcASwABAAAAAAAKABoAigADAAEECQABAA4ABwADAAEECQACAA4AZwADAAEECQADAA4APQADAAEECQAEAA4AfAADAAEECQAFABYAIAADAAEECQAGAA4AUgADAAEECQAKADQApGljb21vb24AaQBjAG8AbQBvAG8AblZlcnNpb24gMS4wAFYAZQByAHMAaQBvAG4AIAAxAC4AMGljb21vb24AaQBjAG8AbQBvAG8Abmljb21vb24AaQBjAG8AbQBvAG8AblJlZ3VsYXIAUgBlAGcAdQBsAGEAcmljb21vb24AaQBjAG8AbQBvAG8AbkZvbnQgZ2VuZXJhdGVkIGJ5IEljb01vb24uAEYAbwBuAHQAIABnAGUAbgBlAHIAYQB0AGUAZAAgAGIAeQAgAEkAYwBvAE0AbwBvAG4ALgAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=) format(\'truetype\');  font-weight: normal;  font-style: normal;}[class^="w-e-icon-"],[class*=" w-e-icon-"] {  /* use !important to prevent issues with browser extensions that change fonts */  font-family: \'w-e-icon\' !important;  speak: none;  font-style: normal;  font-weight: normal;  font-variant: normal;  text-transform: none;  line-height: 1;  /* Better Font Rendering =========== */  -webkit-font-smoothing: antialiased;  -moz-osx-font-smoothing: grayscale;}.w-e-icon-close:before {  content: "\\f00d";}.w-e-icon-upload2:before {  content: "\\e9c6";}.w-e-icon-trash-o:before {  content: "\\f014";}.w-e-icon-header:before {  content: "\\f1dc";}.w-e-icon-pencil2:before {  content: "\\e906";}.w-e-icon-paint-brush:before {  content: "\\f1fc";}.w-e-icon-image:before {  content: "\\e90d";}.w-e-icon-play:before {  content: "\\e912";}.w-e-icon-location:before {  content: "\\e947";}.w-e-icon-undo:before {  content: "\\e965";}.w-e-icon-redo:before {  content: "\\e966";}.w-e-icon-quotes-left:before {  content: "\\e977";}.w-e-icon-list-numbered:before {  content: "\\e9b9";}.w-e-icon-list2:before {  content: "\\e9bb";}.w-e-icon-link:before {  content: "\\e9cb";}.w-e-icon-happy:before {  content: "\\e9df";}.w-e-icon-bold:before {  content: "\\ea62";}.w-e-icon-underline:before {  content: "\\ea63";}.w-e-icon-italic:before {  content: "\\ea64";}.w-e-icon-strikethrough:before {  content: "\\ea65";}.w-e-icon-table2:before {  content: "\\ea71";}.w-e-icon-paragraph-left:before {  content: "\\ea77";}.w-e-icon-paragraph-center:before {  content: "\\ea78";}.w-e-icon-paragraph-right:before {  content: "\\ea79";}.w-e-icon-terminal:before {  content: "\\f120";}.w-e-icon-page-break:before {  content: "\\ea68";}.w-e-icon-cancel-circle:before {  content: "\\ea0d";}.w-e-icon-font:before {  content: "\\ea5c";}.w-e-icon-text-heigh:before {  content: "\\ea5f";}.w-e-toolbar {  display: -webkit-box;  display: -ms-flexbox;  display: flex;  padding: 0 5px;  /* flex-wrap: wrap; */  /* 单个菜单 */}.w-e-toolbar .w-e-menu {  position: relative;  text-align: center;  padding: 5px 10px;  cursor: pointer;}.w-e-toolbar .w-e-menu i {  color: #999;}.w-e-toolbar .w-e-menu:hover i {  color: #333;}.w-e-toolbar .w-e-active i {  color: #1e88e5;}.w-e-toolbar .w-e-active:hover i {  color: #1e88e5;}.w-e-text-container .w-e-panel-container {  position: absolute;  top: 0;  left: 50%;  border: 1px solid #ccc;  border-top: 0;  box-shadow: 1px 1px 2px #ccc;  color: #333;  background-color: #fff;  /* 为 emotion panel 定制的样式 */  /* 上传图片的 panel 定制样式 */}.w-e-text-container .w-e-panel-container .w-e-panel-close {  position: absolute;  right: 0;  top: 0;  padding: 5px;  margin: 2px 5px 0 0;  cursor: pointer;  color: #999;}.w-e-text-container .w-e-panel-container .w-e-panel-close:hover {  color: #333;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-title {  list-style: none;  display: -webkit-box;  display: -ms-flexbox;  display: flex;  font-size: 14px;  margin: 2px 10px 0 10px;  border-bottom: 1px solid #f1f1f1;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-title .w-e-item {  padding: 3px 5px;  color: #999;  cursor: pointer;  margin: 0 3px;  position: relative;  top: 1px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-title .w-e-active {  color: #333;  border-bottom: 1px solid #333;  cursor: default;  font-weight: 700;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content {  padding: 10px 15px 10px 15px;  font-size: 16px;  /* 输入框的样式 */  /* 按钮的样式 */}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input:focus,.w-e-text-container .w-e-panel-container .w-e-panel-tab-content textarea:focus,.w-e-text-container .w-e-panel-container .w-e-panel-tab-content button:focus {  outline: none;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content textarea {  width: 100%;  border: 1px solid #ccc;  padding: 5px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content textarea:focus {  border-color: #1e88e5;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input[type=text] {  border: none;  border-bottom: 1px solid #ccc;  font-size: 14px;  height: 20px;  color: #333;  text-align: left;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input[type=text].small {  width: 30px;  text-align: center;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input[type=text].block {  display: block;  width: 100%;  margin: 10px 0;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input[type=text]:focus {  border-bottom: 2px solid #1e88e5;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button {  font-size: 14px;  color: #1e88e5;  border: none;  padding: 5px 10px;  background-color: #fff;  cursor: pointer;  border-radius: 3px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button.left {  float: left;  margin-right: 10px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button.right {  float: right;  margin-left: 10px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button.gray {  color: #999;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button.red {  color: #c24f4a;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button:hover {  background-color: #f1f1f1;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container:after {  content: "";  display: table;  clear: both;}.w-e-text-container .w-e-panel-container .w-e-emoticon-container .w-e-item {  cursor: pointer;  font-size: 18px;  padding: 0 3px;  display: inline-block;  *display: inline;  *zoom: 1;}.w-e-text-container .w-e-panel-container .w-e-up-img-container {  text-align: center;}.w-e-text-container .w-e-panel-container .w-e-up-img-container .w-e-up-btn {  display: inline-block;  *display: inline;  *zoom: 1;  color: #999;  cursor: pointer;  font-size: 60px;  line-height: 1;}.w-e-text-container .w-e-panel-container .w-e-up-img-container .w-e-up-btn:hover {  color: #333;}.w-e-text-container {  position: relative;}.w-e-text-container .w-e-progress {  position: absolute;  background-color: #1e88e5;  bottom: 0;  left: 0;  height: 1px;}.w-e-text {  padding: 0 10px;  overflow-y: scroll;}.w-e-text p,.w-e-text h1,.w-e-text h2,.w-e-text h3,.w-e-text h4,.w-e-text h5,.w-e-text table,.w-e-text pre {  margin: 10px 0;  line-height: 1.5;}.w-e-text ul,.w-e-text ol {  margin: 10px 0 10px 20px;}.w-e-text blockquote {  display: block;  border-left: 8px solid #d0e5f2;  padding: 5px 10px;  margin: 10px 0;  line-height: 1.4;  font-size: 100%;  background-color: #f1f1f1;}.w-e-text code {  display: inline-block;  *display: inline;  *zoom: 1;  background-color: #f1f1f1;  border-radius: 3px;  padding: 3px 5px;  margin: 0 3px;}.w-e-text pre code {  display: block;}.w-e-text table {  border-top: 1px solid #ccc;  border-left: 1px solid #ccc;}.w-e-text table td,.w-e-text table th {  border-bottom: 1px solid #ccc;  border-right: 1px solid #ccc;  padding: 3px 5px;}.w-e-text table th {  border-bottom: 2px solid #ccc;  text-align: center;}.w-e-text:focus {  outline: none;}.w-e-text img {  cursor: pointer;}.w-e-text img:hover {  box-shadow: 0 0 5px #333;}';
-
-// 将 css 代码添加到 <style> 中
-var style = document.createElement('style');
-style.type = 'text/css';
-style.innerHTML = inlinecss;
-document.getElementsByTagName('HEAD').item(0).appendChild(style);
-
-// 返回
-var index = window.wangEditor || Editor;
-
-return index;
-
-})));
 
 
 /***/ }),
@@ -5643,7 +1072,7 @@ return index;
 /***/ (function(module, exports, __webpack_require__) {
 
 __webpack_require__(11);
-module.exports = __webpack_require__(44);
+module.exports = __webpack_require__(48);
 
 
 /***/ }),
@@ -5652,10 +1081,10 @@ module.exports = __webpack_require__(44);
 
 "use strict";
 Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_vue_router__ = __webpack_require__(36);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__components_Release_vue__ = __webpack_require__(40);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0_vue_router__ = __webpack_require__(38);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__components_Release_vue__ = __webpack_require__(42);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__components_Release_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_1__components_Release_vue__);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__components_Question_vue__ = __webpack_require__(71);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__components_Question_vue__ = __webpack_require__(45);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__components_Question_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_2__components_Question_vue__);
 
 /**
@@ -5665,10 +1094,11 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
  */
 
 __webpack_require__(12);
-window.E = __webpack_require__(9);
-window.Velocity = __webpack_require__(70);
+window.E = __webpack_require__(36);
+window.Velocity = __webpack_require__(37);
+window.Swal = __webpack_require__(59);
 
-window.Vue = __webpack_require__(37);
+window.Vue = __webpack_require__(39);
 
 /**
  * Next, we will create a fresh Vue application instance and attach it to
@@ -36544,6 +31974,9469 @@ module.exports = function spread(callback) {
 
 /***/ }),
 /* 36 */
+/***/ (function(module, exports, __webpack_require__) {
+
+(function (global, factory) {
+	 true ? module.exports = factory() :
+	typeof define === 'function' && define.amd ? define(factory) :
+	(global.wangEditor = factory());
+}(this, (function () { 'use strict';
+
+/*
+    poly-fill
+*/
+
+var polyfill = function () {
+
+    // Object.assign
+    if (typeof Object.assign != 'function') {
+        Object.assign = function (target, varArgs) {
+            // .length of function is 2
+            if (target == null) {
+                // TypeError if undefined or null
+                throw new TypeError('Cannot convert undefined or null to object');
+            }
+
+            var to = Object(target);
+
+            for (var index = 1; index < arguments.length; index++) {
+                var nextSource = arguments[index];
+
+                if (nextSource != null) {
+                    // Skip over if undefined or null
+                    for (var nextKey in nextSource) {
+                        // Avoid bugs when hasOwnProperty is shadowed
+                        if (Object.prototype.hasOwnProperty.call(nextSource, nextKey)) {
+                            to[nextKey] = nextSource[nextKey];
+                        }
+                    }
+                }
+            }
+            return to;
+        };
+    }
+
+    // IE 中兼容 Element.prototype.matches
+    if (!Element.prototype.matches) {
+        Element.prototype.matches = Element.prototype.matchesSelector || Element.prototype.mozMatchesSelector || Element.prototype.msMatchesSelector || Element.prototype.oMatchesSelector || Element.prototype.webkitMatchesSelector || function (s) {
+            var matches = (this.document || this.ownerDocument).querySelectorAll(s),
+                i = matches.length;
+            while (--i >= 0 && matches.item(i) !== this) {}
+            return i > -1;
+        };
+    }
+};
+
+/*
+    DOM 操作 API
+*/
+
+// 根据 html 代码片段创建 dom 对象
+function createElemByHTML(html) {
+    var div = void 0;
+    div = document.createElement('div');
+    div.innerHTML = html;
+    return div.children;
+}
+
+// 是否是 DOM List
+function isDOMList(selector) {
+    if (!selector) {
+        return false;
+    }
+    if (selector instanceof HTMLCollection || selector instanceof NodeList) {
+        return true;
+    }
+    return false;
+}
+
+// 封装 document.querySelectorAll
+function querySelectorAll(selector) {
+    var result = document.querySelectorAll(selector);
+    if (isDOMList(result)) {
+        return result;
+    } else {
+        return [result];
+    }
+}
+
+// 记录所有的事件绑定
+var eventList = [];
+
+// 创建构造函数
+function DomElement(selector) {
+    if (!selector) {
+        return;
+    }
+
+    // selector 本来就是 DomElement 对象，直接返回
+    if (selector instanceof DomElement) {
+        return selector;
+    }
+
+    this.selector = selector;
+    var nodeType = selector.nodeType;
+
+    // 根据 selector 得出的结果（如 DOM，DOM List）
+    var selectorResult = [];
+    if (nodeType === 9) {
+        // document 节点
+        selectorResult = [selector];
+    } else if (nodeType === 1) {
+        // 单个 DOM 节点
+        selectorResult = [selector];
+    } else if (isDOMList(selector) || selector instanceof Array) {
+        // DOM List 或者数组
+        selectorResult = selector;
+    } else if (typeof selector === 'string') {
+        // 字符串
+        selector = selector.replace('/\n/mg', '').trim();
+        if (selector.indexOf('<') === 0) {
+            // 如 <div>
+            selectorResult = createElemByHTML(selector);
+        } else {
+            // 如 #id .class
+            selectorResult = querySelectorAll(selector);
+        }
+    }
+
+    var length = selectorResult.length;
+    if (!length) {
+        // 空数组
+        return this;
+    }
+
+    // 加入 DOM 节点
+    var i = void 0;
+    for (i = 0; i < length; i++) {
+        this[i] = selectorResult[i];
+    }
+    this.length = length;
+}
+
+// 修改原型
+DomElement.prototype = {
+    constructor: DomElement,
+
+    // 类数组，forEach
+    forEach: function forEach(fn) {
+        var i = void 0;
+        for (i = 0; i < this.length; i++) {
+            var elem = this[i];
+            var result = fn.call(elem, elem, i);
+            if (result === false) {
+                break;
+            }
+        }
+        return this;
+    },
+
+    // clone
+    clone: function clone(deep) {
+        var cloneList = [];
+        this.forEach(function (elem) {
+            cloneList.push(elem.cloneNode(!!deep));
+        });
+        return $(cloneList);
+    },
+
+    // 获取第几个元素
+    get: function get(index) {
+        var length = this.length;
+        if (index >= length) {
+            index = index % length;
+        }
+        return $(this[index]);
+    },
+
+    // 第一个
+    first: function first() {
+        return this.get(0);
+    },
+
+    // 最后一个
+    last: function last() {
+        var length = this.length;
+        return this.get(length - 1);
+    },
+
+    // 绑定事件
+    on: function on(type, selector, fn) {
+        // selector 不为空，证明绑定事件要加代理
+        if (!fn) {
+            fn = selector;
+            selector = null;
+        }
+
+        // type 是否有多个
+        var types = [];
+        types = type.split(/\s+/);
+
+        return this.forEach(function (elem) {
+            types.forEach(function (type) {
+                if (!type) {
+                    return;
+                }
+
+                // 记录下，方便后面解绑
+                eventList.push({
+                    elem: elem,
+                    type: type,
+                    fn: fn
+                });
+
+                if (!selector) {
+                    // 无代理
+                    elem.addEventListener(type, fn);
+                    return;
+                }
+
+                // 有代理
+                elem.addEventListener(type, function (e) {
+                    var target = e.target;
+                    if (target.matches(selector)) {
+                        fn.call(target, e);
+                    }
+                });
+            });
+        });
+    },
+
+    // 取消事件绑定
+    off: function off(type, fn) {
+        return this.forEach(function (elem) {
+            elem.removeEventListener(type, fn);
+        });
+    },
+
+    // 获取/设置 属性
+    attr: function attr(key, val) {
+        if (val == null) {
+            // 获取值
+            return this[0].getAttribute(key);
+        } else {
+            // 设置值
+            return this.forEach(function (elem) {
+                elem.setAttribute(key, val);
+            });
+        }
+    },
+
+    // 添加 class
+    addClass: function addClass(className) {
+        if (!className) {
+            return this;
+        }
+        return this.forEach(function (elem) {
+            var arr = void 0;
+            if (elem.className) {
+                // 解析当前 className 转换为数组
+                arr = elem.className.split(/\s/);
+                arr = arr.filter(function (item) {
+                    return !!item.trim();
+                });
+                // 添加 class
+                if (arr.indexOf(className) < 0) {
+                    arr.push(className);
+                }
+                // 修改 elem.class
+                elem.className = arr.join(' ');
+            } else {
+                elem.className = className;
+            }
+        });
+    },
+
+    // 删除 class
+    removeClass: function removeClass(className) {
+        if (!className) {
+            return this;
+        }
+        return this.forEach(function (elem) {
+            var arr = void 0;
+            if (elem.className) {
+                // 解析当前 className 转换为数组
+                arr = elem.className.split(/\s/);
+                arr = arr.filter(function (item) {
+                    item = item.trim();
+                    // 删除 class
+                    if (!item || item === className) {
+                        return false;
+                    }
+                    return true;
+                });
+                // 修改 elem.class
+                elem.className = arr.join(' ');
+            }
+        });
+    },
+
+    // 修改 css
+    css: function css(key, val) {
+        var currentStyle = key + ':' + val + ';';
+        return this.forEach(function (elem) {
+            var style = (elem.getAttribute('style') || '').trim();
+            var styleArr = void 0,
+                resultArr = [];
+            if (style) {
+                // 将 style 按照 ; 拆分为数组
+                styleArr = style.split(';');
+                styleArr.forEach(function (item) {
+                    // 对每项样式，按照 : 拆分为 key 和 value
+                    var arr = item.split(':').map(function (i) {
+                        return i.trim();
+                    });
+                    if (arr.length === 2) {
+                        resultArr.push(arr[0] + ':' + arr[1]);
+                    }
+                });
+                // 替换或者新增
+                resultArr = resultArr.map(function (item) {
+                    if (item.indexOf(key) === 0) {
+                        return currentStyle;
+                    } else {
+                        return item;
+                    }
+                });
+                if (resultArr.indexOf(currentStyle) < 0) {
+                    resultArr.push(currentStyle);
+                }
+                // 结果
+                elem.setAttribute('style', resultArr.join('; '));
+            } else {
+                // style 无值
+                elem.setAttribute('style', currentStyle);
+            }
+        });
+    },
+
+    // 显示
+    show: function show() {
+        return this.css('display', 'block');
+    },
+
+    // 隐藏
+    hide: function hide() {
+        return this.css('display', 'none');
+    },
+
+    // 获取子节点
+    children: function children() {
+        var elem = this[0];
+        if (!elem) {
+            return null;
+        }
+
+        return $(elem.children);
+    },
+
+    // 获取子节点（包括文本节点）
+    childNodes: function childNodes() {
+        var elem = this[0];
+        if (!elem) {
+            return null;
+        }
+
+        return $(elem.childNodes);
+    },
+
+    // 增加子节点
+    append: function append($children) {
+        return this.forEach(function (elem) {
+            $children.forEach(function (child) {
+                elem.appendChild(child);
+            });
+        });
+    },
+
+    // 移除当前节点
+    remove: function remove() {
+        return this.forEach(function (elem) {
+            if (elem.remove) {
+                elem.remove();
+            } else {
+                var parent = elem.parentElement;
+                parent && parent.removeChild(elem);
+            }
+        });
+    },
+
+    // 是否包含某个子节点
+    isContain: function isContain($child) {
+        var elem = this[0];
+        var child = $child[0];
+        return elem.contains(child);
+    },
+
+    // 尺寸数据
+    getSizeData: function getSizeData() {
+        var elem = this[0];
+        return elem.getBoundingClientRect(); // 可得到 bottom height left right top width 的数据
+    },
+
+    // 封装 nodeName
+    getNodeName: function getNodeName() {
+        var elem = this[0];
+        return elem.nodeName;
+    },
+
+    // 从当前元素查找
+    find: function find(selector) {
+        var elem = this[0];
+        return $(elem.querySelectorAll(selector));
+    },
+
+    // 获取当前元素的 text
+    text: function text(val) {
+        if (!val) {
+            // 获取 text
+            var elem = this[0];
+            return elem.innerHTML.replace(/<.*?>/g, function () {
+                return '';
+            });
+        } else {
+            // 设置 text
+            return this.forEach(function (elem) {
+                elem.innerHTML = val;
+            });
+        }
+    },
+
+    // 获取 html
+    html: function html(value) {
+        var elem = this[0];
+        if (value == null) {
+            return elem.innerHTML;
+        } else {
+            elem.innerHTML = value;
+            return this;
+        }
+    },
+
+    // 获取 value
+    val: function val() {
+        var elem = this[0];
+        return elem.value.trim();
+    },
+
+    // focus
+    focus: function focus() {
+        return this.forEach(function (elem) {
+            elem.focus();
+        });
+    },
+
+    // parent
+    parent: function parent() {
+        var elem = this[0];
+        return $(elem.parentElement);
+    },
+
+    // parentUntil 找到符合 selector 的父节点
+    parentUntil: function parentUntil(selector, _currentElem) {
+        var results = document.querySelectorAll(selector);
+        var length = results.length;
+        if (!length) {
+            // 传入的 selector 无效
+            return null;
+        }
+
+        var elem = _currentElem || this[0];
+        if (elem.nodeName === 'BODY') {
+            return null;
+        }
+
+        var parent = elem.parentElement;
+        var i = void 0;
+        for (i = 0; i < length; i++) {
+            if (parent === results[i]) {
+                // 找到，并返回
+                return $(parent);
+            }
+        }
+
+        // 继续查找
+        return this.parentUntil(selector, parent);
+    },
+
+    // 判断两个 elem 是否相等
+    equal: function equal($elem) {
+        if ($elem.nodeType === 1) {
+            return this[0] === $elem;
+        } else {
+            return this[0] === $elem[0];
+        }
+    },
+
+    // 将该元素插入到某个元素前面
+    insertBefore: function insertBefore(selector) {
+        var $referenceNode = $(selector);
+        var referenceNode = $referenceNode[0];
+        if (!referenceNode) {
+            return this;
+        }
+        return this.forEach(function (elem) {
+            var parent = referenceNode.parentNode;
+            parent.insertBefore(elem, referenceNode);
+        });
+    },
+
+    // 将该元素插入到某个元素后面
+    insertAfter: function insertAfter(selector) {
+        var $referenceNode = $(selector);
+        var referenceNode = $referenceNode[0];
+        if (!referenceNode) {
+            return this;
+        }
+        return this.forEach(function (elem) {
+            var parent = referenceNode.parentNode;
+            if (parent.lastChild === referenceNode) {
+                // 最后一个元素
+                parent.appendChild(elem);
+            } else {
+                // 不是最后一个元素
+                parent.insertBefore(elem, referenceNode.nextSibling);
+            }
+        });
+    }
+};
+
+// new 一个对象
+function $(selector) {
+    return new DomElement(selector);
+}
+
+// 解绑所有事件，用于销毁编辑器
+$.offAll = function () {
+    eventList.forEach(function (item) {
+        var elem = item.elem;
+        var type = item.type;
+        var fn = item.fn;
+        // 解绑
+        elem.removeEventListener(type, fn);
+    });
+};
+
+/*
+    配置信息
+*/
+
+var config = {
+
+    // 默认菜单配置
+    menus: ['head', 'bold', 'fontSize', 'fontName', 'italic', 'underline', 'strikeThrough', 'foreColor', 'backColor', 'link', 'list', 'justify', 'quote', 'emoticon', 'image', 'table', 'video', 'code', 'undo', 'redo'],
+
+    fontNames: ['宋体', '微软雅黑', 'Arial', 'Tahoma', 'Verdana'],
+
+    colors: ['#000000', '#eeece0', '#1c487f', '#4d80bf', '#c24f4a', '#8baa4a', '#7b5ba1', '#46acc8', '#f9963b', '#ffffff'],
+
+    // // 语言配置
+    // lang: {
+    //     '设置标题': 'title',
+    //     '正文': 'p',
+    //     '链接文字': 'link text',
+    //     '链接': 'link',
+    //     '插入': 'insert',
+    //     '创建': 'init'
+    // },
+
+    // 表情
+    emotions: [{
+        // tab 的标题
+        title: '默认',
+        // type -> 'emoji' / 'image'
+        type: 'image',
+        // content -> 数组
+        content: [{
+            alt: '[坏笑]',
+            src: 'http://img.t.sinajs.cn/t4/appstyle/expression/ext/normal/50/pcmoren_huaixiao_org.png'
+        }, {
+            alt: '[舔屏]',
+            src: 'http://img.t.sinajs.cn/t4/appstyle/expression/ext/normal/40/pcmoren_tian_org.png'
+        }, {
+            alt: '[污]',
+            src: 'http://img.t.sinajs.cn/t4/appstyle/expression/ext/normal/3c/pcmoren_wu_org.png'
+        }]
+    }, {
+        // tab 的标题
+        title: '新浪',
+        // type -> 'emoji' / 'image'
+        type: 'image',
+        // content -> 数组
+        content: [{
+            src: 'http://img.t.sinajs.cn/t35/style/images/common/face/ext/normal/7a/shenshou_thumb.gif',
+            alt: '[草泥马]'
+        }, {
+            src: 'http://img.t.sinajs.cn/t35/style/images/common/face/ext/normal/60/horse2_thumb.gif',
+            alt: '[神马]'
+        }, {
+            src: 'http://img.t.sinajs.cn/t35/style/images/common/face/ext/normal/bc/fuyun_thumb.gif',
+            alt: '[浮云]'
+        }]
+    }, {
+        // tab 的标题
+        title: 'emoji',
+        // type -> 'emoji' / 'image'
+        type: 'emoji',
+        // content -> 数组
+        content: '😀 😃 😄 😁 😆 😅 😂 😊 😇 🙂 🙃 😉 😓 😪 😴 🙄 🤔 😬 🤐'.split(/\s/)
+    }],
+
+    // 编辑区域的 z-index
+    zIndex: 10000,
+
+    // 是否开启 debug 模式（debug 模式下错误会 throw error 形式抛出）
+    debug: false,
+
+    // 插入链接时候的格式校验
+    linkCheck: function linkCheck(text, link) {
+        // text 是插入的文字
+        // link 是插入的链接
+        return true; // 返回 true 即表示成功
+        // return '校验失败' // 返回字符串即表示失败的提示信息
+    },
+
+    // 插入网络图片的校验
+    linkImgCheck: function linkImgCheck(src) {
+        // src 即图片的地址
+        return true; // 返回 true 即表示成功
+        // return '校验失败'  // 返回字符串即表示失败的提示信息
+    },
+
+    // 粘贴过滤样式，默认开启
+    pasteFilterStyle: true,
+
+    // 粘贴内容时，忽略图片。默认关闭
+    pasteIgnoreImg: false,
+
+    // 对粘贴的文字进行自定义处理，返回处理后的结果。编辑器会将处理后的结果粘贴到编辑区域中。
+    // IE 暂时不支持
+    pasteTextHandle: function pasteTextHandle(content) {
+        // content 即粘贴过来的内容（html 或 纯文本），可进行自定义处理然后返回
+        return content;
+    },
+
+    // onchange 事件
+    // onchange: function (html) {
+    //     // html 即变化之后的内容
+    //     console.log(html)
+    // },
+
+    // 是否显示添加网络图片的 tab
+    showLinkImg: true,
+
+    // 插入网络图片的回调
+    linkImgCallback: function linkImgCallback(url) {
+        // console.log(url)  // url 即插入图片的地址
+    },
+
+    // 默认上传图片 max size: 5M
+    uploadImgMaxSize: 5 * 1024 * 1024,
+
+    // 配置一次最多上传几个图片
+    // uploadImgMaxLength: 5,
+
+    // 上传图片，是否显示 base64 格式
+    uploadImgShowBase64: false,
+
+    // 上传图片，server 地址（如果有值，则 base64 格式的配置则失效）
+    // uploadImgServer: '/upload',
+
+    // 自定义配置 filename
+    uploadFileName: '',
+
+    // 上传图片的自定义参数
+    uploadImgParams: {
+        // token: 'abcdef12345'
+    },
+
+    // 上传图片的自定义header
+    uploadImgHeaders: {
+        // 'Accept': 'text/x-json'
+    },
+
+    // 配置 XHR withCredentials
+    withCredentials: false,
+
+    // 自定义上传图片超时时间 ms
+    uploadImgTimeout: 10000,
+
+    // 上传图片 hook 
+    uploadImgHooks: {
+        // customInsert: function (insertLinkImg, result, editor) {
+        //     console.log('customInsert')
+        //     // 图片上传并返回结果，自定义插入图片的事件，而不是编辑器自动插入图片
+        //     const data = result.data1 || []
+        //     data.forEach(link => {
+        //         insertLinkImg(link)
+        //     })
+        // },
+        before: function before(xhr, editor, files) {
+            // 图片上传之前触发
+
+            // 如果返回的结果是 {prevent: true, msg: 'xxxx'} 则表示用户放弃上传
+            // return {
+            //     prevent: true,
+            //     msg: '放弃上传'
+            // }
+        },
+        success: function success(xhr, editor, result) {
+            // 图片上传并返回结果，图片插入成功之后触发
+        },
+        fail: function fail(xhr, editor, result) {
+            // 图片上传并返回结果，但图片插入错误时触发
+        },
+        error: function error(xhr, editor) {
+            // 图片上传出错时触发
+        },
+        timeout: function timeout(xhr, editor) {
+            // 图片上传超时时触发
+        }
+    },
+
+    // 是否上传七牛云，默认为 false
+    qiniu: false
+
+};
+
+/*
+    工具
+*/
+
+// 和 UA 相关的属性
+var UA = {
+    _ua: navigator.userAgent,
+
+    // 是否 webkit
+    isWebkit: function isWebkit() {
+        var reg = /webkit/i;
+        return reg.test(this._ua);
+    },
+
+    // 是否 IE
+    isIE: function isIE() {
+        return 'ActiveXObject' in window;
+    }
+};
+
+// 遍历对象
+function objForEach(obj, fn) {
+    var key = void 0,
+        result = void 0;
+    for (key in obj) {
+        if (obj.hasOwnProperty(key)) {
+            result = fn.call(obj, key, obj[key]);
+            if (result === false) {
+                break;
+            }
+        }
+    }
+}
+
+// 遍历类数组
+function arrForEach(fakeArr, fn) {
+    var i = void 0,
+        item = void 0,
+        result = void 0;
+    var length = fakeArr.length || 0;
+    for (i = 0; i < length; i++) {
+        item = fakeArr[i];
+        result = fn.call(fakeArr, item, i);
+        if (result === false) {
+            break;
+        }
+    }
+}
+
+// 获取随机数
+function getRandom(prefix) {
+    return prefix + Math.random().toString().slice(2);
+}
+
+// 替换 html 特殊字符
+function replaceHtmlSymbol(html) {
+    if (html == null) {
+        return '';
+    }
+    return html.replace(/</gm, '&lt;').replace(/>/gm, '&gt;').replace(/"/gm, '&quot;').replace(/(\r\n|\r|\n)/g, '<br/>');
+}
+
+// 返回百分比的格式
+
+
+// 判断是不是 function
+function isFunction(fn) {
+    return typeof fn === 'function';
+}
+
+/*
+    bold-menu
+*/
+// 构造函数
+function Bold(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-bold"></i>\n        </div>');
+    this.type = 'click';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Bold.prototype = {
+    constructor: Bold,
+
+    // 点击事件
+    onClick: function onClick(e) {
+        // 点击菜单将触发这里
+
+        var editor = this.editor;
+        var isSeleEmpty = editor.selection.isSelectionEmpty();
+
+        if (isSeleEmpty) {
+            // 选区是空的，插入并选中一个“空白”
+            editor.selection.createEmptyRange();
+        }
+
+        // 执行 bold 命令
+        editor.cmd.do('bold');
+
+        if (isSeleEmpty) {
+            // 需要将选取折叠起来
+            editor.selection.collapseRange();
+            editor.selection.restoreSelection();
+        }
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        if (editor.cmd.queryCommandState('bold')) {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    替换多语言
+ */
+
+var replaceLang = function (editor, str) {
+    var langArgs = editor.config.langArgs || [];
+    var result = str;
+
+    langArgs.forEach(function (item) {
+        var reg = item.reg;
+        var val = item.val;
+
+        if (reg.test(result)) {
+            result = result.replace(reg, function () {
+                return val;
+            });
+        }
+    });
+
+    return result;
+};
+
+/*
+    droplist
+*/
+var _emptyFn = function _emptyFn() {};
+
+// 构造函数
+function DropList(menu, opt) {
+    var _this = this;
+
+    // droplist 所依附的菜单
+    var editor = menu.editor;
+    this.menu = menu;
+    this.opt = opt;
+    // 容器
+    var $container = $('<div class="w-e-droplist"></div>');
+
+    // 标题
+    var $title = opt.$title;
+    var titleHtml = void 0;
+    if ($title) {
+        // 替换多语言
+        titleHtml = $title.html();
+        titleHtml = replaceLang(editor, titleHtml);
+        $title.html(titleHtml);
+
+        $title.addClass('w-e-dp-title');
+        $container.append($title);
+    }
+
+    var list = opt.list || [];
+    var type = opt.type || 'list'; // 'list' 列表形式（如“标题”菜单） / 'inline-block' 块状形式（如“颜色”菜单）
+    var onClick = opt.onClick || _emptyFn;
+
+    // 加入 DOM 并绑定事件
+    var $list = $('<ul class="' + (type === 'list' ? 'w-e-list' : 'w-e-block') + '"></ul>');
+    $container.append($list);
+    list.forEach(function (item) {
+        var $elem = item.$elem;
+
+        // 替换多语言
+        var elemHtml = $elem.html();
+        elemHtml = replaceLang(editor, elemHtml);
+        $elem.html(elemHtml);
+
+        var value = item.value;
+        var $li = $('<li class="w-e-item"></li>');
+        if ($elem) {
+            $li.append($elem);
+            $list.append($li);
+            $li.on('click', function (e) {
+                onClick(value);
+
+                // 隐藏
+                _this.hideTimeoutId = setTimeout(function () {
+                    _this.hide();
+                }, 0);
+            });
+        }
+    });
+
+    // 绑定隐藏事件
+    $container.on('mouseleave', function (e) {
+        _this.hideTimeoutId = setTimeout(function () {
+            _this.hide();
+        }, 0);
+    });
+
+    // 记录属性
+    this.$container = $container;
+
+    // 基本属性
+    this._rendered = false;
+    this._show = false;
+}
+
+// 原型
+DropList.prototype = {
+    constructor: DropList,
+
+    // 显示（插入DOM）
+    show: function show() {
+        if (this.hideTimeoutId) {
+            // 清除之前的定时隐藏
+            clearTimeout(this.hideTimeoutId);
+        }
+
+        var menu = this.menu;
+        var $menuELem = menu.$elem;
+        var $container = this.$container;
+        if (this._show) {
+            return;
+        }
+        if (this._rendered) {
+            // 显示
+            $container.show();
+        } else {
+            // 加入 DOM 之前先定位位置
+            var menuHeight = $menuELem.getSizeData().height || 0;
+            var width = this.opt.width || 100; // 默认为 100
+            $container.css('margin-top', menuHeight + 'px').css('width', width + 'px');
+
+            // 加入到 DOM
+            $menuELem.append($container);
+            this._rendered = true;
+        }
+
+        // 修改属性
+        this._show = true;
+    },
+
+    // 隐藏（移除DOM）
+    hide: function hide() {
+        if (this.showTimeoutId) {
+            // 清除之前的定时显示
+            clearTimeout(this.showTimeoutId);
+        }
+
+        var $container = this.$container;
+        if (!this._show) {
+            return;
+        }
+        // 隐藏并需改属性
+        $container.hide();
+        this._show = false;
+    }
+};
+
+/*
+    menu - header
+*/
+// 构造函数
+function Head(editor) {
+    var _this = this;
+
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-header"></i></div>');
+    this.type = 'droplist';
+
+    // 当前是否 active 状态
+    this._active = false;
+
+    // 初始化 droplist
+    this.droplist = new DropList(this, {
+        width: 100,
+        $title: $('<p>设置标题</p>'),
+        type: 'list', // droplist 以列表形式展示
+        list: [{ $elem: $('<h1>H1</h1>'), value: '<h1>' }, { $elem: $('<h2>H2</h2>'), value: '<h2>' }, { $elem: $('<h3>H3</h3>'), value: '<h3>' }, { $elem: $('<h4>H4</h4>'), value: '<h4>' }, { $elem: $('<h5>H5</h5>'), value: '<h5>' }, { $elem: $('<p>正文</p>'), value: '<p>' }],
+        onClick: function onClick(value) {
+            // 注意 this 是指向当前的 Head 对象
+            _this._command(value);
+        }
+    });
+}
+
+// 原型
+Head.prototype = {
+    constructor: Head,
+
+    // 执行命令
+    _command: function _command(value) {
+        var editor = this.editor;
+
+        var $selectionElem = editor.selection.getSelectionContainerElem();
+        if (editor.$textElem.equal($selectionElem)) {
+            // 不能选中多行来设置标题，否则会出现问题
+            // 例如选中的是 <p>xxx</p><p>yyy</p> 来设置标题，设置之后会成为 <h1>xxx<br>yyy</h1> 不符合预期
+            return;
+        }
+
+        editor.cmd.do('formatBlock', value);
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        var reg = /^h/i;
+        var cmdValue = editor.cmd.queryCommandValue('formatBlock');
+        if (reg.test(cmdValue)) {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    menu - fontSize
+*/
+
+// 构造函数
+function FontSize(editor) {
+    var _this = this;
+
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-text-heigh"></i></div>');
+    this.type = 'droplist';
+
+    // 当前是否 active 状态
+    this._active = false;
+
+    // 初始化 droplist
+    this.droplist = new DropList(this, {
+        width: 160,
+        $title: $('<p>字号</p>'),
+        type: 'list', // droplist 以列表形式展示
+        list: [{ $elem: $('<span style="font-size: x-small;">x-small</span>'), value: '1' }, { $elem: $('<span style="font-size: small;">small</span>'), value: '2' }, { $elem: $('<span>normal</span>'), value: '3' }, { $elem: $('<span style="font-size: large;">large</span>'), value: '4' }, { $elem: $('<span style="font-size: x-large;">x-large</span>'), value: '5' }, { $elem: $('<span style="font-size: xx-large;">xx-large</span>'), value: '6' }],
+        onClick: function onClick(value) {
+            // 注意 this 是指向当前的 FontSize 对象
+            _this._command(value);
+        }
+    });
+}
+
+// 原型
+FontSize.prototype = {
+    constructor: FontSize,
+
+    // 执行命令
+    _command: function _command(value) {
+        var editor = this.editor;
+        editor.cmd.do('fontSize', value);
+    }
+};
+
+/*
+    menu - fontName
+*/
+
+// 构造函数
+function FontName(editor) {
+    var _this = this;
+
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-font"></i></div>');
+    this.type = 'droplist';
+
+    // 当前是否 active 状态
+    this._active = false;
+
+    // 获取配置的字体
+    var config = editor.config;
+    var fontNames = config.fontNames || [];
+
+    // 初始化 droplist
+    this.droplist = new DropList(this, {
+        width: 100,
+        $title: $('<p>字体</p>'),
+        type: 'list', // droplist 以列表形式展示
+        list: fontNames.map(function (fontName) {
+            return { $elem: $('<span style="font-family: ' + fontName + ';">' + fontName + '</span>'), value: fontName };
+        }),
+        onClick: function onClick(value) {
+            // 注意 this 是指向当前的 FontName 对象
+            _this._command(value);
+        }
+    });
+}
+
+// 原型
+FontName.prototype = {
+    constructor: FontName,
+
+    _command: function _command(value) {
+        var editor = this.editor;
+        editor.cmd.do('fontName', value);
+    }
+};
+
+/*
+    panel
+*/
+
+var emptyFn = function emptyFn() {};
+
+// 记录已经显示 panel 的菜单
+var _isCreatedPanelMenus = [];
+
+// 构造函数
+function Panel(menu, opt) {
+    this.menu = menu;
+    this.opt = opt;
+}
+
+// 原型
+Panel.prototype = {
+    constructor: Panel,
+
+    // 显示（插入DOM）
+    show: function show() {
+        var _this = this;
+
+        var menu = this.menu;
+        if (_isCreatedPanelMenus.indexOf(menu) >= 0) {
+            // 该菜单已经创建了 panel 不能再创建
+            return;
+        }
+
+        var editor = menu.editor;
+        var $body = $('body');
+        var $textContainerElem = editor.$textContainerElem;
+        var opt = this.opt;
+
+        // panel 的容器
+        var $container = $('<div class="w-e-panel-container"></div>');
+        var width = opt.width || 300; // 默认 300px
+        $container.css('width', width + 'px').css('margin-left', (0 - width) / 2 + 'px');
+
+        // 添加关闭按钮
+        var $closeBtn = $('<i class="w-e-icon-close w-e-panel-close"></i>');
+        $container.append($closeBtn);
+        $closeBtn.on('click', function () {
+            _this.hide();
+        });
+
+        // 准备 tabs 容器
+        var $tabTitleContainer = $('<ul class="w-e-panel-tab-title"></ul>');
+        var $tabContentContainer = $('<div class="w-e-panel-tab-content"></div>');
+        $container.append($tabTitleContainer).append($tabContentContainer);
+
+        // 设置高度
+        var height = opt.height;
+        if (height) {
+            $tabContentContainer.css('height', height + 'px').css('overflow-y', 'auto');
+        }
+
+        // tabs
+        var tabs = opt.tabs || [];
+        var tabTitleArr = [];
+        var tabContentArr = [];
+        tabs.forEach(function (tab, tabIndex) {
+            if (!tab) {
+                return;
+            }
+            var title = tab.title || '';
+            var tpl = tab.tpl || '';
+
+            // 替换多语言
+            title = replaceLang(editor, title);
+            tpl = replaceLang(editor, tpl);
+
+            // 添加到 DOM
+            var $title = $('<li class="w-e-item">' + title + '</li>');
+            $tabTitleContainer.append($title);
+            var $content = $(tpl);
+            $tabContentContainer.append($content);
+
+            // 记录到内存
+            $title._index = tabIndex;
+            tabTitleArr.push($title);
+            tabContentArr.push($content);
+
+            // 设置 active 项
+            if (tabIndex === 0) {
+                $title._active = true;
+                $title.addClass('w-e-active');
+            } else {
+                $content.hide();
+            }
+
+            // 绑定 tab 的事件
+            $title.on('click', function (e) {
+                if ($title._active) {
+                    return;
+                }
+                // 隐藏所有的 tab
+                tabTitleArr.forEach(function ($title) {
+                    $title._active = false;
+                    $title.removeClass('w-e-active');
+                });
+                tabContentArr.forEach(function ($content) {
+                    $content.hide();
+                });
+
+                // 显示当前的 tab
+                $title._active = true;
+                $title.addClass('w-e-active');
+                $content.show();
+            });
+        });
+
+        // 绑定关闭事件
+        $container.on('click', function (e) {
+            // 点击时阻止冒泡
+            e.stopPropagation();
+        });
+        $body.on('click', function (e) {
+            _this.hide();
+        });
+
+        // 添加到 DOM
+        $textContainerElem.append($container);
+
+        // 绑定 opt 的事件，只有添加到 DOM 之后才能绑定成功
+        tabs.forEach(function (tab, index) {
+            if (!tab) {
+                return;
+            }
+            var events = tab.events || [];
+            events.forEach(function (event) {
+                var selector = event.selector;
+                var type = event.type;
+                var fn = event.fn || emptyFn;
+                var $content = tabContentArr[index];
+                $content.find(selector).on(type, function (e) {
+                    e.stopPropagation();
+                    var needToHide = fn(e);
+                    // 执行完事件之后，是否要关闭 panel
+                    if (needToHide) {
+                        _this.hide();
+                    }
+                });
+            });
+        });
+
+        // focus 第一个 elem
+        var $inputs = $container.find('input[type=text],textarea');
+        if ($inputs.length) {
+            $inputs.get(0).focus();
+        }
+
+        // 添加到属性
+        this.$container = $container;
+
+        // 隐藏其他 panel
+        this._hideOtherPanels();
+        // 记录该 menu 已经创建了 panel
+        _isCreatedPanelMenus.push(menu);
+    },
+
+    // 隐藏（移除DOM）
+    hide: function hide() {
+        var menu = this.menu;
+        var $container = this.$container;
+        if ($container) {
+            $container.remove();
+        }
+
+        // 将该 menu 记录中移除
+        _isCreatedPanelMenus = _isCreatedPanelMenus.filter(function (item) {
+            if (item === menu) {
+                return false;
+            } else {
+                return true;
+            }
+        });
+    },
+
+    // 一个 panel 展示时，隐藏其他 panel
+    _hideOtherPanels: function _hideOtherPanels() {
+        if (!_isCreatedPanelMenus.length) {
+            return;
+        }
+        _isCreatedPanelMenus.forEach(function (menu) {
+            var panel = menu.panel || {};
+            if (panel.hide) {
+                panel.hide();
+            }
+        });
+    }
+};
+
+/*
+    menu - link
+*/
+// 构造函数
+function Link(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-link"></i></div>');
+    this.type = 'panel';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Link.prototype = {
+    constructor: Link,
+
+    // 点击事件
+    onClick: function onClick(e) {
+        var editor = this.editor;
+        var $linkelem = void 0;
+
+        if (this._active) {
+            // 当前选区在链接里面
+            $linkelem = editor.selection.getSelectionContainerElem();
+            if (!$linkelem) {
+                return;
+            }
+            // 将该元素都包含在选取之内，以便后面整体替换
+            editor.selection.createRangeByElem($linkelem);
+            editor.selection.restoreSelection();
+            // 显示 panel
+            this._createPanel($linkelem.text(), $linkelem.attr('href'));
+        } else {
+            // 当前选区不在链接里面
+            if (editor.selection.isSelectionEmpty()) {
+                // 选区是空的，未选中内容
+                this._createPanel('', '');
+            } else {
+                // 选中内容了
+                this._createPanel(editor.selection.getSelectionText(), '');
+            }
+        }
+    },
+
+    // 创建 panel
+    _createPanel: function _createPanel(text, link) {
+        var _this = this;
+
+        // panel 中需要用到的id
+        var inputLinkId = getRandom('input-link');
+        var inputTextId = getRandom('input-text');
+        var btnOkId = getRandom('btn-ok');
+        var btnDelId = getRandom('btn-del');
+
+        // 是否显示“删除链接”
+        var delBtnDisplay = this._active ? 'inline-block' : 'none';
+
+        // 初始化并显示 panel
+        var panel = new Panel(this, {
+            width: 300,
+            // panel 中可包含多个 tab
+            tabs: [{
+                // tab 的标题
+                title: '链接',
+                // 模板
+                tpl: '<div>\n                            <input id="' + inputTextId + '" type="text" class="block" value="' + text + '" placeholder="\u94FE\u63A5\u6587\u5B57"/></td>\n                            <input id="' + inputLinkId + '" type="text" class="block" value="' + link + '" placeholder="http://..."/></td>\n                            <div class="w-e-button-container">\n                                <button id="' + btnOkId + '" class="right">\u63D2\u5165</button>\n                                <button id="' + btnDelId + '" class="gray right" style="display:' + delBtnDisplay + '">\u5220\u9664\u94FE\u63A5</button>\n                            </div>\n                        </div>',
+                // 事件绑定
+                events: [
+                // 插入链接
+                {
+                    selector: '#' + btnOkId,
+                    type: 'click',
+                    fn: function fn() {
+                        // 执行插入链接
+                        var $link = $('#' + inputLinkId);
+                        var $text = $('#' + inputTextId);
+                        var link = $link.val();
+                        var text = $text.val();
+                        _this._insertLink(text, link);
+
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                },
+                // 删除链接
+                {
+                    selector: '#' + btnDelId,
+                    type: 'click',
+                    fn: function fn() {
+                        // 执行删除链接
+                        _this._delLink();
+
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }]
+            } // tab end
+            ] // tabs end
+        });
+
+        // 显示 panel
+        panel.show();
+
+        // 记录属性
+        this.panel = panel;
+    },
+
+    // 删除当前链接
+    _delLink: function _delLink() {
+        if (!this._active) {
+            return;
+        }
+        var editor = this.editor;
+        var $selectionELem = editor.selection.getSelectionContainerElem();
+        if (!$selectionELem) {
+            return;
+        }
+        var selectionText = editor.selection.getSelectionText();
+        editor.cmd.do('insertHTML', '<span>' + selectionText + '</span>');
+    },
+
+    // 插入链接
+    _insertLink: function _insertLink(text, link) {
+        var editor = this.editor;
+        var config = editor.config;
+        var linkCheck = config.linkCheck;
+        var checkResult = true; // 默认为 true
+        if (linkCheck && typeof linkCheck === 'function') {
+            checkResult = linkCheck(text, link);
+        }
+        if (checkResult === true) {
+            editor.cmd.do('insertHTML', '<a href="' + link + '" target="_blank">' + text + '</a>');
+        } else {
+            alert(checkResult);
+        }
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        var $selectionELem = editor.selection.getSelectionContainerElem();
+        if (!$selectionELem) {
+            return;
+        }
+        if ($selectionELem.getNodeName() === 'A') {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    italic-menu
+*/
+// 构造函数
+function Italic(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-italic"></i>\n        </div>');
+    this.type = 'click';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Italic.prototype = {
+    constructor: Italic,
+
+    // 点击事件
+    onClick: function onClick(e) {
+        // 点击菜单将触发这里
+
+        var editor = this.editor;
+        var isSeleEmpty = editor.selection.isSelectionEmpty();
+
+        if (isSeleEmpty) {
+            // 选区是空的，插入并选中一个“空白”
+            editor.selection.createEmptyRange();
+        }
+
+        // 执行 italic 命令
+        editor.cmd.do('italic');
+
+        if (isSeleEmpty) {
+            // 需要将选取折叠起来
+            editor.selection.collapseRange();
+            editor.selection.restoreSelection();
+        }
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        if (editor.cmd.queryCommandState('italic')) {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    redo-menu
+*/
+// 构造函数
+function Redo(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-redo"></i>\n        </div>');
+    this.type = 'click';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Redo.prototype = {
+    constructor: Redo,
+
+    // 点击事件
+    onClick: function onClick(e) {
+        // 点击菜单将触发这里
+
+        var editor = this.editor;
+
+        // 执行 redo 命令
+        editor.cmd.do('redo');
+    }
+};
+
+/*
+    strikeThrough-menu
+*/
+// 构造函数
+function StrikeThrough(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-strikethrough"></i>\n        </div>');
+    this.type = 'click';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+StrikeThrough.prototype = {
+    constructor: StrikeThrough,
+
+    // 点击事件
+    onClick: function onClick(e) {
+        // 点击菜单将触发这里
+
+        var editor = this.editor;
+        var isSeleEmpty = editor.selection.isSelectionEmpty();
+
+        if (isSeleEmpty) {
+            // 选区是空的，插入并选中一个“空白”
+            editor.selection.createEmptyRange();
+        }
+
+        // 执行 strikeThrough 命令
+        editor.cmd.do('strikeThrough');
+
+        if (isSeleEmpty) {
+            // 需要将选取折叠起来
+            editor.selection.collapseRange();
+            editor.selection.restoreSelection();
+        }
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        if (editor.cmd.queryCommandState('strikeThrough')) {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    underline-menu
+*/
+// 构造函数
+function Underline(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-underline"></i>\n        </div>');
+    this.type = 'click';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Underline.prototype = {
+    constructor: Underline,
+
+    // 点击事件
+    onClick: function onClick(e) {
+        // 点击菜单将触发这里
+
+        var editor = this.editor;
+        var isSeleEmpty = editor.selection.isSelectionEmpty();
+
+        if (isSeleEmpty) {
+            // 选区是空的，插入并选中一个“空白”
+            editor.selection.createEmptyRange();
+        }
+
+        // 执行 underline 命令
+        editor.cmd.do('underline');
+
+        if (isSeleEmpty) {
+            // 需要将选取折叠起来
+            editor.selection.collapseRange();
+            editor.selection.restoreSelection();
+        }
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        if (editor.cmd.queryCommandState('underline')) {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    undo-menu
+*/
+// 构造函数
+function Undo(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-undo"></i>\n        </div>');
+    this.type = 'click';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Undo.prototype = {
+    constructor: Undo,
+
+    // 点击事件
+    onClick: function onClick(e) {
+        // 点击菜单将触发这里
+
+        var editor = this.editor;
+
+        // 执行 undo 命令
+        editor.cmd.do('undo');
+    }
+};
+
+/*
+    menu - list
+*/
+// 构造函数
+function List(editor) {
+    var _this = this;
+
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-list2"></i></div>');
+    this.type = 'droplist';
+
+    // 当前是否 active 状态
+    this._active = false;
+
+    // 初始化 droplist
+    this.droplist = new DropList(this, {
+        width: 120,
+        $title: $('<p>设置列表</p>'),
+        type: 'list', // droplist 以列表形式展示
+        list: [{ $elem: $('<span><i class="w-e-icon-list-numbered"></i> 有序列表</span>'), value: 'insertOrderedList' }, { $elem: $('<span><i class="w-e-icon-list2"></i> 无序列表</span>'), value: 'insertUnorderedList' }],
+        onClick: function onClick(value) {
+            // 注意 this 是指向当前的 List 对象
+            _this._command(value);
+        }
+    });
+}
+
+// 原型
+List.prototype = {
+    constructor: List,
+
+    // 执行命令
+    _command: function _command(value) {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+        editor.selection.restoreSelection();
+        if (editor.cmd.queryCommandState(value)) {
+            return;
+        }
+        editor.cmd.do(value);
+
+        // 验证列表是否被包裹在 <p> 之内
+        var $selectionElem = editor.selection.getSelectionContainerElem();
+        if ($selectionElem.getNodeName() === 'LI') {
+            $selectionElem = $selectionElem.parent();
+        }
+        if (/^ol|ul$/i.test($selectionElem.getNodeName()) === false) {
+            return;
+        }
+        if ($selectionElem.equal($textElem)) {
+            // 证明是顶级标签，没有被 <p> 包裹
+            return;
+        }
+        var $parent = $selectionElem.parent();
+        if ($parent.equal($textElem)) {
+            // $parent 是顶级标签，不能删除
+            return;
+        }
+
+        $selectionElem.insertAfter($parent);
+        $parent.remove();
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        if (editor.cmd.queryCommandState('insertUnOrderedList') || editor.cmd.queryCommandState('insertOrderedList')) {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    menu - justify
+*/
+// 构造函数
+function Justify(editor) {
+    var _this = this;
+
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-paragraph-left"></i></div>');
+    this.type = 'droplist';
+
+    // 当前是否 active 状态
+    this._active = false;
+
+    // 初始化 droplist
+    this.droplist = new DropList(this, {
+        width: 100,
+        $title: $('<p>对齐方式</p>'),
+        type: 'list', // droplist 以列表形式展示
+        list: [{ $elem: $('<span><i class="w-e-icon-paragraph-left"></i> 靠左</span>'), value: 'justifyLeft' }, { $elem: $('<span><i class="w-e-icon-paragraph-center"></i> 居中</span>'), value: 'justifyCenter' }, { $elem: $('<span><i class="w-e-icon-paragraph-right"></i> 靠右</span>'), value: 'justifyRight' }],
+        onClick: function onClick(value) {
+            // 注意 this 是指向当前的 List 对象
+            _this._command(value);
+        }
+    });
+}
+
+// 原型
+Justify.prototype = {
+    constructor: Justify,
+
+    // 执行命令
+    _command: function _command(value) {
+        var editor = this.editor;
+        editor.cmd.do(value);
+    }
+};
+
+/*
+    menu - Forecolor
+*/
+// 构造函数
+function ForeColor(editor) {
+    var _this = this;
+
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-pencil2"></i></div>');
+    this.type = 'droplist';
+
+    // 获取配置的颜色
+    var config = editor.config;
+    var colors = config.colors || [];
+
+    // 当前是否 active 状态
+    this._active = false;
+
+    // 初始化 droplist
+    this.droplist = new DropList(this, {
+        width: 120,
+        $title: $('<p>文字颜色</p>'),
+        type: 'inline-block', // droplist 内容以 block 形式展示
+        list: colors.map(function (color) {
+            return { $elem: $('<i style="color:' + color + ';" class="w-e-icon-pencil2"></i>'), value: color };
+        }),
+        onClick: function onClick(value) {
+            // 注意 this 是指向当前的 ForeColor 对象
+            _this._command(value);
+        }
+    });
+}
+
+// 原型
+ForeColor.prototype = {
+    constructor: ForeColor,
+
+    // 执行命令
+    _command: function _command(value) {
+        var editor = this.editor;
+        editor.cmd.do('foreColor', value);
+    }
+};
+
+/*
+    menu - BackColor
+*/
+// 构造函数
+function BackColor(editor) {
+    var _this = this;
+
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-paint-brush"></i></div>');
+    this.type = 'droplist';
+
+    // 获取配置的颜色
+    var config = editor.config;
+    var colors = config.colors || [];
+
+    // 当前是否 active 状态
+    this._active = false;
+
+    // 初始化 droplist
+    this.droplist = new DropList(this, {
+        width: 120,
+        $title: $('<p>背景色</p>'),
+        type: 'inline-block', // droplist 内容以 block 形式展示
+        list: colors.map(function (color) {
+            return { $elem: $('<i style="color:' + color + ';" class="w-e-icon-paint-brush"></i>'), value: color };
+        }),
+        onClick: function onClick(value) {
+            // 注意 this 是指向当前的 BackColor 对象
+            _this._command(value);
+        }
+    });
+}
+
+// 原型
+BackColor.prototype = {
+    constructor: BackColor,
+
+    // 执行命令
+    _command: function _command(value) {
+        var editor = this.editor;
+        editor.cmd.do('backColor', value);
+    }
+};
+
+/*
+    menu - quote
+*/
+// 构造函数
+function Quote(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-quotes-left"></i>\n        </div>');
+    this.type = 'click';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Quote.prototype = {
+    constructor: Quote,
+
+    onClick: function onClick(e) {
+        var editor = this.editor;
+        var $selectionElem = editor.selection.getSelectionContainerElem();
+        var nodeName = $selectionElem.getNodeName();
+
+        if (!UA.isIE()) {
+            if (nodeName === 'BLOCKQUOTE') {
+                // 撤销 quote
+                editor.cmd.do('formatBlock', '<P>');
+            } else {
+                // 转换为 quote
+                editor.cmd.do('formatBlock', '<BLOCKQUOTE>');
+            }
+            return;
+        }
+
+        // IE 中不支持 formatBlock <BLOCKQUOTE> ，要用其他方式兼容
+        var content = void 0,
+            $targetELem = void 0;
+        if (nodeName === 'P') {
+            // 将 P 转换为 quote
+            content = $selectionElem.text();
+            $targetELem = $('<blockquote>' + content + '</blockquote>');
+            $targetELem.insertAfter($selectionElem);
+            $selectionElem.remove();
+            return;
+        }
+        if (nodeName === 'BLOCKQUOTE') {
+            // 撤销 quote
+            content = $selectionElem.text();
+            $targetELem = $('<p>' + content + '</p>');
+            $targetELem.insertAfter($selectionElem);
+            $selectionElem.remove();
+        }
+    },
+
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        var reg = /^BLOCKQUOTE$/i;
+        var cmdValue = editor.cmd.queryCommandValue('formatBlock');
+        if (reg.test(cmdValue)) {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    menu - code
+*/
+// 构造函数
+function Code(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-terminal"></i>\n        </div>');
+    this.type = 'panel';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Code.prototype = {
+    constructor: Code,
+
+    onClick: function onClick(e) {
+        var editor = this.editor;
+        var $startElem = editor.selection.getSelectionStartElem();
+        var $endElem = editor.selection.getSelectionEndElem();
+        var isSeleEmpty = editor.selection.isSelectionEmpty();
+        var selectionText = editor.selection.getSelectionText();
+        var $code = void 0;
+
+        if (!$startElem.equal($endElem)) {
+            // 跨元素选择，不做处理
+            editor.selection.restoreSelection();
+            return;
+        }
+        if (!isSeleEmpty) {
+            // 选取不是空，用 <code> 包裹即可
+            $code = $('<code>' + selectionText + '</code>');
+            editor.cmd.do('insertElem', $code);
+            editor.selection.createRangeByElem($code, false);
+            editor.selection.restoreSelection();
+            return;
+        }
+
+        // 选取是空，且没有夸元素选择，则插入 <pre><code></code></prev>
+        if (this._active) {
+            // 选中状态，将编辑内容
+            this._createPanel($startElem.html());
+        } else {
+            // 未选中状态，将创建内容
+            this._createPanel();
+        }
+    },
+
+    _createPanel: function _createPanel(value) {
+        var _this = this;
+
+        // value - 要编辑的内容
+        value = value || '';
+        var type = !value ? 'new' : 'edit';
+        var textId = getRandom('texxt');
+        var btnId = getRandom('btn');
+
+        var panel = new Panel(this, {
+            width: 500,
+            // 一个 Panel 包含多个 tab
+            tabs: [{
+                // 标题
+                title: '插入代码',
+                // 模板
+                tpl: '<div>\n                        <textarea id="' + textId + '" style="height:145px;;">' + value + '</textarea>\n                        <div class="w-e-button-container">\n                            <button id="' + btnId + '" class="right">\u63D2\u5165</button>\n                        </div>\n                    <div>',
+                // 事件绑定
+                events: [
+                // 插入代码
+                {
+                    selector: '#' + btnId,
+                    type: 'click',
+                    fn: function fn() {
+                        var $text = $('#' + textId);
+                        var text = $text.val() || $text.html();
+                        text = replaceHtmlSymbol(text);
+                        if (type === 'new') {
+                            // 新插入
+                            _this._insertCode(text);
+                        } else {
+                            // 编辑更新
+                            _this._updateCode(text);
+                        }
+
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }]
+            } // first tab end
+            ] // tabs end
+        }); // new Panel end
+
+        // 显示 panel
+        panel.show();
+
+        // 记录属性
+        this.panel = panel;
+    },
+
+    // 插入代码
+    _insertCode: function _insertCode(value) {
+        var editor = this.editor;
+        editor.cmd.do('insertHTML', '<pre><code>' + value + '</code></pre><p><br></p>');
+    },
+
+    // 更新代码
+    _updateCode: function _updateCode(value) {
+        var editor = this.editor;
+        var $selectionELem = editor.selection.getSelectionContainerElem();
+        if (!$selectionELem) {
+            return;
+        }
+        $selectionELem.html(value);
+        editor.selection.restoreSelection();
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        var $selectionELem = editor.selection.getSelectionContainerElem();
+        if (!$selectionELem) {
+            return;
+        }
+        var $parentElem = $selectionELem.parent();
+        if ($selectionELem.getNodeName() === 'CODE' && $parentElem.getNodeName() === 'PRE') {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    menu - emoticon
+*/
+// 构造函数
+function Emoticon(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu">\n            <i class="w-e-icon-happy"></i>\n        </div>');
+    this.type = 'panel';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Emoticon.prototype = {
+    constructor: Emoticon,
+
+    onClick: function onClick() {
+        this._createPanel();
+    },
+
+    _createPanel: function _createPanel() {
+        var _this = this;
+
+        var editor = this.editor;
+        var config = editor.config;
+        // 获取表情配置
+        var emotions = config.emotions || [];
+
+        // 创建表情 dropPanel 的配置
+        var tabConfig = [];
+        emotions.forEach(function (emotData) {
+            var emotType = emotData.type;
+            var content = emotData.content || [];
+
+            // 这一组表情最终拼接出来的 html
+            var faceHtml = '';
+
+            // emoji 表情
+            if (emotType === 'emoji') {
+                content.forEach(function (item) {
+                    if (item) {
+                        faceHtml += '<span class="w-e-item">' + item + '</span>';
+                    }
+                });
+            }
+            // 图片表情
+            if (emotType === 'image') {
+                content.forEach(function (item) {
+                    var src = item.src;
+                    var alt = item.alt;
+                    if (src) {
+                        // 加一个 data-w-e 属性，点击图片的时候不再提示编辑图片
+                        faceHtml += '<span class="w-e-item"><img src="' + src + '" alt="' + alt + '" data-w-e="1"/></span>';
+                    }
+                });
+            }
+
+            tabConfig.push({
+                title: emotData.title,
+                tpl: '<div class="w-e-emoticon-container">' + faceHtml + '</div>',
+                events: [{
+                    selector: 'span.w-e-item',
+                    type: 'click',
+                    fn: function fn(e) {
+                        var target = e.target;
+                        var $target = $(target);
+                        var nodeName = $target.getNodeName();
+
+                        var insertHtml = void 0;
+                        if (nodeName === 'IMG') {
+                            // 插入图片
+                            insertHtml = $target.parent().html();
+                        } else {
+                            // 插入 emoji
+                            insertHtml = '<span>' + $target.html() + '</span>';
+                        }
+
+                        _this._insert(insertHtml);
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }]
+            });
+        });
+
+        var panel = new Panel(this, {
+            width: 300,
+            height: 200,
+            // 一个 Panel 包含多个 tab
+            tabs: tabConfig
+        });
+
+        // 显示 panel
+        panel.show();
+
+        // 记录属性
+        this.panel = panel;
+    },
+
+    // 插入表情
+    _insert: function _insert(emotHtml) {
+        var editor = this.editor;
+        editor.cmd.do('insertHTML', emotHtml);
+    }
+};
+
+/*
+    menu - table
+*/
+// 构造函数
+function Table(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-table2"></i></div>');
+    this.type = 'panel';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Table.prototype = {
+    constructor: Table,
+
+    onClick: function onClick() {
+        if (this._active) {
+            // 编辑现有表格
+            this._createEditPanel();
+        } else {
+            // 插入新表格
+            this._createInsertPanel();
+        }
+    },
+
+    // 创建插入新表格的 panel
+    _createInsertPanel: function _createInsertPanel() {
+        var _this = this;
+
+        // 用到的 id
+        var btnInsertId = getRandom('btn');
+        var textRowNum = getRandom('row');
+        var textColNum = getRandom('col');
+
+        var panel = new Panel(this, {
+            width: 250,
+            // panel 包含多个 tab
+            tabs: [{
+                // 标题
+                title: '插入表格',
+                // 模板
+                tpl: '<div>\n                        <p style="text-align:left; padding:5px 0;">\n                            \u521B\u5EFA\n                            <input id="' + textRowNum + '" type="text" value="5" style="width:40px;text-align:center;"/>\n                            \u884C\n                            <input id="' + textColNum + '" type="text" value="5" style="width:40px;text-align:center;"/>\n                            \u5217\u7684\u8868\u683C\n                        </p>\n                        <div class="w-e-button-container">\n                            <button id="' + btnInsertId + '" class="right">\u63D2\u5165</button>\n                        </div>\n                    </div>',
+                // 事件绑定
+                events: [{
+                    // 点击按钮，插入表格
+                    selector: '#' + btnInsertId,
+                    type: 'click',
+                    fn: function fn() {
+                        var rowNum = parseInt($('#' + textRowNum).val());
+                        var colNum = parseInt($('#' + textColNum).val());
+
+                        if (rowNum && colNum && rowNum > 0 && colNum > 0) {
+                            // form 数据有效
+                            _this._insert(rowNum, colNum);
+                        }
+
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }]
+            } // first tab end
+            ] // tabs end
+        }); // panel end
+
+        // 展示 panel
+        panel.show();
+
+        // 记录属性
+        this.panel = panel;
+    },
+
+    // 插入表格
+    _insert: function _insert(rowNum, colNum) {
+        // 拼接 table 模板
+        var r = void 0,
+            c = void 0;
+        var html = '<table border="0" width="100%" cellpadding="0" cellspacing="0">';
+        for (r = 0; r < rowNum; r++) {
+            html += '<tr>';
+            if (r === 0) {
+                for (c = 0; c < colNum; c++) {
+                    html += '<th>&nbsp;</th>';
+                }
+            } else {
+                for (c = 0; c < colNum; c++) {
+                    html += '<td>&nbsp;</td>';
+                }
+            }
+            html += '</tr>';
+        }
+        html += '</table><p><br></p>';
+
+        // 执行命令
+        var editor = this.editor;
+        editor.cmd.do('insertHTML', html);
+
+        // 防止 firefox 下出现 resize 的控制点
+        editor.cmd.do('enableObjectResizing', false);
+        editor.cmd.do('enableInlineTableEditing', false);
+    },
+
+    // 创建编辑表格的 panel
+    _createEditPanel: function _createEditPanel() {
+        var _this2 = this;
+
+        // 可用的 id
+        var addRowBtnId = getRandom('add-row');
+        var addColBtnId = getRandom('add-col');
+        var delRowBtnId = getRandom('del-row');
+        var delColBtnId = getRandom('del-col');
+        var delTableBtnId = getRandom('del-table');
+
+        // 创建 panel 对象
+        var panel = new Panel(this, {
+            width: 320,
+            // panel 包含多个 tab
+            tabs: [{
+                // 标题
+                title: '编辑表格',
+                // 模板
+                tpl: '<div>\n                        <div class="w-e-button-container" style="border-bottom:1px solid #f1f1f1;padding-bottom:5px;margin-bottom:5px;">\n                            <button id="' + addRowBtnId + '" class="left">\u589E\u52A0\u884C</button>\n                            <button id="' + delRowBtnId + '" class="red left">\u5220\u9664\u884C</button>\n                            <button id="' + addColBtnId + '" class="left">\u589E\u52A0\u5217</button>\n                            <button id="' + delColBtnId + '" class="red left">\u5220\u9664\u5217</button>\n                        </div>\n                        <div class="w-e-button-container">\n                            <button id="' + delTableBtnId + '" class="gray left">\u5220\u9664\u8868\u683C</button>\n                        </dv>\n                    </div>',
+                // 事件绑定
+                events: [{
+                    // 增加行
+                    selector: '#' + addRowBtnId,
+                    type: 'click',
+                    fn: function fn() {
+                        _this2._addRow();
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }, {
+                    // 增加列
+                    selector: '#' + addColBtnId,
+                    type: 'click',
+                    fn: function fn() {
+                        _this2._addCol();
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }, {
+                    // 删除行
+                    selector: '#' + delRowBtnId,
+                    type: 'click',
+                    fn: function fn() {
+                        _this2._delRow();
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }, {
+                    // 删除列
+                    selector: '#' + delColBtnId,
+                    type: 'click',
+                    fn: function fn() {
+                        _this2._delCol();
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }, {
+                    // 删除表格
+                    selector: '#' + delTableBtnId,
+                    type: 'click',
+                    fn: function fn() {
+                        _this2._delTable();
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }]
+            }]
+        });
+        // 显示 panel
+        panel.show();
+    },
+
+    // 获取选中的单元格的位置信息
+    _getLocationData: function _getLocationData() {
+        var result = {};
+        var editor = this.editor;
+        var $selectionELem = editor.selection.getSelectionContainerElem();
+        if (!$selectionELem) {
+            return;
+        }
+        var nodeName = $selectionELem.getNodeName();
+        if (nodeName !== 'TD' && nodeName !== 'TH') {
+            return;
+        }
+
+        // 获取 td index
+        var $tr = $selectionELem.parent();
+        var $tds = $tr.children();
+        var tdLength = $tds.length;
+        $tds.forEach(function (td, index) {
+            if (td === $selectionELem[0]) {
+                // 记录并跳出循环
+                result.td = {
+                    index: index,
+                    elem: td,
+                    length: tdLength
+                };
+                return false;
+            }
+        });
+
+        // 获取 tr index
+        var $tbody = $tr.parent();
+        var $trs = $tbody.children();
+        var trLength = $trs.length;
+        $trs.forEach(function (tr, index) {
+            if (tr === $tr[0]) {
+                // 记录并跳出循环
+                result.tr = {
+                    index: index,
+                    elem: tr,
+                    length: trLength
+                };
+                return false;
+            }
+        });
+
+        // 返回结果
+        return result;
+    },
+
+    // 增加行
+    _addRow: function _addRow() {
+        // 获取当前单元格的位置信息
+        var locationData = this._getLocationData();
+        if (!locationData) {
+            return;
+        }
+        var trData = locationData.tr;
+        var $currentTr = $(trData.elem);
+        var tdData = locationData.td;
+        var tdLength = tdData.length;
+
+        // 拼接即将插入的字符串
+        var newTr = document.createElement('tr');
+        var tpl = '',
+            i = void 0;
+        for (i = 0; i < tdLength; i++) {
+            tpl += '<td>&nbsp;</td>';
+        }
+        newTr.innerHTML = tpl;
+        // 插入
+        $(newTr).insertAfter($currentTr);
+    },
+
+    // 增加列
+    _addCol: function _addCol() {
+        // 获取当前单元格的位置信息
+        var locationData = this._getLocationData();
+        if (!locationData) {
+            return;
+        }
+        var trData = locationData.tr;
+        var tdData = locationData.td;
+        var tdIndex = tdData.index;
+        var $currentTr = $(trData.elem);
+        var $trParent = $currentTr.parent();
+        var $trs = $trParent.children();
+
+        // 遍历所有行
+        $trs.forEach(function (tr) {
+            var $tr = $(tr);
+            var $tds = $tr.children();
+            var $currentTd = $tds.get(tdIndex);
+            var name = $currentTd.getNodeName().toLowerCase();
+
+            // new 一个 td，并插入
+            var newTd = document.createElement(name);
+            $(newTd).insertAfter($currentTd);
+        });
+    },
+
+    // 删除行
+    _delRow: function _delRow() {
+        // 获取当前单元格的位置信息
+        var locationData = this._getLocationData();
+        if (!locationData) {
+            return;
+        }
+        var trData = locationData.tr;
+        var $currentTr = $(trData.elem);
+        $currentTr.remove();
+    },
+
+    // 删除列
+    _delCol: function _delCol() {
+        // 获取当前单元格的位置信息
+        var locationData = this._getLocationData();
+        if (!locationData) {
+            return;
+        }
+        var trData = locationData.tr;
+        var tdData = locationData.td;
+        var tdIndex = tdData.index;
+        var $currentTr = $(trData.elem);
+        var $trParent = $currentTr.parent();
+        var $trs = $trParent.children();
+
+        // 遍历所有行
+        $trs.forEach(function (tr) {
+            var $tr = $(tr);
+            var $tds = $tr.children();
+            var $currentTd = $tds.get(tdIndex);
+            // 删除
+            $currentTd.remove();
+        });
+    },
+
+    // 删除表格
+    _delTable: function _delTable() {
+        var editor = this.editor;
+        var $selectionELem = editor.selection.getSelectionContainerElem();
+        if (!$selectionELem) {
+            return;
+        }
+        var $table = $selectionELem.parentUntil('table');
+        if (!$table) {
+            return;
+        }
+        $table.remove();
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        var $selectionELem = editor.selection.getSelectionContainerElem();
+        if (!$selectionELem) {
+            return;
+        }
+        var nodeName = $selectionELem.getNodeName();
+        if (nodeName === 'TD' || nodeName === 'TH') {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    menu - video
+*/
+// 构造函数
+function Video(editor) {
+    this.editor = editor;
+    this.$elem = $('<div class="w-e-menu"><i class="w-e-icon-play"></i></div>');
+    this.type = 'panel';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Video.prototype = {
+    constructor: Video,
+
+    onClick: function onClick() {
+        this._createPanel();
+    },
+
+    _createPanel: function _createPanel() {
+        var _this = this;
+
+        // 创建 id
+        var textValId = getRandom('text-val');
+        var btnId = getRandom('btn');
+
+        // 创建 panel
+        var panel = new Panel(this, {
+            width: 350,
+            // 一个 panel 多个 tab
+            tabs: [{
+                // 标题
+                title: '插入视频',
+                // 模板
+                tpl: '<div>\n                        <input id="' + textValId + '" type="text" class="block" placeholder="\u683C\u5F0F\u5982\uFF1A<iframe src=... ></iframe>"/>\n                        <div class="w-e-button-container">\n                            <button id="' + btnId + '" class="right">\u63D2\u5165</button>\n                        </div>\n                    </div>',
+                // 事件绑定
+                events: [{
+                    selector: '#' + btnId,
+                    type: 'click',
+                    fn: function fn() {
+                        var $text = $('#' + textValId);
+                        var val = $text.val().trim();
+
+                        // 测试用视频地址
+                        // <iframe height=498 width=510 src='http://player.youku.com/embed/XMjcwMzc3MzM3Mg==' frameborder=0 'allowfullscreen'></iframe>
+
+                        if (val) {
+                            // 插入视频
+                            _this._insert(val);
+                        }
+
+                        // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                        return true;
+                    }
+                }]
+            } // first tab end
+            ] // tabs end
+        }); // panel end
+
+        // 显示 panel
+        panel.show();
+
+        // 记录属性
+        this.panel = panel;
+    },
+
+    // 插入视频
+    _insert: function _insert(val) {
+        var editor = this.editor;
+        editor.cmd.do('insertHTML', val + '<p><br></p>');
+    }
+};
+
+/*
+    menu - img
+*/
+// 构造函数
+function Image(editor) {
+    this.editor = editor;
+    var imgMenuId = getRandom('w-e-img');
+    this.$elem = $('<div class="w-e-menu" id="' + imgMenuId + '"><i class="w-e-icon-image"></i></div>');
+    editor.imgMenuId = imgMenuId;
+    this.type = 'panel';
+
+    // 当前是否 active 状态
+    this._active = false;
+}
+
+// 原型
+Image.prototype = {
+    constructor: Image,
+
+    onClick: function onClick() {
+        var editor = this.editor;
+        var config = editor.config;
+        if (config.qiniu) {
+            return;
+        }
+        if (this._active) {
+            this._createEditPanel();
+        } else {
+            this._createInsertPanel();
+        }
+    },
+
+    _createEditPanel: function _createEditPanel() {
+        var editor = this.editor;
+
+        // id
+        var width30 = getRandom('width-30');
+        var width50 = getRandom('width-50');
+        var width100 = getRandom('width-100');
+        var delBtn = getRandom('del-btn');
+
+        // tab 配置
+        var tabsConfig = [{
+            title: '编辑图片',
+            tpl: '<div>\n                    <div class="w-e-button-container" style="border-bottom:1px solid #f1f1f1;padding-bottom:5px;margin-bottom:5px;">\n                        <span style="float:left;font-size:14px;margin:4px 5px 0 5px;color:#333;">\u6700\u5927\u5BBD\u5EA6\uFF1A</span>\n                        <button id="' + width30 + '" class="left">30%</button>\n                        <button id="' + width50 + '" class="left">50%</button>\n                        <button id="' + width100 + '" class="left">100%</button>\n                    </div>\n                    <div class="w-e-button-container">\n                        <button id="' + delBtn + '" class="gray left">\u5220\u9664\u56FE\u7247</button>\n                    </dv>\n                </div>',
+            events: [{
+                selector: '#' + width30,
+                type: 'click',
+                fn: function fn() {
+                    var $img = editor._selectedImg;
+                    if ($img) {
+                        $img.css('max-width', '30%');
+                    }
+                    // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                    return true;
+                }
+            }, {
+                selector: '#' + width50,
+                type: 'click',
+                fn: function fn() {
+                    var $img = editor._selectedImg;
+                    if ($img) {
+                        $img.css('max-width', '50%');
+                    }
+                    // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                    return true;
+                }
+            }, {
+                selector: '#' + width100,
+                type: 'click',
+                fn: function fn() {
+                    var $img = editor._selectedImg;
+                    if ($img) {
+                        $img.css('max-width', '100%');
+                    }
+                    // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                    return true;
+                }
+            }, {
+                selector: '#' + delBtn,
+                type: 'click',
+                fn: function fn() {
+                    var $img = editor._selectedImg;
+                    if ($img) {
+                        $img.remove();
+                    }
+                    // 返回 true，表示该事件执行完之后，panel 要关闭。否则 panel 不会关闭
+                    return true;
+                }
+            }]
+        }];
+
+        // 创建 panel 并显示
+        var panel = new Panel(this, {
+            width: 300,
+            tabs: tabsConfig
+        });
+        panel.show();
+
+        // 记录属性
+        this.panel = panel;
+    },
+
+    _createInsertPanel: function _createInsertPanel() {
+        var editor = this.editor;
+        var uploadImg = editor.uploadImg;
+        var config = editor.config;
+
+        // id
+        var upTriggerId = getRandom('up-trigger');
+        var upFileId = getRandom('up-file');
+        var linkUrlId = getRandom('link-url');
+        var linkBtnId = getRandom('link-btn');
+
+        // tabs 的配置
+        var tabsConfig = [{
+            title: '上传图片',
+            tpl: '<div class="w-e-up-img-container">\n                    <div id="' + upTriggerId + '" class="w-e-up-btn">\n                        <i class="w-e-icon-upload2"></i>\n                    </div>\n                    <div style="display:none;">\n                        <input id="' + upFileId + '" type="file" multiple="multiple" accept="image/jpg,image/jpeg,image/png,image/gif,image/bmp"/>\n                    </div>\n                </div>',
+            events: [{
+                // 触发选择图片
+                selector: '#' + upTriggerId,
+                type: 'click',
+                fn: function fn() {
+                    var $file = $('#' + upFileId);
+                    var fileElem = $file[0];
+                    if (fileElem) {
+                        fileElem.click();
+                    } else {
+                        // 返回 true 可关闭 panel
+                        return true;
+                    }
+                }
+            }, {
+                // 选择图片完毕
+                selector: '#' + upFileId,
+                type: 'change',
+                fn: function fn() {
+                    var $file = $('#' + upFileId);
+                    var fileElem = $file[0];
+                    if (!fileElem) {
+                        // 返回 true 可关闭 panel
+                        return true;
+                    }
+
+                    // 获取选中的 file 对象列表
+                    var fileList = fileElem.files;
+                    if (fileList.length) {
+                        uploadImg.uploadImg(fileList);
+                    }
+
+                    // 返回 true 可关闭 panel
+                    return true;
+                }
+            }]
+        }, // first tab end
+        {
+            title: '网络图片',
+            tpl: '<div>\n                    <input id="' + linkUrlId + '" type="text" class="block" placeholder="\u56FE\u7247\u94FE\u63A5"/></td>\n                    <div class="w-e-button-container">\n                        <button id="' + linkBtnId + '" class="right">\u63D2\u5165</button>\n                    </div>\n                </div>',
+            events: [{
+                selector: '#' + linkBtnId,
+                type: 'click',
+                fn: function fn() {
+                    var $linkUrl = $('#' + linkUrlId);
+                    var url = $linkUrl.val().trim();
+
+                    if (url) {
+                        uploadImg.insertLinkImg(url);
+                    }
+
+                    // 返回 true 表示函数执行结束之后关闭 panel
+                    return true;
+                }
+            }]
+        } // second tab end
+        ]; // tabs end
+
+        // 判断 tabs 的显示
+        var tabsConfigResult = [];
+        if ((config.uploadImgShowBase64 || config.uploadImgServer || config.customUploadImg) && window.FileReader) {
+            // 显示“上传图片”
+            tabsConfigResult.push(tabsConfig[0]);
+        }
+        if (config.showLinkImg) {
+            // 显示“网络图片”
+            tabsConfigResult.push(tabsConfig[1]);
+        }
+
+        // 创建 panel 并显示
+        var panel = new Panel(this, {
+            width: 300,
+            tabs: tabsConfigResult
+        });
+        panel.show();
+
+        // 记录属性
+        this.panel = panel;
+    },
+
+    // 试图改变 active 状态
+    tryChangeActive: function tryChangeActive(e) {
+        var editor = this.editor;
+        var $elem = this.$elem;
+        if (editor._selectedImg) {
+            this._active = true;
+            $elem.addClass('w-e-active');
+        } else {
+            this._active = false;
+            $elem.removeClass('w-e-active');
+        }
+    }
+};
+
+/*
+    所有菜单的汇总
+*/
+
+// 存储菜单的构造函数
+var MenuConstructors = {};
+
+MenuConstructors.bold = Bold;
+
+MenuConstructors.head = Head;
+
+MenuConstructors.fontSize = FontSize;
+
+MenuConstructors.fontName = FontName;
+
+MenuConstructors.link = Link;
+
+MenuConstructors.italic = Italic;
+
+MenuConstructors.redo = Redo;
+
+MenuConstructors.strikeThrough = StrikeThrough;
+
+MenuConstructors.underline = Underline;
+
+MenuConstructors.undo = Undo;
+
+MenuConstructors.list = List;
+
+MenuConstructors.justify = Justify;
+
+MenuConstructors.foreColor = ForeColor;
+
+MenuConstructors.backColor = BackColor;
+
+MenuConstructors.quote = Quote;
+
+MenuConstructors.code = Code;
+
+MenuConstructors.emoticon = Emoticon;
+
+MenuConstructors.table = Table;
+
+MenuConstructors.video = Video;
+
+MenuConstructors.image = Image;
+
+/*
+    菜单集合
+*/
+// 构造函数
+function Menus(editor) {
+    this.editor = editor;
+    this.menus = {};
+}
+
+// 修改原型
+Menus.prototype = {
+    constructor: Menus,
+
+    // 初始化菜单
+    init: function init() {
+        var _this = this;
+
+        var editor = this.editor;
+        var config = editor.config || {};
+        var configMenus = config.menus || []; // 获取配置中的菜单
+
+        // 根据配置信息，创建菜单
+        configMenus.forEach(function (menuKey) {
+            var MenuConstructor = MenuConstructors[menuKey];
+            if (MenuConstructor && typeof MenuConstructor === 'function') {
+                // 创建单个菜单
+                _this.menus[menuKey] = new MenuConstructor(editor);
+            }
+        });
+
+        // 添加到菜单栏
+        this._addToToolbar();
+
+        // 绑定事件
+        this._bindEvent();
+    },
+
+    // 添加到菜单栏
+    _addToToolbar: function _addToToolbar() {
+        var editor = this.editor;
+        var $toolbarElem = editor.$toolbarElem;
+        var menus = this.menus;
+        var config = editor.config;
+        // config.zIndex 是配置的编辑区域的 z-index，菜单的 z-index 得在其基础上 +1
+        var zIndex = config.zIndex + 1;
+        objForEach(menus, function (key, menu) {
+            var $elem = menu.$elem;
+            if ($elem) {
+                // 设置 z-index
+                $elem.css('z-index', zIndex);
+                $toolbarElem.append($elem);
+            }
+        });
+    },
+
+    // 绑定菜单 click mouseenter 事件
+    _bindEvent: function _bindEvent() {
+        var menus = this.menus;
+        var editor = this.editor;
+        objForEach(menus, function (key, menu) {
+            var type = menu.type;
+            if (!type) {
+                return;
+            }
+            var $elem = menu.$elem;
+            var droplist = menu.droplist;
+            var panel = menu.panel;
+
+            // 点击类型，例如 bold
+            if (type === 'click' && menu.onClick) {
+                $elem.on('click', function (e) {
+                    if (editor.selection.getRange() == null) {
+                        return;
+                    }
+                    menu.onClick(e);
+                });
+            }
+
+            // 下拉框，例如 head
+            if (type === 'droplist' && droplist) {
+                $elem.on('mouseenter', function (e) {
+                    if (editor.selection.getRange() == null) {
+                        return;
+                    }
+                    // 显示
+                    droplist.showTimeoutId = setTimeout(function () {
+                        droplist.show();
+                    }, 200);
+                }).on('mouseleave', function (e) {
+                    // 隐藏
+                    droplist.hideTimeoutId = setTimeout(function () {
+                        droplist.hide();
+                    }, 0);
+                });
+            }
+
+            // 弹框类型，例如 link
+            if (type === 'panel' && menu.onClick) {
+                $elem.on('click', function (e) {
+                    e.stopPropagation();
+                    if (editor.selection.getRange() == null) {
+                        return;
+                    }
+                    // 在自定义事件中显示 panel
+                    menu.onClick(e);
+                });
+            }
+        });
+    },
+
+    // 尝试修改菜单状态
+    changeActive: function changeActive() {
+        var menus = this.menus;
+        objForEach(menus, function (key, menu) {
+            if (menu.tryChangeActive) {
+                setTimeout(function () {
+                    menu.tryChangeActive();
+                }, 100);
+            }
+        });
+    }
+};
+
+/*
+    粘贴信息的处理
+*/
+
+// 获取粘贴的纯文本
+function getPasteText(e) {
+    var clipboardData = e.clipboardData || e.originalEvent && e.originalEvent.clipboardData;
+    var pasteText = void 0;
+    if (clipboardData == null) {
+        pasteText = window.clipboardData && window.clipboardData.getData('text');
+    } else {
+        pasteText = clipboardData.getData('text/plain');
+    }
+
+    return replaceHtmlSymbol(pasteText);
+}
+
+// 获取粘贴的html
+function getPasteHtml(e, filterStyle, ignoreImg) {
+    var clipboardData = e.clipboardData || e.originalEvent && e.originalEvent.clipboardData;
+    var pasteText = void 0,
+        pasteHtml = void 0;
+    if (clipboardData == null) {
+        pasteText = window.clipboardData && window.clipboardData.getData('text');
+    } else {
+        pasteText = clipboardData.getData('text/plain');
+        pasteHtml = clipboardData.getData('text/html');
+    }
+    if (!pasteHtml && pasteText) {
+        pasteHtml = '<p>' + replaceHtmlSymbol(pasteText) + '</p>';
+    }
+    if (!pasteHtml) {
+        return;
+    }
+
+    // 过滤word中状态过来的无用字符
+    var docSplitHtml = pasteHtml.split('</html>');
+    if (docSplitHtml.length === 2) {
+        pasteHtml = docSplitHtml[0];
+    }
+
+    // 过滤无用标签
+    pasteHtml = pasteHtml.replace(/<(meta|script|link).+?>/igm, '');
+    // 去掉注释
+    pasteHtml = pasteHtml.replace(/<!--.*?-->/mg, '');
+    // 过滤 data-xxx 属性
+    pasteHtml = pasteHtml.replace(/\s?data-.+?=('|").+?('|")/igm, '');
+
+    if (ignoreImg) {
+        // 忽略图片
+        pasteHtml = pasteHtml.replace(/<img.+?>/igm, '');
+    }
+
+    if (filterStyle) {
+        // 过滤样式
+        pasteHtml = pasteHtml.replace(/\s?(class|style)=('|").*?('|")/igm, '');
+    } else {
+        // 保留样式
+        pasteHtml = pasteHtml.replace(/\s?class=('|").*?('|")/igm, '');
+    }
+
+    return pasteHtml;
+}
+
+// 获取粘贴的图片文件
+function getPasteImgs(e) {
+    var result = [];
+    var txt = getPasteText(e);
+    if (txt) {
+        // 有文字，就忽略图片
+        return result;
+    }
+
+    var clipboardData = e.clipboardData || e.originalEvent && e.originalEvent.clipboardData || {};
+    var items = clipboardData.items;
+    if (!items) {
+        return result;
+    }
+
+    objForEach(items, function (key, value) {
+        var type = value.type;
+        if (/image/i.test(type)) {
+            result.push(value.getAsFile());
+        }
+    });
+
+    return result;
+}
+
+/*
+    编辑区域
+*/
+
+// 获取一个 elem.childNodes 的 JSON 数据
+function getChildrenJSON($elem) {
+    var result = [];
+    var $children = $elem.childNodes() || []; // 注意 childNodes() 可以获取文本节点
+    $children.forEach(function (curElem) {
+        var elemResult = void 0;
+        var nodeType = curElem.nodeType;
+
+        // 文本节点
+        if (nodeType === 3) {
+            elemResult = curElem.textContent;
+            elemResult = replaceHtmlSymbol(elemResult);
+        }
+
+        // 普通 DOM 节点
+        if (nodeType === 1) {
+            elemResult = {};
+
+            // tag
+            elemResult.tag = curElem.nodeName.toLowerCase();
+            // attr
+            var attrData = [];
+            var attrList = curElem.attributes || {};
+            var attrListLength = attrList.length || 0;
+            for (var i = 0; i < attrListLength; i++) {
+                var attr = attrList[i];
+                attrData.push({
+                    name: attr.name,
+                    value: attr.value
+                });
+            }
+            elemResult.attrs = attrData;
+            // children（递归）
+            elemResult.children = getChildrenJSON($(curElem));
+        }
+
+        result.push(elemResult);
+    });
+    return result;
+}
+
+// 构造函数
+function Text(editor) {
+    this.editor = editor;
+}
+
+// 修改原型
+Text.prototype = {
+    constructor: Text,
+
+    // 初始化
+    init: function init() {
+        // 绑定事件
+        this._bindEvent();
+    },
+
+    // 清空内容
+    clear: function clear() {
+        this.html('<p><br></p>');
+    },
+
+    // 获取 设置 html
+    html: function html(val) {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+        var html = void 0;
+        if (val == null) {
+            html = $textElem.html();
+            // 未选中任何内容的时候点击“加粗”或者“斜体”等按钮，就得需要一个空的占位符 &#8203 ，这里替换掉
+            html = html.replace(/\u200b/gm, '');
+            return html;
+        } else {
+            $textElem.html(val);
+
+            // 初始化选取，将光标定位到内容尾部
+            editor.initSelection();
+        }
+    },
+
+    // 获取 JSON
+    getJSON: function getJSON() {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+        return getChildrenJSON($textElem);
+    },
+
+    // 获取 设置 text
+    text: function text(val) {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+        var text = void 0;
+        if (val == null) {
+            text = $textElem.text();
+            // 未选中任何内容的时候点击“加粗”或者“斜体”等按钮，就得需要一个空的占位符 &#8203 ，这里替换掉
+            text = text.replace(/\u200b/gm, '');
+            return text;
+        } else {
+            $textElem.text('<p>' + val + '</p>');
+
+            // 初始化选取，将光标定位到内容尾部
+            editor.initSelection();
+        }
+    },
+
+    // 追加内容
+    append: function append(html) {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+        $textElem.append($(html));
+
+        // 初始化选取，将光标定位到内容尾部
+        editor.initSelection();
+    },
+
+    // 绑定事件
+    _bindEvent: function _bindEvent() {
+        // 实时保存选取
+        this._saveRangeRealTime();
+
+        // 按回车建时的特殊处理
+        this._enterKeyHandle();
+
+        // 清空时保留 <p><br></p>
+        this._clearHandle();
+
+        // 粘贴事件（粘贴文字，粘贴图片）
+        this._pasteHandle();
+
+        // tab 特殊处理
+        this._tabHandle();
+
+        // img 点击
+        this._imgHandle();
+
+        // 拖拽事件
+        this._dragHandle();
+    },
+
+    // 实时保存选取
+    _saveRangeRealTime: function _saveRangeRealTime() {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+
+        // 保存当前的选区
+        function saveRange(e) {
+            // 随时保存选区
+            editor.selection.saveRange();
+            // 更新按钮 ative 状态
+            editor.menus.changeActive();
+        }
+        // 按键后保存
+        $textElem.on('keyup', saveRange);
+        $textElem.on('mousedown', function (e) {
+            // mousedown 状态下，鼠标滑动到编辑区域外面，也需要保存选区
+            $textElem.on('mouseleave', saveRange);
+        });
+        $textElem.on('mouseup', function (e) {
+            saveRange();
+            // 在编辑器区域之内完成点击，取消鼠标滑动到编辑区外面的事件
+            $textElem.off('mouseleave', saveRange);
+        });
+    },
+
+    // 按回车键时的特殊处理
+    _enterKeyHandle: function _enterKeyHandle() {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+
+        function insertEmptyP($selectionElem) {
+            var $p = $('<p><br></p>');
+            $p.insertBefore($selectionElem);
+            editor.selection.createRangeByElem($p, true);
+            editor.selection.restoreSelection();
+            $selectionElem.remove();
+        }
+
+        // 将回车之后生成的非 <p> 的顶级标签，改为 <p>
+        function pHandle(e) {
+            var $selectionElem = editor.selection.getSelectionContainerElem();
+            var $parentElem = $selectionElem.parent();
+
+            if ($parentElem.html() === '<code><br></code>') {
+                // 回车之前光标所在一个 <p><code>.....</code></p> ，忽然回车生成一个空的 <p><code><br></code></p>
+                // 而且继续回车跳不出去，因此只能特殊处理
+                insertEmptyP($selectionElem);
+                return;
+            }
+
+            if (!$parentElem.equal($textElem)) {
+                // 不是顶级标签
+                return;
+            }
+
+            var nodeName = $selectionElem.getNodeName();
+            if (nodeName === 'P') {
+                // 当前的标签是 P ，不用做处理
+                return;
+            }
+
+            if ($selectionElem.text()) {
+                // 有内容，不做处理
+                return;
+            }
+
+            // 插入 <p> ，并将选取定位到 <p>，删除当前标签
+            insertEmptyP($selectionElem);
+        }
+
+        $textElem.on('keyup', function (e) {
+            if (e.keyCode !== 13) {
+                // 不是回车键
+                return;
+            }
+            // 将回车之后生成的非 <p> 的顶级标签，改为 <p>
+            pHandle(e);
+        });
+
+        // <pre><code></code></pre> 回车时 特殊处理
+        function codeHandle(e) {
+            var $selectionElem = editor.selection.getSelectionContainerElem();
+            if (!$selectionElem) {
+                return;
+            }
+            var $parentElem = $selectionElem.parent();
+            var selectionNodeName = $selectionElem.getNodeName();
+            var parentNodeName = $parentElem.getNodeName();
+
+            if (selectionNodeName !== 'CODE' || parentNodeName !== 'PRE') {
+                // 不符合要求 忽略
+                return;
+            }
+
+            if (!editor.cmd.queryCommandSupported('insertHTML')) {
+                // 必须原生支持 insertHTML 命令
+                return;
+            }
+
+            // 处理：光标定位到代码末尾，联系点击两次回车，即跳出代码块
+            if (editor._willBreakCode === true) {
+                // 此时可以跳出代码块
+                // 插入 <p> ，并将选取定位到 <p>
+                var $p = $('<p><br></p>');
+                $p.insertAfter($parentElem);
+                editor.selection.createRangeByElem($p, true);
+                editor.selection.restoreSelection();
+
+                // 修改状态
+                editor._willBreakCode = false;
+
+                e.preventDefault();
+                return;
+            }
+
+            var _startOffset = editor.selection.getRange().startOffset;
+
+            // 处理：回车时，不能插入 <br> 而是插入 \n ，因为是在 pre 标签里面
+            editor.cmd.do('insertHTML', '\n');
+            editor.selection.saveRange();
+            if (editor.selection.getRange().startOffset === _startOffset) {
+                // 没起作用，再来一遍
+                editor.cmd.do('insertHTML', '\n');
+            }
+
+            var codeLength = $selectionElem.html().length;
+            if (editor.selection.getRange().startOffset + 1 === codeLength) {
+                // 说明光标在代码最后的位置，执行了回车操作
+                // 记录下来，以便下次回车时候跳出 code
+                editor._willBreakCode = true;
+            }
+
+            // 阻止默认行为
+            e.preventDefault();
+        }
+
+        $textElem.on('keydown', function (e) {
+            if (e.keyCode !== 13) {
+                // 不是回车键
+                // 取消即将跳转代码块的记录
+                editor._willBreakCode = false;
+                return;
+            }
+            // <pre><code></code></pre> 回车时 特殊处理
+            codeHandle(e);
+        });
+    },
+
+    // 清空时保留 <p><br></p>
+    _clearHandle: function _clearHandle() {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+
+        $textElem.on('keydown', function (e) {
+            if (e.keyCode !== 8) {
+                return;
+            }
+            var txtHtml = $textElem.html().toLowerCase().trim();
+            if (txtHtml === '<p><br></p>') {
+                // 最后剩下一个空行，就不再删除了
+                e.preventDefault();
+                return;
+            }
+        });
+
+        $textElem.on('keyup', function (e) {
+            if (e.keyCode !== 8) {
+                return;
+            }
+            var $p = void 0;
+            var txtHtml = $textElem.html().toLowerCase().trim();
+
+            // firefox 时用 txtHtml === '<br>' 判断，其他用 !txtHtml 判断
+            if (!txtHtml || txtHtml === '<br>') {
+                // 内容空了
+                $p = $('<p><br/></p>');
+                $textElem.html(''); // 一定要先清空，否则在 firefox 下有问题
+                $textElem.append($p);
+                editor.selection.createRangeByElem($p, false, true);
+                editor.selection.restoreSelection();
+            }
+        });
+    },
+
+    // 粘贴事件（粘贴文字 粘贴图片）
+    _pasteHandle: function _pasteHandle() {
+        var editor = this.editor;
+        var config = editor.config;
+        var pasteFilterStyle = config.pasteFilterStyle;
+        var pasteTextHandle = config.pasteTextHandle;
+        var ignoreImg = config.pasteIgnoreImg;
+        var $textElem = editor.$textElem;
+
+        // 粘贴图片、文本的事件，每次只能执行一个
+        // 判断该次粘贴事件是否可以执行
+        var pasteTime = 0;
+        function canDo() {
+            var now = Date.now();
+            var flag = false;
+            if (now - pasteTime >= 100) {
+                // 间隔大于 100 ms ，可以执行
+                flag = true;
+            }
+            pasteTime = now;
+            return flag;
+        }
+        function resetTime() {
+            pasteTime = 0;
+        }
+
+        // 粘贴文字
+        $textElem.on('paste', function (e) {
+            if (UA.isIE()) {
+                return;
+            } else {
+                // 阻止默认行为，使用 execCommand 的粘贴命令
+                e.preventDefault();
+            }
+
+            // 粘贴图片和文本，只能同时使用一个
+            if (!canDo()) {
+                return;
+            }
+
+            // 获取粘贴的文字
+            var pasteHtml = getPasteHtml(e, pasteFilterStyle, ignoreImg);
+            var pasteText = getPasteText(e);
+            pasteText = pasteText.replace(/\n/gm, '<br>');
+
+            var $selectionElem = editor.selection.getSelectionContainerElem();
+            if (!$selectionElem) {
+                return;
+            }
+            var nodeName = $selectionElem.getNodeName();
+
+            // code 中只能粘贴纯文本
+            if (nodeName === 'CODE' || nodeName === 'PRE') {
+                if (pasteTextHandle && isFunction(pasteTextHandle)) {
+                    // 用户自定义过滤处理粘贴内容
+                    pasteText = '' + (pasteTextHandle(pasteText) || '');
+                }
+                editor.cmd.do('insertHTML', '<p>' + pasteText + '</p>');
+                return;
+            }
+
+            // 先放开注释，有问题再追查 ————
+            // // 表格中忽略，可能会出现异常问题
+            // if (nodeName === 'TD' || nodeName === 'TH') {
+            //     return
+            // }
+
+            if (!pasteHtml) {
+                // 没有内容，可继续执行下面的图片粘贴
+                resetTime();
+                return;
+            }
+            try {
+                // firefox 中，获取的 pasteHtml 可能是没有 <ul> 包裹的 <li>
+                // 因此执行 insertHTML 会报错
+                if (pasteTextHandle && isFunction(pasteTextHandle)) {
+                    // 用户自定义过滤处理粘贴内容
+                    pasteHtml = '' + (pasteTextHandle(pasteHtml) || '');
+                }
+                editor.cmd.do('insertHTML', pasteHtml);
+            } catch (ex) {
+                // 此时使用 pasteText 来兼容一下
+                if (pasteTextHandle && isFunction(pasteTextHandle)) {
+                    // 用户自定义过滤处理粘贴内容
+                    pasteText = '' + (pasteTextHandle(pasteText) || '');
+                }
+                editor.cmd.do('insertHTML', '<p>' + pasteText + '</p>');
+            }
+        });
+
+        // 粘贴图片
+        $textElem.on('paste', function (e) {
+            if (UA.isIE()) {
+                return;
+            } else {
+                e.preventDefault();
+            }
+
+            // 粘贴图片和文本，只能同时使用一个
+            if (!canDo()) {
+                return;
+            }
+
+            // 获取粘贴的图片
+            var pasteFiles = getPasteImgs(e);
+            if (!pasteFiles || !pasteFiles.length) {
+                return;
+            }
+
+            // 获取当前的元素
+            var $selectionElem = editor.selection.getSelectionContainerElem();
+            if (!$selectionElem) {
+                return;
+            }
+            var nodeName = $selectionElem.getNodeName();
+
+            // code 中粘贴忽略
+            if (nodeName === 'CODE' || nodeName === 'PRE') {
+                return;
+            }
+
+            // 上传图片
+            var uploadImg = editor.uploadImg;
+            uploadImg.uploadImg(pasteFiles);
+        });
+    },
+
+    // tab 特殊处理
+    _tabHandle: function _tabHandle() {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+
+        $textElem.on('keydown', function (e) {
+            if (e.keyCode !== 9) {
+                return;
+            }
+            if (!editor.cmd.queryCommandSupported('insertHTML')) {
+                // 必须原生支持 insertHTML 命令
+                return;
+            }
+            var $selectionElem = editor.selection.getSelectionContainerElem();
+            if (!$selectionElem) {
+                return;
+            }
+            var $parentElem = $selectionElem.parent();
+            var selectionNodeName = $selectionElem.getNodeName();
+            var parentNodeName = $parentElem.getNodeName();
+
+            if (selectionNodeName === 'CODE' && parentNodeName === 'PRE') {
+                // <pre><code> 里面
+                editor.cmd.do('insertHTML', '    ');
+            } else {
+                // 普通文字
+                editor.cmd.do('insertHTML', '&nbsp;&nbsp;&nbsp;&nbsp;');
+            }
+
+            e.preventDefault();
+        });
+    },
+
+    // img 点击
+    _imgHandle: function _imgHandle() {
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+
+        // 为图片增加 selected 样式
+        $textElem.on('click', 'img', function (e) {
+            var img = this;
+            var $img = $(img);
+
+            if ($img.attr('data-w-e') === '1') {
+                // 是表情图片，忽略
+                return;
+            }
+
+            // 记录当前点击过的图片
+            editor._selectedImg = $img;
+
+            // 修改选区并 restore ，防止用户此时点击退格键，会删除其他内容
+            editor.selection.createRangeByElem($img);
+            editor.selection.restoreSelection();
+        });
+
+        // 去掉图片的 selected 样式
+        $textElem.on('click  keyup', function (e) {
+            if (e.target.matches('img')) {
+                // 点击的是图片，忽略
+                return;
+            }
+            // 删除记录
+            editor._selectedImg = null;
+        });
+    },
+
+    // 拖拽事件
+    _dragHandle: function _dragHandle() {
+        var editor = this.editor;
+
+        // 禁用 document 拖拽事件
+        var $document = $(document);
+        $document.on('dragleave drop dragenter dragover', function (e) {
+            e.preventDefault();
+        });
+
+        // 添加编辑区域拖拽事件
+        var $textElem = editor.$textElem;
+        $textElem.on('drop', function (e) {
+            e.preventDefault();
+            var files = e.dataTransfer && e.dataTransfer.files;
+            if (!files || !files.length) {
+                return;
+            }
+
+            // 上传图片
+            var uploadImg = editor.uploadImg;
+            uploadImg.uploadImg(files);
+        });
+    }
+};
+
+/*
+    命令，封装 document.execCommand
+*/
+
+// 构造函数
+function Command(editor) {
+    this.editor = editor;
+}
+
+// 修改原型
+Command.prototype = {
+    constructor: Command,
+
+    // 执行命令
+    do: function _do(name, value) {
+        var editor = this.editor;
+
+        // 使用 styleWithCSS
+        if (!editor._useStyleWithCSS) {
+            document.execCommand('styleWithCSS', null, true);
+            editor._useStyleWithCSS = true;
+        }
+
+        // 如果无选区，忽略
+        if (!editor.selection.getRange()) {
+            return;
+        }
+
+        // 恢复选取
+        editor.selection.restoreSelection();
+
+        // 执行
+        var _name = '_' + name;
+        if (this[_name]) {
+            // 有自定义事件
+            this[_name](value);
+        } else {
+            // 默认 command
+            this._execCommand(name, value);
+        }
+
+        // 修改菜单状态
+        editor.menus.changeActive();
+
+        // 最后，恢复选取保证光标在原来的位置闪烁
+        editor.selection.saveRange();
+        editor.selection.restoreSelection();
+
+        // 触发 onchange
+        editor.change && editor.change();
+    },
+
+    // 自定义 insertHTML 事件
+    _insertHTML: function _insertHTML(html) {
+        var editor = this.editor;
+        var range = editor.selection.getRange();
+
+        if (this.queryCommandSupported('insertHTML')) {
+            // W3C
+            this._execCommand('insertHTML', html);
+        } else if (range.insertNode) {
+            // IE
+            range.deleteContents();
+            range.insertNode($(html)[0]);
+        } else if (range.pasteHTML) {
+            // IE <= 10
+            range.pasteHTML(html);
+        }
+    },
+
+    // 插入 elem
+    _insertElem: function _insertElem($elem) {
+        var editor = this.editor;
+        var range = editor.selection.getRange();
+
+        if (range.insertNode) {
+            range.deleteContents();
+            range.insertNode($elem[0]);
+        }
+    },
+
+    // 封装 execCommand
+    _execCommand: function _execCommand(name, value) {
+        document.execCommand(name, false, value);
+    },
+
+    // 封装 document.queryCommandValue
+    queryCommandValue: function queryCommandValue(name) {
+        return document.queryCommandValue(name);
+    },
+
+    // 封装 document.queryCommandState
+    queryCommandState: function queryCommandState(name) {
+        return document.queryCommandState(name);
+    },
+
+    // 封装 document.queryCommandSupported
+    queryCommandSupported: function queryCommandSupported(name) {
+        return document.queryCommandSupported(name);
+    }
+};
+
+/*
+    selection range API
+*/
+
+// 构造函数
+function API(editor) {
+    this.editor = editor;
+    this._currentRange = null;
+}
+
+// 修改原型
+API.prototype = {
+    constructor: API,
+
+    // 获取 range 对象
+    getRange: function getRange() {
+        return this._currentRange;
+    },
+
+    // 保存选区
+    saveRange: function saveRange(_range) {
+        if (_range) {
+            // 保存已有选区
+            this._currentRange = _range;
+            return;
+        }
+
+        // 获取当前的选区
+        var selection = window.getSelection();
+        if (selection.rangeCount === 0) {
+            return;
+        }
+        var range = selection.getRangeAt(0);
+
+        // 判断选区内容是否在编辑内容之内
+        var $containerElem = this.getSelectionContainerElem(range);
+        if (!$containerElem) {
+            return;
+        }
+
+        // 判断选区内容是否在不可编辑区域之内
+        if ($containerElem.attr('contenteditable') === 'false' || $containerElem.parentUntil('[contenteditable=false]')) {
+            return;
+        }
+
+        var editor = this.editor;
+        var $textElem = editor.$textElem;
+        if ($textElem.isContain($containerElem)) {
+            // 是编辑内容之内的
+            this._currentRange = range;
+        }
+    },
+
+    // 折叠选区
+    collapseRange: function collapseRange(toStart) {
+        if (toStart == null) {
+            // 默认为 false
+            toStart = false;
+        }
+        var range = this._currentRange;
+        if (range) {
+            range.collapse(toStart);
+        }
+    },
+
+    // 选中区域的文字
+    getSelectionText: function getSelectionText() {
+        var range = this._currentRange;
+        if (range) {
+            return this._currentRange.toString();
+        } else {
+            return '';
+        }
+    },
+
+    // 选区的 $Elem
+    getSelectionContainerElem: function getSelectionContainerElem(range) {
+        range = range || this._currentRange;
+        var elem = void 0;
+        if (range) {
+            elem = range.commonAncestorContainer;
+            return $(elem.nodeType === 1 ? elem : elem.parentNode);
+        }
+    },
+    getSelectionStartElem: function getSelectionStartElem(range) {
+        range = range || this._currentRange;
+        var elem = void 0;
+        if (range) {
+            elem = range.startContainer;
+            return $(elem.nodeType === 1 ? elem : elem.parentNode);
+        }
+    },
+    getSelectionEndElem: function getSelectionEndElem(range) {
+        range = range || this._currentRange;
+        var elem = void 0;
+        if (range) {
+            elem = range.endContainer;
+            return $(elem.nodeType === 1 ? elem : elem.parentNode);
+        }
+    },
+
+    // 选区是否为空
+    isSelectionEmpty: function isSelectionEmpty() {
+        var range = this._currentRange;
+        if (range && range.startContainer) {
+            if (range.startContainer === range.endContainer) {
+                if (range.startOffset === range.endOffset) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    },
+
+    // 恢复选区
+    restoreSelection: function restoreSelection() {
+        var selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(this._currentRange);
+    },
+
+    // 创建一个空白（即 &#8203 字符）选区
+    createEmptyRange: function createEmptyRange() {
+        var editor = this.editor;
+        var range = this.getRange();
+        var $elem = void 0;
+
+        if (!range) {
+            // 当前无 range
+            return;
+        }
+        if (!this.isSelectionEmpty()) {
+            // 当前选区必须没有内容才可以
+            return;
+        }
+
+        try {
+            // 目前只支持 webkit 内核
+            if (UA.isWebkit()) {
+                // 插入 &#8203
+                editor.cmd.do('insertHTML', '&#8203;');
+                // 修改 offset 位置
+                range.setEnd(range.endContainer, range.endOffset + 1);
+                // 存储
+                this.saveRange(range);
+            } else {
+                $elem = $('<strong>&#8203;</strong>');
+                editor.cmd.do('insertElem', $elem);
+                this.createRangeByElem($elem, true);
+            }
+        } catch (ex) {
+            // 部分情况下会报错，兼容一下
+        }
+    },
+
+    // 根据 $Elem 设置选区
+    createRangeByElem: function createRangeByElem($elem, toStart, isContent) {
+        // $elem - 经过封装的 elem
+        // toStart - true 开始位置，false 结束位置
+        // isContent - 是否选中Elem的内容
+        if (!$elem.length) {
+            return;
+        }
+
+        var elem = $elem[0];
+        var range = document.createRange();
+
+        if (isContent) {
+            range.selectNodeContents(elem);
+        } else {
+            range.selectNode(elem);
+        }
+
+        if (typeof toStart === 'boolean') {
+            range.collapse(toStart);
+        }
+
+        // 存储 range
+        this.saveRange(range);
+    }
+};
+
+/*
+    上传进度条
+*/
+
+function Progress(editor) {
+    this.editor = editor;
+    this._time = 0;
+    this._isShow = false;
+    this._isRender = false;
+    this._timeoutId = 0;
+    this.$textContainer = editor.$textContainerElem;
+    this.$bar = $('<div class="w-e-progress"></div>');
+}
+
+Progress.prototype = {
+    constructor: Progress,
+
+    show: function show(progress) {
+        var _this = this;
+
+        // 状态处理
+        if (this._isShow) {
+            return;
+        }
+        this._isShow = true;
+
+        // 渲染
+        var $bar = this.$bar;
+        if (!this._isRender) {
+            var $textContainer = this.$textContainer;
+            $textContainer.append($bar);
+        } else {
+            this._isRender = true;
+        }
+
+        // 改变进度（节流，100ms 渲染一次）
+        if (Date.now() - this._time > 100) {
+            if (progress <= 1) {
+                $bar.css('width', progress * 100 + '%');
+                this._time = Date.now();
+            }
+        }
+
+        // 隐藏
+        var timeoutId = this._timeoutId;
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+        timeoutId = setTimeout(function () {
+            _this._hide();
+        }, 500);
+    },
+
+    _hide: function _hide() {
+        var $bar = this.$bar;
+        $bar.remove();
+
+        // 修改状态
+        this._time = 0;
+        this._isShow = false;
+        this._isRender = false;
+    }
+};
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
+  return typeof obj;
+} : function (obj) {
+  return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
+};
+
+/*
+    上传图片
+*/
+
+// 构造函数
+function UploadImg(editor) {
+    this.editor = editor;
+}
+
+// 原型
+UploadImg.prototype = {
+    constructor: UploadImg,
+
+    // 根据 debug 弹出不同的信息
+    _alert: function _alert(alertInfo, debugInfo) {
+        var editor = this.editor;
+        var debug = editor.config.debug;
+        var customAlert = editor.config.customAlert;
+
+        if (debug) {
+            throw new Error('wangEditor: ' + (debugInfo || alertInfo));
+        } else {
+            if (customAlert && typeof customAlert === 'function') {
+                customAlert(alertInfo);
+            } else {
+                alert(alertInfo);
+            }
+        }
+    },
+
+    // 根据链接插入图片
+    insertLinkImg: function insertLinkImg(link) {
+        var _this2 = this;
+
+        if (!link) {
+            return;
+        }
+        var editor = this.editor;
+        var config = editor.config;
+
+        // 校验格式
+        var linkImgCheck = config.linkImgCheck;
+        var checkResult = void 0;
+        if (linkImgCheck && typeof linkImgCheck === 'function') {
+            checkResult = linkImgCheck(link);
+            if (typeof checkResult === 'string') {
+                // 校验失败，提示信息
+                alert(checkResult);
+                return;
+            }
+        }
+
+        editor.cmd.do('insertHTML', '<img src="' + link + '" style="max-width:100%;"/>');
+
+        // 验证图片 url 是否有效，无效的话给出提示
+        var img = document.createElement('img');
+        img.onload = function () {
+            var callback = config.linkImgCallback;
+            if (callback && typeof callback === 'function') {
+                callback(link);
+            }
+
+            img = null;
+        };
+        img.onerror = function () {
+            img = null;
+            // 无法成功下载图片
+            _this2._alert('插入图片错误', 'wangEditor: \u63D2\u5165\u56FE\u7247\u51FA\u9519\uFF0C\u56FE\u7247\u94FE\u63A5\u662F "' + link + '"\uFF0C\u4E0B\u8F7D\u8BE5\u94FE\u63A5\u5931\u8D25');
+            return;
+        };
+        img.onabort = function () {
+            img = null;
+        };
+        img.src = link;
+    },
+
+    // 上传图片
+    uploadImg: function uploadImg(files) {
+        var _this3 = this;
+
+        if (!files || !files.length) {
+            return;
+        }
+
+        // ------------------------------ 获取配置信息 ------------------------------
+        var editor = this.editor;
+        var config = editor.config;
+        var uploadImgServer = config.uploadImgServer;
+        var uploadImgShowBase64 = config.uploadImgShowBase64;
+
+        var maxSize = config.uploadImgMaxSize;
+        var maxSizeM = maxSize / 1024 / 1024;
+        var maxLength = config.uploadImgMaxLength || 10000;
+        var uploadFileName = config.uploadFileName || '';
+        var uploadImgParams = config.uploadImgParams || {};
+        var uploadImgParamsWithUrl = config.uploadImgParamsWithUrl;
+        var uploadImgHeaders = config.uploadImgHeaders || {};
+        var hooks = config.uploadImgHooks || {};
+        var timeout = config.uploadImgTimeout || 3000;
+        var withCredentials = config.withCredentials;
+        if (withCredentials == null) {
+            withCredentials = false;
+        }
+        var customUploadImg = config.customUploadImg;
+
+        if (!customUploadImg) {
+            // 没有 customUploadImg 的情况下，需要如下两个配置才能继续进行图片上传
+            if (!uploadImgServer && !uploadImgShowBase64) {
+                return;
+            }
+        }
+
+        // ------------------------------ 验证文件信息 ------------------------------
+        var resultFiles = [];
+        var errInfo = [];
+        arrForEach(files, function (file) {
+            var name = file.name;
+            var size = file.size;
+
+            // chrome 低版本 name === undefined
+            if (!name || !size) {
+                return;
+            }
+
+            if (/\.(jpg|jpeg|png|bmp|gif|webp)$/i.test(name) === false) {
+                // 后缀名不合法，不是图片
+                errInfo.push('\u3010' + name + '\u3011\u4E0D\u662F\u56FE\u7247');
+                return;
+            }
+            if (maxSize < size) {
+                // 上传图片过大
+                errInfo.push('\u3010' + name + '\u3011\u5927\u4E8E ' + maxSizeM + 'M');
+                return;
+            }
+
+            // 验证通过的加入结果列表
+            resultFiles.push(file);
+        });
+        // 抛出验证信息
+        if (errInfo.length) {
+            this._alert('图片验证未通过: \n' + errInfo.join('\n'));
+            return;
+        }
+        if (resultFiles.length > maxLength) {
+            this._alert('一次最多上传' + maxLength + '张图片');
+            return;
+        }
+
+        // ------------------------------ 自定义上传 ------------------------------
+        if (customUploadImg && typeof customUploadImg === 'function') {
+            customUploadImg(resultFiles, this.insertLinkImg.bind(this));
+
+            // 阻止以下代码执行
+            return;
+        }
+
+        // 添加图片数据
+        var formdata = new FormData();
+        arrForEach(resultFiles, function (file) {
+            var name = uploadFileName || file.name;
+            formdata.append(name, file);
+        });
+
+        // ------------------------------ 上传图片 ------------------------------
+        if (uploadImgServer && typeof uploadImgServer === 'string') {
+            // 添加参数
+            var uploadImgServerArr = uploadImgServer.split('#');
+            uploadImgServer = uploadImgServerArr[0];
+            var uploadImgServerHash = uploadImgServerArr[1] || '';
+            objForEach(uploadImgParams, function (key, val) {
+                // 因使用者反应，自定义参数不能默认 encode ，由 v3.1.1 版本开始注释掉
+                // val = encodeURIComponent(val)
+
+                // 第一，将参数拼接到 url 中
+                if (uploadImgParamsWithUrl) {
+                    if (uploadImgServer.indexOf('?') > 0) {
+                        uploadImgServer += '&';
+                    } else {
+                        uploadImgServer += '?';
+                    }
+                    uploadImgServer = uploadImgServer + key + '=' + val;
+                }
+
+                // 第二，将参数添加到 formdata 中
+                formdata.append(key, val);
+            });
+            if (uploadImgServerHash) {
+                uploadImgServer += '#' + uploadImgServerHash;
+            }
+
+            // 定义 xhr
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', uploadImgServer);
+
+            // 设置超时
+            xhr.timeout = timeout;
+            xhr.ontimeout = function () {
+                // hook - timeout
+                if (hooks.timeout && typeof hooks.timeout === 'function') {
+                    hooks.timeout(xhr, editor);
+                }
+
+                _this3._alert('上传图片超时');
+            };
+
+            // 监控 progress
+            if (xhr.upload) {
+                xhr.upload.onprogress = function (e) {
+                    var percent = void 0;
+                    // 进度条
+                    var progressBar = new Progress(editor);
+                    if (e.lengthComputable) {
+                        percent = e.loaded / e.total;
+                        progressBar.show(percent);
+                    }
+                };
+            }
+
+            // 返回数据
+            xhr.onreadystatechange = function () {
+                var result = void 0;
+                if (xhr.readyState === 4) {
+                    if (xhr.status < 200 || xhr.status >= 300) {
+                        // hook - error
+                        if (hooks.error && typeof hooks.error === 'function') {
+                            hooks.error(xhr, editor);
+                        }
+
+                        // xhr 返回状态错误
+                        _this3._alert('上传图片发生错误', '\u4E0A\u4F20\u56FE\u7247\u53D1\u751F\u9519\u8BEF\uFF0C\u670D\u52A1\u5668\u8FD4\u56DE\u72B6\u6001\u662F ' + xhr.status);
+                        return;
+                    }
+
+                    result = xhr.responseText;
+                    if ((typeof result === 'undefined' ? 'undefined' : _typeof(result)) !== 'object') {
+                        try {
+                            result = JSON.parse(result);
+                        } catch (ex) {
+                            // hook - fail
+                            if (hooks.fail && typeof hooks.fail === 'function') {
+                                hooks.fail(xhr, editor, result);
+                            }
+
+                            _this3._alert('上传图片失败', '上传图片返回结果错误，返回结果是: ' + result);
+                            return;
+                        }
+                    }
+                    if (!hooks.customInsert && result.errno != '0') {
+                        // hook - fail
+                        if (hooks.fail && typeof hooks.fail === 'function') {
+                            hooks.fail(xhr, editor, result);
+                        }
+
+                        // 数据错误
+                        _this3._alert('上传图片失败', '上传图片返回结果错误，返回结果 errno=' + result.errno);
+                    } else {
+                        if (hooks.customInsert && typeof hooks.customInsert === 'function') {
+                            // 使用者自定义插入方法
+                            hooks.customInsert(_this3.insertLinkImg.bind(_this3), result, editor);
+                        } else {
+                            // 将图片插入编辑器
+                            var data = result.data || [];
+                            data.forEach(function (link) {
+                                _this3.insertLinkImg(link);
+                            });
+                        }
+
+                        // hook - success
+                        if (hooks.success && typeof hooks.success === 'function') {
+                            hooks.success(xhr, editor, result);
+                        }
+                    }
+                }
+            };
+
+            // hook - before
+            if (hooks.before && typeof hooks.before === 'function') {
+                var beforeResult = hooks.before(xhr, editor, resultFiles);
+                if (beforeResult && (typeof beforeResult === 'undefined' ? 'undefined' : _typeof(beforeResult)) === 'object') {
+                    if (beforeResult.prevent) {
+                        // 如果返回的结果是 {prevent: true, msg: 'xxxx'} 则表示用户放弃上传
+                        this._alert(beforeResult.msg);
+                        return;
+                    }
+                }
+            }
+
+            // 自定义 headers
+            objForEach(uploadImgHeaders, function (key, val) {
+                xhr.setRequestHeader(key, val);
+            });
+
+            // 跨域传 cookie
+            xhr.withCredentials = withCredentials;
+
+            // 发送请求
+            xhr.send(formdata);
+
+            // 注意，要 return 。不去操作接下来的 base64 显示方式
+            return;
+        }
+
+        // ------------------------------ 显示 base64 格式 ------------------------------
+        if (uploadImgShowBase64) {
+            arrForEach(files, function (file) {
+                var _this = _this3;
+                var reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = function () {
+                    _this.insertLinkImg(this.result);
+                };
+            });
+        }
+    }
+};
+
+/*
+    编辑器构造函数
+*/
+
+// id，累加
+var editorId = 1;
+
+// 构造函数
+function Editor(toolbarSelector, textSelector) {
+    if (toolbarSelector == null) {
+        // 没有传入任何参数，报错
+        throw new Error('错误：初始化编辑器时候未传入任何参数，请查阅文档');
+    }
+    // id，用以区分单个页面不同的编辑器对象
+    this.id = 'wangEditor-' + editorId++;
+
+    this.toolbarSelector = toolbarSelector;
+    this.textSelector = textSelector;
+
+    // 自定义配置
+    this.customConfig = {};
+}
+
+// 修改原型
+Editor.prototype = {
+    constructor: Editor,
+
+    // 初始化配置
+    _initConfig: function _initConfig() {
+        // _config 是默认配置，this.customConfig 是用户自定义配置，将它们 merge 之后再赋值
+        var target = {};
+        this.config = Object.assign(target, config, this.customConfig);
+
+        // 将语言配置，生成正则表达式
+        var langConfig = this.config.lang || {};
+        var langArgs = [];
+        objForEach(langConfig, function (key, val) {
+            // key 即需要生成正则表达式的规则，如“插入链接”
+            // val 即需要被替换成的语言，如“insert link”
+            langArgs.push({
+                reg: new RegExp(key, 'img'),
+                val: val
+
+            });
+        });
+        this.config.langArgs = langArgs;
+    },
+
+    // 初始化 DOM
+    _initDom: function _initDom() {
+        var _this = this;
+
+        var toolbarSelector = this.toolbarSelector;
+        var $toolbarSelector = $(toolbarSelector);
+        var textSelector = this.textSelector;
+
+        var config$$1 = this.config;
+        var zIndex = config$$1.zIndex;
+
+        // 定义变量
+        var $toolbarElem = void 0,
+            $textContainerElem = void 0,
+            $textElem = void 0,
+            $children = void 0;
+
+        if (textSelector == null) {
+            // 只传入一个参数，即是容器的选择器或元素，toolbar 和 text 的元素自行创建
+            $toolbarElem = $('<div></div>');
+            $textContainerElem = $('<div></div>');
+
+            // 将编辑器区域原有的内容，暂存起来
+            $children = $toolbarSelector.children();
+
+            // 添加到 DOM 结构中
+            $toolbarSelector.append($toolbarElem).append($textContainerElem);
+
+            // 自行创建的，需要配置默认的样式
+            $toolbarElem.css('background-color', '#f1f1f1').css('border', '1px solid #ccc');
+            $textContainerElem.css('border', '1px solid #ccc').css('border-top', 'none').css('height', '300px');
+        } else {
+            // toolbar 和 text 的选择器都有值，记录属性
+            $toolbarElem = $toolbarSelector;
+            $textContainerElem = $(textSelector);
+            // 将编辑器区域原有的内容，暂存起来
+            $children = $textContainerElem.children();
+        }
+
+        // 编辑区域
+        $textElem = $('<div></div>');
+        $textElem.attr('contenteditable', 'true').css('width', '100%').css('height', '100%');
+
+        // 初始化编辑区域内容
+        if ($children && $children.length) {
+            $textElem.append($children);
+        } else {
+            $textElem.append($('<p><br></p>'));
+        }
+
+        // 编辑区域加入DOM
+        $textContainerElem.append($textElem);
+
+        // 设置通用的 class
+        $toolbarElem.addClass('w-e-toolbar');
+        $textContainerElem.addClass('w-e-text-container');
+        $textContainerElem.css('z-index', zIndex);
+        $textElem.addClass('w-e-text');
+
+        // 添加 ID
+        var toolbarElemId = getRandom('toolbar-elem');
+        $toolbarElem.attr('id', toolbarElemId);
+        var textElemId = getRandom('text-elem');
+        $textElem.attr('id', textElemId);
+
+        // 记录属性
+        this.$toolbarElem = $toolbarElem;
+        this.$textContainerElem = $textContainerElem;
+        this.$textElem = $textElem;
+        this.toolbarElemId = toolbarElemId;
+        this.textElemId = textElemId;
+
+        // 记录输入法的开始和结束
+        var compositionEnd = true;
+        $textContainerElem.on('compositionstart', function () {
+            // 输入法开始输入
+            compositionEnd = false;
+        });
+        $textContainerElem.on('compositionend', function () {
+            // 输入法结束输入
+            compositionEnd = true;
+        });
+
+        // 绑定 onchange
+        $textContainerElem.on('click keyup', function () {
+            // 输入法结束才出发 onchange
+            compositionEnd && _this.change && _this.change();
+        });
+        $toolbarElem.on('click', function () {
+            this.change && this.change();
+        });
+
+        //绑定 onfocus 与 onblur 事件
+        if (config$$1.onfocus || config$$1.onblur) {
+            // 当前编辑器是否是焦点状态
+            this.isFocus = false;
+
+            $(document).on('click', function (e) {
+                //判断当前点击元素是否在编辑器内
+                var isChild = $textElem.isContain($(e.target));
+
+                //判断当前点击元素是否为工具栏
+                var isToolbar = $toolbarElem.isContain($(e.target));
+                var isMenu = $toolbarElem[0] == e.target ? true : false;
+
+                if (!isChild) {
+                    //若为选择工具栏中的功能，则不视为成blur操作
+                    if (isToolbar && !isMenu) {
+                        return;
+                    }
+
+                    if (_this.isFocus) {
+                        _this.onblur && _this.onblur();
+                    }
+                    _this.isFocus = false;
+                } else {
+                    if (!_this.isFocus) {
+                        _this.onfocus && _this.onfocus();
+                    }
+                    _this.isFocus = true;
+                }
+            });
+        }
+    },
+
+    // 封装 command
+    _initCommand: function _initCommand() {
+        this.cmd = new Command(this);
+    },
+
+    // 封装 selection range API
+    _initSelectionAPI: function _initSelectionAPI() {
+        this.selection = new API(this);
+    },
+
+    // 添加图片上传
+    _initUploadImg: function _initUploadImg() {
+        this.uploadImg = new UploadImg(this);
+    },
+
+    // 初始化菜单
+    _initMenus: function _initMenus() {
+        this.menus = new Menus(this);
+        this.menus.init();
+    },
+
+    // 添加 text 区域
+    _initText: function _initText() {
+        this.txt = new Text(this);
+        this.txt.init();
+    },
+
+    // 初始化选区，将光标定位到内容尾部
+    initSelection: function initSelection(newLine) {
+        var $textElem = this.$textElem;
+        var $children = $textElem.children();
+        if (!$children.length) {
+            // 如果编辑器区域无内容，添加一个空行，重新设置选区
+            $textElem.append($('<p><br></p>'));
+            this.initSelection();
+            return;
+        }
+
+        var $last = $children.last();
+
+        if (newLine) {
+            // 新增一个空行
+            var html = $last.html().toLowerCase();
+            var nodeName = $last.getNodeName();
+            if (html !== '<br>' && html !== '<br\/>' || nodeName !== 'P') {
+                // 最后一个元素不是 <p><br></p>，添加一个空行，重新设置选区
+                $textElem.append($('<p><br></p>'));
+                this.initSelection();
+                return;
+            }
+        }
+
+        this.selection.createRangeByElem($last, false, true);
+        this.selection.restoreSelection();
+    },
+
+    // 绑定事件
+    _bindEvent: function _bindEvent() {
+        // -------- 绑定 onchange 事件 --------
+        var onChangeTimeoutId = 0;
+        var beforeChangeHtml = this.txt.html();
+        var config$$1 = this.config;
+
+        // onchange 触发延迟时间
+        var onchangeTimeout = config$$1.onchangeTimeout;
+        onchangeTimeout = parseInt(onchangeTimeout, 10);
+        if (!onchangeTimeout || onchangeTimeout <= 0) {
+            onchangeTimeout = 200;
+        }
+
+        var onchange = config$$1.onchange;
+        if (onchange && typeof onchange === 'function') {
+            // 触发 change 的有三个场景：
+            // 1. $textContainerElem.on('click keyup')
+            // 2. $toolbarElem.on('click')
+            // 3. editor.cmd.do()
+            this.change = function () {
+                // 判断是否有变化
+                var currentHtml = this.txt.html();
+
+                if (currentHtml.length === beforeChangeHtml.length) {
+                    // 需要比较每一个字符
+                    if (currentHtml === beforeChangeHtml) {
+                        return;
+                    }
+                }
+
+                // 执行，使用节流
+                if (onChangeTimeoutId) {
+                    clearTimeout(onChangeTimeoutId);
+                }
+                onChangeTimeoutId = setTimeout(function () {
+                    // 触发配置的 onchange 函数
+                    onchange(currentHtml);
+                    beforeChangeHtml = currentHtml;
+                }, onchangeTimeout);
+            };
+        }
+
+        // -------- 绑定 onblur 事件 --------
+        var onblur = config$$1.onblur;
+        if (onblur && typeof onblur === 'function') {
+            this.onblur = function () {
+                var currentHtml = this.txt.html();
+                onblur(currentHtml);
+            };
+        }
+
+        // -------- 绑定 onfocus 事件 --------
+        var onfocus = config$$1.onfocus;
+        if (onfocus && typeof onfocus === 'function') {
+            this.onfocus = function () {
+                onfocus();
+            };
+        }
+    },
+
+    // 创建编辑器
+    create: function create() {
+        // 初始化配置信息
+        this._initConfig();
+
+        // 初始化 DOM
+        this._initDom();
+
+        // 封装 command API
+        this._initCommand();
+
+        // 封装 selection range API
+        this._initSelectionAPI();
+
+        // 添加 text
+        this._initText();
+
+        // 初始化菜单
+        this._initMenus();
+
+        // 添加 图片上传
+        this._initUploadImg();
+
+        // 初始化选区，将光标定位到内容尾部
+        this.initSelection(true);
+
+        // 绑定事件
+        this._bindEvent();
+    },
+
+    // 解绑所有事件（暂时不对外开放）
+    _offAllEvent: function _offAllEvent() {
+        $.offAll();
+    }
+};
+
+// 检验是否浏览器环境
+try {
+    document;
+} catch (ex) {
+    throw new Error('请在浏览器环境下运行');
+}
+
+// polyfill
+polyfill();
+
+// 这里的 `inlinecss` 将被替换成 css 代码的内容，详情可去 ./gulpfile.js 中搜索 `inlinecss` 关键字
+var inlinecss = '.w-e-toolbar,.w-e-text-container,.w-e-menu-panel {  padding: 0;  margin: 0;  box-sizing: border-box;}.w-e-toolbar *,.w-e-text-container *,.w-e-menu-panel * {  padding: 0;  margin: 0;  box-sizing: border-box;}.w-e-clear-fix:after {  content: "";  display: table;  clear: both;}.w-e-toolbar .w-e-droplist {  position: absolute;  left: 0;  top: 0;  background-color: #fff;  border: 1px solid #f1f1f1;  border-right-color: #ccc;  border-bottom-color: #ccc;}.w-e-toolbar .w-e-droplist .w-e-dp-title {  text-align: center;  color: #999;  line-height: 2;  border-bottom: 1px solid #f1f1f1;  font-size: 13px;}.w-e-toolbar .w-e-droplist ul.w-e-list {  list-style: none;  line-height: 1;}.w-e-toolbar .w-e-droplist ul.w-e-list li.w-e-item {  color: #333;  padding: 5px 0;}.w-e-toolbar .w-e-droplist ul.w-e-list li.w-e-item:hover {  background-color: #f1f1f1;}.w-e-toolbar .w-e-droplist ul.w-e-block {  list-style: none;  text-align: left;  padding: 5px;}.w-e-toolbar .w-e-droplist ul.w-e-block li.w-e-item {  display: inline-block;  *display: inline;  *zoom: 1;  padding: 3px 5px;}.w-e-toolbar .w-e-droplist ul.w-e-block li.w-e-item:hover {  background-color: #f1f1f1;}@font-face {  font-family: \'w-e-icon\';  src: url(data:application/x-font-woff;charset=utf-8;base64,d09GRgABAAAAABhQAAsAAAAAGAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABPUy8yAAABCAAAAGAAAABgDxIPBGNtYXAAAAFoAAABBAAAAQQrSf4BZ2FzcAAAAmwAAAAIAAAACAAAABBnbHlmAAACdAAAEvAAABLwfpUWUWhlYWQAABVkAAAANgAAADYQp00kaGhlYQAAFZwAAAAkAAAAJAfEA+FobXR4AAAVwAAAAIQAAACEeAcD7GxvY2EAABZEAAAARAAAAERBSEX+bWF4cAAAFogAAAAgAAAAIAAsALZuYW1lAAAWqAAAAYYAAAGGmUoJ+3Bvc3QAABgwAAAAIAAAACAAAwAAAAMD3gGQAAUAAAKZAswAAACPApkCzAAAAesAMwEJAAAAAAAAAAAAAAAAAAAAARAAAAAAAAAAAAAAAAAAAAAAQAAA8fwDwP/AAEADwABAAAAAAQAAAAAAAAAAAAAAIAAAAAAAAwAAAAMAAAAcAAEAAwAAABwAAwABAAAAHAAEAOgAAAA2ACAABAAWAAEAIOkG6Q3pEulH6Wbpd+m56bvpxunL6d/qDepc6l/qZepo6nHqefAN8BTxIPHc8fz//f//AAAAAAAg6QbpDekS6UfpZel36bnpu+nG6cvp3+oN6lzqX+pi6mjqcep38A3wFPEg8dzx/P/9//8AAf/jFv4W+Bb0FsAWoxaTFlIWURZHFkMWMBYDFbUVsxWxFa8VpxWiEA8QCQ7+DkMOJAADAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAB//8ADwABAAAAAAAAAAAAAgAANzkBAAAAAAEAAAAAAAAAAAACAAA3OQEAAAAAAQAAAAAAAAAAAAIAADc5AQAAAAACAAD/wAQAA8AABAATAAABNwEnAQMuAScTNwEjAQMlATUBBwGAgAHAQP5Anxc7MmOAAYDA/oDAAoABgP6ATgFAQAHAQP5A/p0yOxcBEU4BgP6A/YDAAYDA/oCAAAQAAAAABAADgAAQACEALQA0AAABOAExETgBMSE4ATEROAExITUhIgYVERQWMyEyNjURNCYjBxQGIyImNTQ2MzIWEyE1EwEzNwPA/IADgPyAGiYmGgOAGiYmGoA4KCg4OCgoOED9AOABAEDgA0D9AAMAQCYa/QAaJiYaAwAaJuAoODgoKDg4/biAAYD+wMAAAAIAAABABAADQAA4ADwAAAEmJy4BJyYjIgcOAQcGBwYHDgEHBhUUFx4BFxYXFhceARcWMzI3PgE3Njc2Nz4BNzY1NCcuAScmJwERDQED1TY4OXY8PT8/PTx2OTg2CwcICwMDAwMLCAcLNjg5djw9Pz89PHY5ODYLBwgLAwMDAwsIBwv9qwFA/sADIAgGBggCAgICCAYGCCkqKlktLi8vLi1ZKiopCAYGCAICAgIIBgYIKSoqWS0uLy8uLVkqKin94AGAwMAAAAAAAgDA/8ADQAPAABsAJwAAASIHDgEHBhUUFx4BFxYxMDc+ATc2NTQnLgEnJgMiJjU0NjMyFhUUBgIAQjs6VxkZMjJ4MjIyMngyMhkZVzo7QlBwcFBQcHADwBkZVzo7Qnh9fcxBQUFBzH19eEI7OlcZGf4AcFBQcHBQUHAAAAEAAAAABAADgAArAAABIgcOAQcGBycRISc+ATMyFx4BFxYVFAcOAQcGBxc2Nz4BNzY1NCcuAScmIwIANTIyXCkpI5YBgJA1i1BQRUZpHh4JCSIYGB5VKCAgLQwMKCiLXl1qA4AKCycbHCOW/oCQNDweHmlGRVArKClJICEaYCMrK2I2NjlqXV6LKCgAAQAAAAAEAAOAACoAABMUFx4BFxYXNyYnLgEnJjU0Nz4BNzYzMhYXByERByYnLgEnJiMiBw4BBwYADAwtICAoVR4YGCIJCR4eaUZFUFCLNZABgJYjKSlcMjI1al1eiygoAYA5NjZiKysjYBohIEkpKCtQRUZpHh48NJABgJYjHBsnCwooKIteXQAAAAACAAAAQAQBAwAAJgBNAAATMhceARcWFRQHDgEHBiMiJy4BJyY1JzQ3PgE3NjMVIgYHDgEHPgEhMhceARcWFRQHDgEHBiMiJy4BJyY1JzQ3PgE3NjMVIgYHDgEHPgHhLikpPRESEhE9KSkuLikpPRESASMjelJRXUB1LQkQBwgSAkkuKSk9ERISET0pKS4uKSk9ERIBIyN6UlFdQHUtCRAHCBICABIRPSkpLi4pKT0REhIRPSkpLiBdUVJ6IyOAMC4IEwoCARIRPSkpLi4pKT0REhIRPSkpLiBdUVJ6IyOAMC4IEwoCAQAABgBA/8AEAAPAAAMABwALABEAHQApAAAlIRUhESEVIREhFSEnESM1IzUTFTMVIzU3NSM1MxUVESM1MzUjNTM1IzUBgAKA/YACgP2AAoD9gMBAQECAwICAwMCAgICAgIACAIACAIDA/wDAQP3yMkCSPDJAku7+wEBAQEBAAAYAAP/ABAADwAADAAcACwAXACMALwAAASEVIREhFSERIRUhATQ2MzIWFRQGIyImETQ2MzIWFRQGIyImETQ2MzIWFRQGIyImAYACgP2AAoD9gAKA/YD+gEs1NUtLNTVLSzU1S0s1NUtLNTVLSzU1SwOAgP8AgP8AgANANUtLNTVLS/61NUtLNTVLS/61NUtLNTVLSwADAAAAAAQAA6AAAwANABQAADchFSElFSE1EyEVITUhJQkBIxEjEQAEAPwABAD8AIABAAEAAQD9YAEgASDggEBAwEBAAQCAgMABIP7g/wABAAAAAAACAB7/zAPiA7QAMwBkAAABIiYnJicmNDc2PwE+ATMyFhcWFxYUBwYPAQYiJyY0PwE2NCcuASMiBg8BBhQXFhQHDgEjAyImJyYnJjQ3Nj8BNjIXFhQPAQYUFx4BMzI2PwE2NCcmNDc2MhcWFxYUBwYPAQ4BIwG4ChMIIxISEhIjwCNZMTFZIyMSEhISI1gPLA8PD1gpKRQzHBwzFMApKQ8PCBMKuDFZIyMSEhISI1gPLA8PD1gpKRQzHBwzFMApKQ8PDysQIxISEhIjwCNZMQFECAckLS1eLS0kwCIlJSIkLS1eLS0kVxAQDysPWCl0KRQVFRTAKXQpDysQBwj+iCUiJC0tXi0tJFcQEA8rD1gpdCkUFRUUwCl0KQ8rEA8PJC0tXi0tJMAiJQAAAAAFAAD/wAQAA8AAGwA3AFMAXwBrAAAFMjc+ATc2NTQnLgEnJiMiBw4BBwYVFBceARcWEzIXHgEXFhUUBw4BBwYjIicuAScmNTQ3PgE3NhMyNz4BNzY3BgcOAQcGIyInLgEnJicWFx4BFxYnNDYzMhYVFAYjIiYlNDYzMhYVFAYjIiYCAGpdXosoKCgoi15dampdXosoKCgoi15dalZMTHEgISEgcUxMVlZMTHEgISEgcUxMVisrKlEmJiMFHBtWODc/Pzc4VhscBSMmJlEqK9UlGxslJRsbJQGAJRsbJSUbGyVAKCiLXl1qal1eiygoKCiLXl1qal1eiygoA6AhIHFMTFZWTExxICEhIHFMTFZWTExxICH+CQYGFRAQFEM6OlYYGRkYVjo6QxQQEBUGBvcoODgoKDg4KCg4OCgoODgAAAMAAP/ABAADwAAbADcAQwAAASIHDgEHBhUUFx4BFxYzMjc+ATc2NTQnLgEnJgMiJy4BJyY1NDc+ATc2MzIXHgEXFhUUBw4BBwYTBycHFwcXNxc3JzcCAGpdXosoKCgoi15dampdXosoKCgoi15dalZMTHEgISEgcUxMVlZMTHEgISEgcUxMSqCgYKCgYKCgYKCgA8AoKIteXWpqXV6LKCgoKIteXWpqXV6LKCj8YCEgcUxMVlZMTHEgISEgcUxMVlZMTHEgIQKgoKBgoKBgoKBgoKAAAQBl/8ADmwPAACkAAAEiJiMiBw4BBwYVFBYzLgE1NDY3MAcGAgcGBxUhEzM3IzceATMyNjcOAQMgRGhGcVNUbRobSUgGDWVKEBBLPDxZAT1sxizXNC1VJi5QGB09A7AQHh1hPj9BTTsLJjeZbwN9fv7Fj5AjGQIAgPYJDzdrCQcAAAAAAgAAAAAEAAOAAAkAFwAAJTMHJzMRIzcXIyURJyMRMxUhNTMRIwcRA4CAoKCAgKCggP8AQMCA/oCAwEDAwMACAMDAwP8AgP1AQEACwIABAAADAMAAAANAA4AAFgAfACgAAAE+ATU0Jy4BJyYjIREhMjc+ATc2NTQmATMyFhUUBisBEyMRMzIWFRQGAsQcIBQURi4vNf7AAYA1Ly5GFBRE/oRlKjw8KWafn58sPj4B2yJULzUvLkYUFPyAFBRGLi81RnQBRks1NUv+gAEASzU1SwAAAAACAMAAAANAA4AAHwAjAAABMxEUBw4BBwYjIicuAScmNREzERQWFx4BMzI2Nz4BNQEhFSECwIAZGVc6O0JCOzpXGRmAGxgcSSgoSRwYG/4AAoD9gAOA/mA8NDVOFhcXFk41NDwBoP5gHjgXGBsbGBc4Hv6ggAAAAAABAIAAAAOAA4AACwAAARUjATMVITUzASM1A4CA/sCA/kCAAUCAA4BA/QBAQAMAQAABAAAAAAQAA4AAPQAAARUjHgEVFAYHDgEjIiYnLgE1MxQWMzI2NTQmIyE1IS4BJy4BNTQ2Nz4BMzIWFx4BFSM0JiMiBhUUFjMyFhcEAOsVFjUwLHE+PnEsMDWAck5OcnJO/gABLAIEATA1NTAscT4+cSwwNYByTk5yck47bisBwEAdQSI1YiQhJCQhJGI1NExMNDRMQAEDASRiNTViJCEkJCEkYjU0TEw0NEwhHwAAAAcAAP/ABAADwAADAAcACwAPABMAGwAjAAATMxUjNzMVIyUzFSM3MxUjJTMVIwMTIRMzEyETAQMhAyMDIQMAgIDAwMABAICAwMDAAQCAgBAQ/QAQIBACgBD9QBADABAgEP2AEAHAQEBAQEBAQEBAAkD+QAHA/oABgPwAAYD+gAFA/sAAAAoAAAAABAADgAADAAcACwAPABMAFwAbAB8AIwAnAAATESERATUhFR0BITUBFSE1IxUhNREhFSElIRUhETUhFQEhFSEhNSEVAAQA/YABAP8AAQD/AED/AAEA/wACgAEA/wABAPyAAQD/AAKAAQADgPyAA4D9wMDAQMDAAgDAwMDA/wDAwMABAMDA/sDAwMAAAAUAAAAABAADgAADAAcACwAPABMAABMhFSEVIRUhESEVIREhFSERIRUhAAQA/AACgP2AAoD9gAQA/AAEAPwAA4CAQID/AIABQID/AIAAAAAABQAAAAAEAAOAAAMABwALAA8AEwAAEyEVIRchFSERIRUhAyEVIREhFSEABAD8AMACgP2AAoD9gMAEAPwABAD8AAOAgECA/wCAAUCA/wCAAAAFAAAAAAQAA4AAAwAHAAsADwATAAATIRUhBSEVIREhFSEBIRUhESEVIQAEAPwAAYACgP2AAoD9gP6ABAD8AAQA/AADgIBAgP8AgAFAgP8AgAAAAAABAD8APwLmAuYALAAAJRQPAQYjIi8BBwYjIi8BJjU0PwEnJjU0PwE2MzIfATc2MzIfARYVFA8BFxYVAuYQThAXFxCoqBAXFhBOEBCoqBAQThAWFxCoqBAXFxBOEBCoqBDDFhBOEBCoqBAQThAWFxCoqBAXFxBOEBCoqBAQThAXFxCoqBAXAAAABgAAAAADJQNuABQAKAA8AE0AVQCCAAABERQHBisBIicmNRE0NzY7ATIXFhUzERQHBisBIicmNRE0NzY7ATIXFhcRFAcGKwEiJyY1ETQ3NjsBMhcWExEhERQXFhcWMyEyNzY3NjUBIScmJyMGBwUVFAcGKwERFAcGIyEiJyY1ESMiJyY9ATQ3NjsBNzY3NjsBMhcWHwEzMhcWFQElBgUIJAgFBgYFCCQIBQaSBQUIJQgFBQUFCCUIBQWSBQUIJQgFBQUFCCUIBQVJ/gAEBAUEAgHbAgQEBAT+gAEAGwQGtQYEAfcGBQg3Ghsm/iUmGxs3CAUFBQUIsSgIFxYXtxcWFgkosAgFBgIS/rcIBQUFBQgBSQgFBgYFCP63CAUFBQUIAUkIBQYGBQj+twgFBQUFCAFJCAUGBgX+WwId/eMNCwoFBQUFCgsNAmZDBQICBVUkCAYF/eMwIiMhIi8CIAUGCCQIBQVgFQ8PDw8VYAUFCAACAAcASQO3Aq8AGgAuAAAJAQYjIi8BJjU0PwEnJjU0PwE2MzIXARYVFAcBFRQHBiMhIicmPQE0NzYzITIXFgFO/vYGBwgFHQYG4eEGBh0FCAcGAQoGBgJpBQUI/dsIBQUFBQgCJQgFBQGF/vYGBhwGCAcG4OEGBwcGHQUF/vUFCAcG/vslCAUFBQUIJQgFBQUFAAAAAQAjAAAD3QNuALMAACUiJyYjIgcGIyInJjU0NzY3Njc2NzY9ATQnJiMhIgcGHQEUFxYXFjMWFxYVFAcGIyInJiMiBwYjIicmNTQ3Njc2NzY3Nj0BETQ1NDU0JzQnJicmJyYnJicmIyInJjU0NzYzMhcWMzI3NjMyFxYVFAcGIwYHBgcGHQEUFxYzITI3Nj0BNCcmJyYnJjU0NzYzMhcWMzI3NjMyFxYVFAcGByIHBgcGFREUFxYXFhcyFxYVFAcGIwPBGTMyGhkyMxkNCAcJCg0MERAKEgEHFf5+FgcBFQkSEw4ODAsHBw4bNTUaGDExGA0HBwkJCwwQDwkSAQIBAgMEBAUIEhENDQoLBwcOGjU1GhgwMRgOBwcJCgwNEBAIFAEHDwGQDgcBFAoXFw8OBwcOGTMyGRkxMRkOBwcKCg0NEBEIFBQJEREODQoLBwcOAAICAgIMCw8RCQkBAQMDBQxE4AwFAwMFDNRRDQYBAgEICBIPDA0CAgICDAwOEQgJAQIDAwUNRSEB0AINDQgIDg4KCgsLBwcDBgEBCAgSDwwNAgICAg0MDxEICAECAQYMULYMBwEBBwy2UAwGAQEGBxYPDA0CAgICDQwPEQgIAQECBg1P/eZEDAYCAgEJCBEPDA0AAAIAAP+3A/8DtwATADkAAAEyFxYVFAcCBwYjIicmNTQ3ATYzARYXFh8BFgcGIyInJicmJyY1FhcWFxYXFjMyNzY3Njc2NzY3NjcDmygeHhq+TDdFSDQ0NQFtISn9+BcmJy8BAkxMe0c2NiEhEBEEExQQEBIRCRcIDxITFRUdHR4eKQO3GxooJDP+mUY0NTRJSTABSx/9sSsfHw0oek1MGhsuLzo6RAMPDgsLCgoWJRsaEREKCwQEAgABAAAAAAAA9evv618PPPUACwQAAAAAANbEBFgAAAAA1sQEWAAA/7cEAQPAAAAACAACAAAAAAAAAAEAAAPA/8AAAAQAAAD//wQBAAEAAAAAAAAAAAAAAAAAAAAhBAAAAAAAAAAAAAAAAgAAAAQAAAAEAAAABAAAAAQAAMAEAAAABAAAAAQAAAAEAABABAAAAAQAAAAEAAAeBAAAAAQAAAAEAABlBAAAAAQAAMAEAADABAAAgAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAMlAD8DJQAAA74ABwQAACMD/wAAAAAAAAAKABQAHgBMAJQA+AE2AXwBwgI2AnQCvgLoA34EHgSIBMoE8gU0BXAFiAXgBiIGagaSBroG5AcoB+AIKgkcCXgAAQAAACEAtAAKAAAAAAACAAAAAAAAAAAAAAAAAAAAAAAAAA4ArgABAAAAAAABAAcAAAABAAAAAAACAAcAYAABAAAAAAADAAcANgABAAAAAAAEAAcAdQABAAAAAAAFAAsAFQABAAAAAAAGAAcASwABAAAAAAAKABoAigADAAEECQABAA4ABwADAAEECQACAA4AZwADAAEECQADAA4APQADAAEECQAEAA4AfAADAAEECQAFABYAIAADAAEECQAGAA4AUgADAAEECQAKADQApGljb21vb24AaQBjAG8AbQBvAG8AblZlcnNpb24gMS4wAFYAZQByAHMAaQBvAG4AIAAxAC4AMGljb21vb24AaQBjAG8AbQBvAG8Abmljb21vb24AaQBjAG8AbQBvAG8AblJlZ3VsYXIAUgBlAGcAdQBsAGEAcmljb21vb24AaQBjAG8AbQBvAG8AbkZvbnQgZ2VuZXJhdGVkIGJ5IEljb01vb24uAEYAbwBuAHQAIABnAGUAbgBlAHIAYQB0AGUAZAAgAGIAeQAgAEkAYwBvAE0AbwBvAG4ALgAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=) format(\'truetype\');  font-weight: normal;  font-style: normal;}[class^="w-e-icon-"],[class*=" w-e-icon-"] {  /* use !important to prevent issues with browser extensions that change fonts */  font-family: \'w-e-icon\' !important;  speak: none;  font-style: normal;  font-weight: normal;  font-variant: normal;  text-transform: none;  line-height: 1;  /* Better Font Rendering =========== */  -webkit-font-smoothing: antialiased;  -moz-osx-font-smoothing: grayscale;}.w-e-icon-close:before {  content: "\\f00d";}.w-e-icon-upload2:before {  content: "\\e9c6";}.w-e-icon-trash-o:before {  content: "\\f014";}.w-e-icon-header:before {  content: "\\f1dc";}.w-e-icon-pencil2:before {  content: "\\e906";}.w-e-icon-paint-brush:before {  content: "\\f1fc";}.w-e-icon-image:before {  content: "\\e90d";}.w-e-icon-play:before {  content: "\\e912";}.w-e-icon-location:before {  content: "\\e947";}.w-e-icon-undo:before {  content: "\\e965";}.w-e-icon-redo:before {  content: "\\e966";}.w-e-icon-quotes-left:before {  content: "\\e977";}.w-e-icon-list-numbered:before {  content: "\\e9b9";}.w-e-icon-list2:before {  content: "\\e9bb";}.w-e-icon-link:before {  content: "\\e9cb";}.w-e-icon-happy:before {  content: "\\e9df";}.w-e-icon-bold:before {  content: "\\ea62";}.w-e-icon-underline:before {  content: "\\ea63";}.w-e-icon-italic:before {  content: "\\ea64";}.w-e-icon-strikethrough:before {  content: "\\ea65";}.w-e-icon-table2:before {  content: "\\ea71";}.w-e-icon-paragraph-left:before {  content: "\\ea77";}.w-e-icon-paragraph-center:before {  content: "\\ea78";}.w-e-icon-paragraph-right:before {  content: "\\ea79";}.w-e-icon-terminal:before {  content: "\\f120";}.w-e-icon-page-break:before {  content: "\\ea68";}.w-e-icon-cancel-circle:before {  content: "\\ea0d";}.w-e-icon-font:before {  content: "\\ea5c";}.w-e-icon-text-heigh:before {  content: "\\ea5f";}.w-e-toolbar {  display: -webkit-box;  display: -ms-flexbox;  display: flex;  padding: 0 5px;  /* flex-wrap: wrap; */  /* 单个菜单 */}.w-e-toolbar .w-e-menu {  position: relative;  text-align: center;  padding: 5px 10px;  cursor: pointer;}.w-e-toolbar .w-e-menu i {  color: #999;}.w-e-toolbar .w-e-menu:hover i {  color: #333;}.w-e-toolbar .w-e-active i {  color: #1e88e5;}.w-e-toolbar .w-e-active:hover i {  color: #1e88e5;}.w-e-text-container .w-e-panel-container {  position: absolute;  top: 0;  left: 50%;  border: 1px solid #ccc;  border-top: 0;  box-shadow: 1px 1px 2px #ccc;  color: #333;  background-color: #fff;  /* 为 emotion panel 定制的样式 */  /* 上传图片的 panel 定制样式 */}.w-e-text-container .w-e-panel-container .w-e-panel-close {  position: absolute;  right: 0;  top: 0;  padding: 5px;  margin: 2px 5px 0 0;  cursor: pointer;  color: #999;}.w-e-text-container .w-e-panel-container .w-e-panel-close:hover {  color: #333;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-title {  list-style: none;  display: -webkit-box;  display: -ms-flexbox;  display: flex;  font-size: 14px;  margin: 2px 10px 0 10px;  border-bottom: 1px solid #f1f1f1;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-title .w-e-item {  padding: 3px 5px;  color: #999;  cursor: pointer;  margin: 0 3px;  position: relative;  top: 1px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-title .w-e-active {  color: #333;  border-bottom: 1px solid #333;  cursor: default;  font-weight: 700;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content {  padding: 10px 15px 10px 15px;  font-size: 16px;  /* 输入框的样式 */  /* 按钮的样式 */}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input:focus,.w-e-text-container .w-e-panel-container .w-e-panel-tab-content textarea:focus,.w-e-text-container .w-e-panel-container .w-e-panel-tab-content button:focus {  outline: none;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content textarea {  width: 100%;  border: 1px solid #ccc;  padding: 5px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content textarea:focus {  border-color: #1e88e5;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input[type=text] {  border: none;  border-bottom: 1px solid #ccc;  font-size: 14px;  height: 20px;  color: #333;  text-align: left;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input[type=text].small {  width: 30px;  text-align: center;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input[type=text].block {  display: block;  width: 100%;  margin: 10px 0;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content input[type=text]:focus {  border-bottom: 2px solid #1e88e5;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button {  font-size: 14px;  color: #1e88e5;  border: none;  padding: 5px 10px;  background-color: #fff;  cursor: pointer;  border-radius: 3px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button.left {  float: left;  margin-right: 10px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button.right {  float: right;  margin-left: 10px;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button.gray {  color: #999;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button.red {  color: #c24f4a;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container button:hover {  background-color: #f1f1f1;}.w-e-text-container .w-e-panel-container .w-e-panel-tab-content .w-e-button-container:after {  content: "";  display: table;  clear: both;}.w-e-text-container .w-e-panel-container .w-e-emoticon-container .w-e-item {  cursor: pointer;  font-size: 18px;  padding: 0 3px;  display: inline-block;  *display: inline;  *zoom: 1;}.w-e-text-container .w-e-panel-container .w-e-up-img-container {  text-align: center;}.w-e-text-container .w-e-panel-container .w-e-up-img-container .w-e-up-btn {  display: inline-block;  *display: inline;  *zoom: 1;  color: #999;  cursor: pointer;  font-size: 60px;  line-height: 1;}.w-e-text-container .w-e-panel-container .w-e-up-img-container .w-e-up-btn:hover {  color: #333;}.w-e-text-container {  position: relative;}.w-e-text-container .w-e-progress {  position: absolute;  background-color: #1e88e5;  bottom: 0;  left: 0;  height: 1px;}.w-e-text {  padding: 0 10px;  overflow-y: scroll;}.w-e-text p,.w-e-text h1,.w-e-text h2,.w-e-text h3,.w-e-text h4,.w-e-text h5,.w-e-text table,.w-e-text pre {  margin: 10px 0;  line-height: 1.5;}.w-e-text ul,.w-e-text ol {  margin: 10px 0 10px 20px;}.w-e-text blockquote {  display: block;  border-left: 8px solid #d0e5f2;  padding: 5px 10px;  margin: 10px 0;  line-height: 1.4;  font-size: 100%;  background-color: #f1f1f1;}.w-e-text code {  display: inline-block;  *display: inline;  *zoom: 1;  background-color: #f1f1f1;  border-radius: 3px;  padding: 3px 5px;  margin: 0 3px;}.w-e-text pre code {  display: block;}.w-e-text table {  border-top: 1px solid #ccc;  border-left: 1px solid #ccc;}.w-e-text table td,.w-e-text table th {  border-bottom: 1px solid #ccc;  border-right: 1px solid #ccc;  padding: 3px 5px;}.w-e-text table th {  border-bottom: 2px solid #ccc;  text-align: center;}.w-e-text:focus {  outline: none;}.w-e-text img {  cursor: pointer;}.w-e-text img:hover {  box-shadow: 0 0 5px #333;}';
+
+// 将 css 代码添加到 <style> 中
+var style = document.createElement('style');
+style.type = 'text/css';
+style.innerHTML = inlinecss;
+document.getElementsByTagName('HEAD').item(0).appendChild(style);
+
+// 返回
+var index = window.wangEditor || Editor;
+
+return index;
+
+})));
+
+
+/***/ }),
+/* 37 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_RESULT__;/*! VelocityJS.org (1.5.0). (C) 2014 Julian Shapiro. MIT @license: en.wikipedia.org/wiki/MIT_License */
+
+/*************************
+ Velocity jQuery Shim
+ *************************/
+
+/*! VelocityJS.org jQuery Shim (1.0.1). (C) 2014 The jQuery Foundation. MIT @license: en.wikipedia.org/wiki/MIT_License. */
+
+/* This file contains the jQuery functions that Velocity relies on, thereby removing Velocity's dependency on a full copy of jQuery, and allowing it to work in any environment. */
+/* These shimmed functions are only used if jQuery isn't present. If both this shim and jQuery are loaded, Velocity defaults to jQuery proper. */
+/* Browser support: Using this shim instead of jQuery proper removes support for IE8. */
+
+(function(window) {
+	"use strict";
+	/***************
+	 Setup
+	 ***************/
+
+	/* If jQuery is already loaded, there's no point in loading this shim. */
+	if (window.jQuery) {
+		return;
+	}
+
+	/* jQuery base. */
+	var $ = function(selector, context) {
+		return new $.fn.init(selector, context);
+	};
+
+	/********************
+	 Private Methods
+	 ********************/
+
+	/* jQuery */
+	$.isWindow = function(obj) {
+		/* jshint eqeqeq: false */
+		return obj && obj === obj.window;
+	};
+
+	/* jQuery */
+	$.type = function(obj) {
+		if (!obj) {
+			return obj + "";
+		}
+
+		return typeof obj === "object" || typeof obj === "function" ?
+				class2type[toString.call(obj)] || "object" :
+				typeof obj;
+	};
+
+	/* jQuery */
+	$.isArray = Array.isArray || function(obj) {
+		return $.type(obj) === "array";
+	};
+
+	/* jQuery */
+	function isArraylike(obj) {
+		var length = obj.length,
+				type = $.type(obj);
+
+		if (type === "function" || $.isWindow(obj)) {
+			return false;
+		}
+
+		if (obj.nodeType === 1 && length) {
+			return true;
+		}
+
+		return type === "array" || length === 0 || typeof length === "number" && length > 0 && (length - 1) in obj;
+	}
+
+	/***************
+	 $ Methods
+	 ***************/
+
+	/* jQuery: Support removed for IE<9. */
+	$.isPlainObject = function(obj) {
+		var key;
+
+		if (!obj || $.type(obj) !== "object" || obj.nodeType || $.isWindow(obj)) {
+			return false;
+		}
+
+		try {
+			if (obj.constructor &&
+					!hasOwn.call(obj, "constructor") &&
+					!hasOwn.call(obj.constructor.prototype, "isPrototypeOf")) {
+				return false;
+			}
+		} catch (e) {
+			return false;
+		}
+
+		for (key in obj) {
+		}
+
+		return key === undefined || hasOwn.call(obj, key);
+	};
+
+	/* jQuery */
+	$.each = function(obj, callback, args) {
+		var value,
+				i = 0,
+				length = obj.length,
+				isArray = isArraylike(obj);
+
+		if (args) {
+			if (isArray) {
+				for (; i < length; i++) {
+					value = callback.apply(obj[i], args);
+
+					if (value === false) {
+						break;
+					}
+				}
+			} else {
+				for (i in obj) {
+					if (!obj.hasOwnProperty(i)) {
+						continue;
+					}
+					value = callback.apply(obj[i], args);
+
+					if (value === false) {
+						break;
+					}
+				}
+			}
+
+		} else {
+			if (isArray) {
+				for (; i < length; i++) {
+					value = callback.call(obj[i], i, obj[i]);
+
+					if (value === false) {
+						break;
+					}
+				}
+			} else {
+				for (i in obj) {
+					if (!obj.hasOwnProperty(i)) {
+						continue;
+					}
+					value = callback.call(obj[i], i, obj[i]);
+
+					if (value === false) {
+						break;
+					}
+				}
+			}
+		}
+
+		return obj;
+	};
+
+	/* Custom */
+	$.data = function(node, key, value) {
+		/* $.getData() */
+		if (value === undefined) {
+			var getId = node[$.expando],
+					store = getId && cache[getId];
+
+			if (key === undefined) {
+				return store;
+			} else if (store) {
+				if (key in store) {
+					return store[key];
+				}
+			}
+			/* $.setData() */
+		} else if (key !== undefined) {
+			var setId = node[$.expando] || (node[$.expando] = ++$.uuid);
+
+			cache[setId] = cache[setId] || {};
+			cache[setId][key] = value;
+
+			return value;
+		}
+	};
+
+	/* Custom */
+	$.removeData = function(node, keys) {
+		var id = node[$.expando],
+				store = id && cache[id];
+
+		if (store) {
+			// Cleanup the entire store if no keys are provided.
+			if (!keys) {
+				delete cache[id];
+			} else {
+				$.each(keys, function(_, key) {
+					delete store[key];
+				});
+			}
+		}
+	};
+
+	/* jQuery */
+	$.extend = function() {
+		var src, copyIsArray, copy, name, options, clone,
+				target = arguments[0] || {},
+				i = 1,
+				length = arguments.length,
+				deep = false;
+
+		if (typeof target === "boolean") {
+			deep = target;
+
+			target = arguments[i] || {};
+			i++;
+		}
+
+		if (typeof target !== "object" && $.type(target) !== "function") {
+			target = {};
+		}
+
+		if (i === length) {
+			target = this;
+			i--;
+		}
+
+		for (; i < length; i++) {
+			if ((options = arguments[i])) {
+				for (name in options) {
+					if (!options.hasOwnProperty(name)) {
+						continue;
+					}
+					src = target[name];
+					copy = options[name];
+
+					if (target === copy) {
+						continue;
+					}
+
+					if (deep && copy && ($.isPlainObject(copy) || (copyIsArray = $.isArray(copy)))) {
+						if (copyIsArray) {
+							copyIsArray = false;
+							clone = src && $.isArray(src) ? src : [];
+
+						} else {
+							clone = src && $.isPlainObject(src) ? src : {};
+						}
+
+						target[name] = $.extend(deep, clone, copy);
+
+					} else if (copy !== undefined) {
+						target[name] = copy;
+					}
+				}
+			}
+		}
+
+		return target;
+	};
+
+	/* jQuery 1.4.3 */
+	$.queue = function(elem, type, data) {
+		function $makeArray(arr, results) {
+			var ret = results || [];
+
+			if (arr) {
+				if (isArraylike(Object(arr))) {
+					/* $.merge */
+					(function(first, second) {
+						var len = +second.length,
+								j = 0,
+								i = first.length;
+
+						while (j < len) {
+							first[i++] = second[j++];
+						}
+
+						if (len !== len) {
+							while (second[j] !== undefined) {
+								first[i++] = second[j++];
+							}
+						}
+
+						first.length = i;
+
+						return first;
+					})(ret, typeof arr === "string" ? [arr] : arr);
+				} else {
+					[].push.call(ret, arr);
+				}
+			}
+
+			return ret;
+		}
+
+		if (!elem) {
+			return;
+		}
+
+		type = (type || "fx") + "queue";
+
+		var q = $.data(elem, type);
+
+		if (!data) {
+			return q || [];
+		}
+
+		if (!q || $.isArray(data)) {
+			q = $.data(elem, type, $makeArray(data));
+		} else {
+			q.push(data);
+		}
+
+		return q;
+	};
+
+	/* jQuery 1.4.3 */
+	$.dequeue = function(elems, type) {
+		/* Custom: Embed element iteration. */
+		$.each(elems.nodeType ? [elems] : elems, function(i, elem) {
+			type = type || "fx";
+
+			var queue = $.queue(elem, type),
+					fn = queue.shift();
+
+			if (fn === "inprogress") {
+				fn = queue.shift();
+			}
+
+			if (fn) {
+				if (type === "fx") {
+					queue.unshift("inprogress");
+				}
+
+				fn.call(elem, function() {
+					$.dequeue(elem, type);
+				});
+			}
+		});
+	};
+
+	/******************
+	 $.fn Methods
+	 ******************/
+
+	/* jQuery */
+	$.fn = $.prototype = {
+		init: function(selector) {
+			/* Just return the element wrapped inside an array; don't proceed with the actual jQuery node wrapping process. */
+			if (selector.nodeType) {
+				this[0] = selector;
+
+				return this;
+			} else {
+				throw new Error("Not a DOM node.");
+			}
+		},
+		offset: function() {
+			/* jQuery altered code: Dropped disconnected DOM node checking. */
+			var box = this[0].getBoundingClientRect ? this[0].getBoundingClientRect() : {top: 0, left: 0};
+
+			return {
+				top: box.top + (window.pageYOffset || document.scrollTop || 0) - (document.clientTop || 0),
+				left: box.left + (window.pageXOffset || document.scrollLeft || 0) - (document.clientLeft || 0)
+			};
+		},
+		position: function() {
+			/* jQuery */
+			function offsetParentFn(elem) {
+				var offsetParent = elem.offsetParent;
+
+				while (offsetParent && (offsetParent.nodeName.toLowerCase() !== "html" && offsetParent.style && offsetParent.style.position.toLowerCase() === "static")) {
+					offsetParent = offsetParent.offsetParent;
+				}
+
+				return offsetParent || document;
+			}
+
+			/* Zepto */
+			var elem = this[0],
+					offsetParent = offsetParentFn(elem),
+					offset = this.offset(),
+					parentOffset = /^(?:body|html)$/i.test(offsetParent.nodeName) ? {top: 0, left: 0} : $(offsetParent).offset();
+
+			offset.top -= parseFloat(elem.style.marginTop) || 0;
+			offset.left -= parseFloat(elem.style.marginLeft) || 0;
+
+			if (offsetParent.style) {
+				parentOffset.top += parseFloat(offsetParent.style.borderTopWidth) || 0;
+				parentOffset.left += parseFloat(offsetParent.style.borderLeftWidth) || 0;
+			}
+
+			return {
+				top: offset.top - parentOffset.top,
+				left: offset.left - parentOffset.left
+			};
+		}
+	};
+
+	/**********************
+	 Private Variables
+	 **********************/
+
+	/* For $.data() */
+	var cache = {};
+	$.expando = "velocity" + (new Date().getTime());
+	$.uuid = 0;
+
+	/* For $.queue() */
+	var class2type = {},
+			hasOwn = class2type.hasOwnProperty,
+			toString = class2type.toString;
+
+	var types = "Boolean Number String Function Array Date RegExp Object Error".split(" ");
+	for (var i = 0; i < types.length; i++) {
+		class2type["[object " + types[i] + "]"] = types[i].toLowerCase();
+	}
+
+	/* Makes $(node) possible, without having to call init. */
+	$.fn.init.prototype = $.fn;
+
+	/* Globalize Velocity onto the window, and assign its Utilities property. */
+	window.Velocity = {Utilities: $};
+})(window);
+
+/******************
+ Velocity.js
+ ******************/
+
+(function(factory) {
+	"use strict";
+	/* CommonJS module. */
+	if (typeof module === "object" && typeof module.exports === "object") {
+		module.exports = factory();
+		/* AMD module. */
+	} else if (true) {
+		!(__WEBPACK_AMD_DEFINE_FACTORY__ = (factory),
+				__WEBPACK_AMD_DEFINE_RESULT__ = (typeof __WEBPACK_AMD_DEFINE_FACTORY__ === 'function' ?
+				(__WEBPACK_AMD_DEFINE_FACTORY__.call(exports, __webpack_require__, exports, module)) :
+				__WEBPACK_AMD_DEFINE_FACTORY__),
+				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+		/* Browser globals. */
+	} else {
+		factory();
+	}
+}(function() {
+	"use strict";
+	return function(global, window, document, undefined) {
+
+		/***************
+		 Summary
+		 ***************/
+
+		/*
+		 - CSS: CSS stack that works independently from the rest of Velocity.
+		 - animate(): Core animation method that iterates over the targeted elements and queues the incoming call onto each element individually.
+		 - Pre-Queueing: Prepare the element for animation by instantiating its data cache and processing the call's options.
+		 - Queueing: The logic that runs once the call has reached its point of execution in the element's $.queue() stack.
+		 Most logic is placed here to avoid risking it becoming stale (if the element's properties have changed).
+		 - Pushing: Consolidation of the tween data followed by its push onto the global in-progress calls container.
+		 - tick(): The single requestAnimationFrame loop responsible for tweening all in-progress calls.
+		 - completeCall(): Handles the cleanup process for each Velocity call.
+		 */
+
+		/*********************
+		 Helper Functions
+		 *********************/
+
+		/* IE detection. Gist: https://gist.github.com/julianshapiro/9098609 */
+		var IE = (function() {
+			if (document.documentMode) {
+				return document.documentMode;
+			} else {
+				for (var i = 7; i > 4; i--) {
+					var div = document.createElement("div");
+
+					div.innerHTML = "<!--[if IE " + i + "]><span></span><![endif]-->";
+
+					if (div.getElementsByTagName("span").length) {
+						div = null;
+
+						return i;
+					}
+				}
+			}
+
+			return undefined;
+		})();
+
+		/* rAF shim. Gist: https://gist.github.com/julianshapiro/9497513 */
+		var rAFShim = (function() {
+			var timeLast = 0;
+
+			return window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || function(callback) {
+				var timeCurrent = (new Date()).getTime(),
+						timeDelta;
+
+				/* Dynamically set delay on a per-tick basis to match 60fps. */
+				/* Technique by Erik Moller. MIT license: https://gist.github.com/paulirish/1579671 */
+				timeDelta = Math.max(0, 16 - (timeCurrent - timeLast));
+				timeLast = timeCurrent + timeDelta;
+
+				return setTimeout(function() {
+					callback(timeCurrent + timeDelta);
+				}, timeDelta);
+			};
+		})();
+
+		var performance = (function() {
+			var perf = window.performance || {};
+
+			if (typeof perf.now !== "function") {
+				var nowOffset = perf.timing && perf.timing.navigationStart ? perf.timing.navigationStart : (new Date()).getTime();
+
+				perf.now = function() {
+					return (new Date()).getTime() - nowOffset;
+				};
+			}
+			return perf;
+		})();
+
+		/* Array compacting. Copyright Lo-Dash. MIT License: https://github.com/lodash/lodash/blob/master/LICENSE.txt */
+		function compactSparseArray(array) {
+			var index = -1,
+					length = array ? array.length : 0,
+					result = [];
+
+			while (++index < length) {
+				var value = array[index];
+
+				if (value) {
+					result.push(value);
+				}
+			}
+
+			return result;
+		}
+
+		/**
+		 * Shim for "fixing" IE's lack of support (IE < 9) for applying slice
+		 * on host objects like NamedNodeMap, NodeList, and HTMLCollection
+		 * (technically, since host objects have been implementation-dependent,
+		 * at least before ES2015, IE hasn't needed to work this way).
+		 * Also works on strings, fixes IE < 9 to allow an explicit undefined
+		 * for the 2nd argument (as in Firefox), and prevents errors when
+		 * called on other DOM objects.
+		 */
+		var _slice = (function() {
+			var slice = Array.prototype.slice;
+
+			try {
+				// Can't be used with DOM elements in IE < 9
+				slice.call(document.documentElement);
+				return slice;
+			} catch (e) { // Fails in IE < 9
+
+				// This will work for genuine arrays, array-like objects, 
+				// NamedNodeMap (attributes, entities, notations),
+				// NodeList (e.g., getElementsByTagName), HTMLCollection (e.g., childNodes),
+				// and will not fail on other DOM objects (as do DOM elements in IE < 9)
+				return function(begin, end) {
+					var len = this.length;
+
+					if (typeof begin !== "number") {
+						begin = 0;
+					}
+					// IE < 9 gets unhappy with an undefined end argument
+					if (typeof end !== "number") {
+						end = len;
+					}
+					// For native Array objects, we use the native slice function
+					if (this.slice) {
+						return slice.call(this, begin, end);
+					}
+					// For array like object we handle it ourselves.
+					var i,
+							cloned = [],
+							// Handle negative value for "begin"
+							start = (begin >= 0) ? begin : Math.max(0, len + begin),
+							// Handle negative value for "end"
+							upTo = end < 0 ? len + end : Math.min(end, len),
+							// Actual expected size of the slice
+							size = upTo - start;
+
+					if (size > 0) {
+						cloned = new Array(size);
+						if (this.charAt) {
+							for (i = 0; i < size; i++) {
+								cloned[i] = this.charAt(start + i);
+							}
+						} else {
+							for (i = 0; i < size; i++) {
+								cloned[i] = this[start + i];
+							}
+						}
+					}
+					return cloned;
+				};
+			}
+		})();
+
+		/* .indexOf doesn't exist in IE<9 */
+		var _inArray = (function() {
+			if (Array.prototype.includes) {
+				return function(arr, val) {
+					return arr.includes(val);
+				};
+			}
+			if (Array.prototype.indexOf) {
+				return function(arr, val) {
+					return arr.indexOf(val) >= 0;
+				};
+			}
+			return function(arr, val) {
+				for (var i = 0; i < arr.length; i++) {
+					if (arr[i] === val) {
+						return true;
+					}
+				}
+				return false;
+			};
+		});
+
+		function sanitizeElements(elements) {
+			/* Unwrap jQuery/Zepto objects. */
+			if (Type.isWrapped(elements)) {
+				elements = _slice.call(elements);
+				/* Wrap a single element in an array so that $.each() can iterate with the element instead of its node's children. */
+			} else if (Type.isNode(elements)) {
+				elements = [elements];
+			}
+
+			return elements;
+		}
+
+		var Type = {
+			isNumber: function(variable) {
+				return (typeof variable === "number");
+			},
+			isString: function(variable) {
+				return (typeof variable === "string");
+			},
+			isArray: Array.isArray || function(variable) {
+				return Object.prototype.toString.call(variable) === "[object Array]";
+			},
+			isFunction: function(variable) {
+				return Object.prototype.toString.call(variable) === "[object Function]";
+			},
+			isNode: function(variable) {
+				return variable && variable.nodeType;
+			},
+			/* Determine if variable is an array-like wrapped jQuery, Zepto or similar element, or even a NodeList etc. */
+			/* NOTE: HTMLFormElements also have a length. */
+			isWrapped: function(variable) {
+				return variable
+						&& variable !== window
+						&& Type.isNumber(variable.length)
+						&& !Type.isString(variable)
+						&& !Type.isFunction(variable)
+						&& !Type.isNode(variable)
+						&& (variable.length === 0 || Type.isNode(variable[0]));
+			},
+			isSVG: function(variable) {
+				return window.SVGElement && (variable instanceof window.SVGElement);
+			},
+			isEmptyObject: function(variable) {
+				for (var name in variable) {
+					if (variable.hasOwnProperty(name)) {
+						return false;
+					}
+				}
+
+				return true;
+			}
+		};
+
+		/*****************
+		 Dependencies
+		 *****************/
+
+		var $,
+				isJQuery = false;
+
+		if (global.fn && global.fn.jquery) {
+			$ = global;
+			isJQuery = true;
+		} else {
+			$ = window.Velocity.Utilities;
+		}
+
+		if (IE <= 8 && !isJQuery) {
+			throw new Error("Velocity: IE8 and below require jQuery to be loaded before Velocity.");
+		} else if (IE <= 7) {
+			/* Revert to jQuery's $.animate(), and lose Velocity's extra features. */
+			jQuery.fn.velocity = jQuery.fn.animate;
+
+			/* Now that $.fn.velocity is aliased, abort this Velocity declaration. */
+			return;
+		}
+
+		/*****************
+		 Constants
+		 *****************/
+
+		var DURATION_DEFAULT = 400,
+				EASING_DEFAULT = "swing";
+
+		/*************
+		 State
+		 *************/
+
+		var Velocity = {
+			/* Container for page-wide Velocity state data. */
+			State: {
+				/* Detect mobile devices to determine if mobileHA should be turned on. */
+				isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(window.navigator.userAgent),
+				/* The mobileHA option's behavior changes on older Android devices (Gingerbread, versions 2.3.3-2.3.7). */
+				isAndroid: /Android/i.test(window.navigator.userAgent),
+				isGingerbread: /Android 2\.3\.[3-7]/i.test(window.navigator.userAgent),
+				isChrome: window.chrome,
+				isFirefox: /Firefox/i.test(window.navigator.userAgent),
+				/* Create a cached element for re-use when checking for CSS property prefixes. */
+				prefixElement: document.createElement("div"),
+				/* Cache every prefix match to avoid repeating lookups. */
+				prefixMatches: {},
+				/* Cache the anchor used for animating window scrolling. */
+				scrollAnchor: null,
+				/* Cache the browser-specific property names associated with the scroll anchor. */
+				scrollPropertyLeft: null,
+				scrollPropertyTop: null,
+				/* Keep track of whether our RAF tick is running. */
+				isTicking: false,
+				/* Container for every in-progress call to Velocity. */
+				calls: [],
+				delayedElements: {
+					count: 0
+				}
+			},
+			/* Velocity's custom CSS stack. Made global for unit testing. */
+			CSS: {/* Defined below. */},
+			/* A shim of the jQuery utility functions used by Velocity -- provided by Velocity's optional jQuery shim. */
+			Utilities: $,
+			/* Container for the user's custom animation redirects that are referenced by name in place of the properties map argument. */
+			Redirects: {/* Manually registered by the user. */},
+			Easings: {/* Defined below. */},
+			/* Attempt to use ES6 Promises by default. Users can override this with a third-party promises library. */
+			Promise: window.Promise,
+			/* Velocity option defaults, which can be overriden by the user. */
+			defaults: {
+				queue: "",
+				duration: DURATION_DEFAULT,
+				easing: EASING_DEFAULT,
+				begin: undefined,
+				complete: undefined,
+				progress: undefined,
+				display: undefined,
+				visibility: undefined,
+				loop: false,
+				delay: false,
+				mobileHA: true,
+				/* Advanced: Set to false to prevent property values from being cached between consecutive Velocity-initiated chain calls. */
+				_cacheValues: true,
+				/* Advanced: Set to false if the promise should always resolve on empty element lists. */
+				promiseRejectEmpty: true
+			},
+			/* A design goal of Velocity is to cache data wherever possible in order to avoid DOM requerying. Accordingly, each element has a data cache. */
+			init: function(element) {
+				$.data(element, "velocity", {
+					/* Store whether this is an SVG element, since its properties are retrieved and updated differently than standard HTML elements. */
+					isSVG: Type.isSVG(element),
+					/* Keep track of whether the element is currently being animated by Velocity.
+					 This is used to ensure that property values are not transferred between non-consecutive (stale) calls. */
+					isAnimating: false,
+					/* A reference to the element's live computedStyle object. Learn more here: https://developer.mozilla.org/en/docs/Web/API/window.getComputedStyle */
+					computedStyle: null,
+					/* Tween data is cached for each animation on the element so that data can be passed across calls --
+					 in particular, end values are used as subsequent start values in consecutive Velocity calls. */
+					tweensContainer: null,
+					/* The full root property values of each CSS hook being animated on this element are cached so that:
+					 1) Concurrently-animating hooks sharing the same root can have their root values' merged into one while tweening.
+					 2) Post-hook-injection root values can be transferred over to consecutively chained Velocity calls as starting root values. */
+					rootPropertyValueCache: {},
+					/* A cache for transform updates, which must be manually flushed via CSS.flushTransformCache(). */
+					transformCache: {}
+				});
+			},
+			/* A parallel to jQuery's $.css(), used for getting/setting Velocity's hooked CSS properties. */
+			hook: null, /* Defined below. */
+			/* Velocity-wide animation time remapping for testing purposes. */
+			mock: false,
+			version: {major: 1, minor: 5, patch: 1},
+			/* Set to 1 or 2 (most verbose) to output debug info to console. */
+			debug: false,
+			/* Use rAF high resolution timestamp when available */
+			timestamp: true,
+			/* Pause all animations */
+			pauseAll: function(queueName) {
+				var currentTime = (new Date()).getTime();
+
+				$.each(Velocity.State.calls, function(i, activeCall) {
+
+					if (activeCall) {
+
+						/* If we have a queueName and this call is not on that queue, skip */
+						if (queueName !== undefined && ((activeCall[2].queue !== queueName) || (activeCall[2].queue === false))) {
+							return true;
+						}
+
+						/* Set call to paused */
+						activeCall[5] = {
+							resume: false
+						};
+					}
+				});
+
+				/* Pause timers on any currently delayed calls */
+				$.each(Velocity.State.delayedElements, function(k, element) {
+					if (!element) {
+						return;
+					}
+					pauseDelayOnElement(element, currentTime);
+				});
+			},
+			/* Resume all animations */
+			resumeAll: function(queueName) {
+				var currentTime = (new Date()).getTime();
+
+				$.each(Velocity.State.calls, function(i, activeCall) {
+
+					if (activeCall) {
+
+						/* If we have a queueName and this call is not on that queue, skip */
+						if (queueName !== undefined && ((activeCall[2].queue !== queueName) || (activeCall[2].queue === false))) {
+							return true;
+						}
+
+						/* Set call to resumed if it was paused */
+						if (activeCall[5]) {
+							activeCall[5].resume = true;
+						}
+					}
+				});
+				/* Resume timers on any currently delayed calls */
+				$.each(Velocity.State.delayedElements, function(k, element) {
+					if (!element) {
+						return;
+					}
+					resumeDelayOnElement(element, currentTime);
+				});
+			}
+		};
+
+		/* Retrieve the appropriate scroll anchor and property name for the browser: https://developer.mozilla.org/en-US/docs/Web/API/Window.scrollY */
+		if (window.pageYOffset !== undefined) {
+			Velocity.State.scrollAnchor = window;
+			Velocity.State.scrollPropertyLeft = "pageXOffset";
+			Velocity.State.scrollPropertyTop = "pageYOffset";
+		} else {
+			Velocity.State.scrollAnchor = document.documentElement || document.body.parentNode || document.body;
+			Velocity.State.scrollPropertyLeft = "scrollLeft";
+			Velocity.State.scrollPropertyTop = "scrollTop";
+		}
+
+		/* Shorthand alias for jQuery's $.data() utility. */
+		function Data(element) {
+			/* Hardcode a reference to the plugin name. */
+			var response = $.data(element, "velocity");
+
+			/* jQuery <=1.4.2 returns null instead of undefined when no match is found. We normalize this behavior. */
+			return response === null ? undefined : response;
+		}
+
+		/**************
+		 Delay Timer
+		 **************/
+
+		function pauseDelayOnElement(element, currentTime) {
+			/* Check for any delay timers, and pause the set timeouts (while preserving time data)
+			 to be resumed when the "resume" command is issued */
+			var data = Data(element);
+			if (data && data.delayTimer && !data.delayPaused) {
+				data.delayRemaining = data.delay - currentTime + data.delayBegin;
+				data.delayPaused = true;
+				clearTimeout(data.delayTimer.setTimeout);
+			}
+		}
+
+		function resumeDelayOnElement(element, currentTime) {
+			/* Check for any paused timers and resume */
+			var data = Data(element);
+			if (data && data.delayTimer && data.delayPaused) {
+				/* If the element was mid-delay, re initiate the timeout with the remaining delay */
+				data.delayPaused = false;
+				data.delayTimer.setTimeout = setTimeout(data.delayTimer.next, data.delayRemaining);
+			}
+		}
+
+
+
+		/**************
+		 Easing
+		 **************/
+
+		/* Step easing generator. */
+		function generateStep(steps) {
+			return function(p) {
+				return Math.round(p * steps) * (1 / steps);
+			};
+		}
+
+		/* Bezier curve function generator. Copyright Gaetan Renaudeau. MIT License: http://en.wikipedia.org/wiki/MIT_License */
+		function generateBezier(mX1, mY1, mX2, mY2) {
+			var NEWTON_ITERATIONS = 4,
+					NEWTON_MIN_SLOPE = 0.001,
+					SUBDIVISION_PRECISION = 0.0000001,
+					SUBDIVISION_MAX_ITERATIONS = 10,
+					kSplineTableSize = 11,
+					kSampleStepSize = 1.0 / (kSplineTableSize - 1.0),
+					float32ArraySupported = "Float32Array" in window;
+
+			/* Must contain four arguments. */
+			if (arguments.length !== 4) {
+				return false;
+			}
+
+			/* Arguments must be numbers. */
+			for (var i = 0; i < 4; ++i) {
+				if (typeof arguments[i] !== "number" || isNaN(arguments[i]) || !isFinite(arguments[i])) {
+					return false;
+				}
+			}
+
+			/* X values must be in the [0, 1] range. */
+			mX1 = Math.min(mX1, 1);
+			mX2 = Math.min(mX2, 1);
+			mX1 = Math.max(mX1, 0);
+			mX2 = Math.max(mX2, 0);
+
+			var mSampleValues = float32ArraySupported ? new Float32Array(kSplineTableSize) : new Array(kSplineTableSize);
+
+			function A(aA1, aA2) {
+				return 1.0 - 3.0 * aA2 + 3.0 * aA1;
+			}
+			function B(aA1, aA2) {
+				return 3.0 * aA2 - 6.0 * aA1;
+			}
+			function C(aA1) {
+				return 3.0 * aA1;
+			}
+
+			function calcBezier(aT, aA1, aA2) {
+				return ((A(aA1, aA2) * aT + B(aA1, aA2)) * aT + C(aA1)) * aT;
+			}
+
+			function getSlope(aT, aA1, aA2) {
+				return 3.0 * A(aA1, aA2) * aT * aT + 2.0 * B(aA1, aA2) * aT + C(aA1);
+			}
+
+			function newtonRaphsonIterate(aX, aGuessT) {
+				for (var i = 0; i < NEWTON_ITERATIONS; ++i) {
+					var currentSlope = getSlope(aGuessT, mX1, mX2);
+
+					if (currentSlope === 0.0) {
+						return aGuessT;
+					}
+
+					var currentX = calcBezier(aGuessT, mX1, mX2) - aX;
+					aGuessT -= currentX / currentSlope;
+				}
+
+				return aGuessT;
+			}
+
+			function calcSampleValues() {
+				for (var i = 0; i < kSplineTableSize; ++i) {
+					mSampleValues[i] = calcBezier(i * kSampleStepSize, mX1, mX2);
+				}
+			}
+
+			function binarySubdivide(aX, aA, aB) {
+				var currentX, currentT, i = 0;
+
+				do {
+					currentT = aA + (aB - aA) / 2.0;
+					currentX = calcBezier(currentT, mX1, mX2) - aX;
+					if (currentX > 0.0) {
+						aB = currentT;
+					} else {
+						aA = currentT;
+					}
+				} while (Math.abs(currentX) > SUBDIVISION_PRECISION && ++i < SUBDIVISION_MAX_ITERATIONS);
+
+				return currentT;
+			}
+
+			function getTForX(aX) {
+				var intervalStart = 0.0,
+						currentSample = 1,
+						lastSample = kSplineTableSize - 1;
+
+				for (; currentSample !== lastSample && mSampleValues[currentSample] <= aX; ++currentSample) {
+					intervalStart += kSampleStepSize;
+				}
+
+				--currentSample;
+
+				var dist = (aX - mSampleValues[currentSample]) / (mSampleValues[currentSample + 1] - mSampleValues[currentSample]),
+						guessForT = intervalStart + dist * kSampleStepSize,
+						initialSlope = getSlope(guessForT, mX1, mX2);
+
+				if (initialSlope >= NEWTON_MIN_SLOPE) {
+					return newtonRaphsonIterate(aX, guessForT);
+				} else if (initialSlope === 0.0) {
+					return guessForT;
+				} else {
+					return binarySubdivide(aX, intervalStart, intervalStart + kSampleStepSize);
+				}
+			}
+
+			var _precomputed = false;
+
+			function precompute() {
+				_precomputed = true;
+				if (mX1 !== mY1 || mX2 !== mY2) {
+					calcSampleValues();
+				}
+			}
+
+			var f = function(aX) {
+				if (!_precomputed) {
+					precompute();
+				}
+				if (mX1 === mY1 && mX2 === mY2) {
+					return aX;
+				}
+				if (aX === 0) {
+					return 0;
+				}
+				if (aX === 1) {
+					return 1;
+				}
+
+				return calcBezier(getTForX(aX), mY1, mY2);
+			};
+
+			f.getControlPoints = function() {
+				return [{x: mX1, y: mY1}, {x: mX2, y: mY2}];
+			};
+
+			var str = "generateBezier(" + [mX1, mY1, mX2, mY2] + ")";
+			f.toString = function() {
+				return str;
+			};
+
+			return f;
+		}
+
+		/* Runge-Kutta spring physics function generator. Adapted from Framer.js, copyright Koen Bok. MIT License: http://en.wikipedia.org/wiki/MIT_License */
+		/* Given a tension, friction, and duration, a simulation at 60FPS will first run without a defined duration in order to calculate the full path. A second pass
+		 then adjusts the time delta -- using the relation between actual time and duration -- to calculate the path for the duration-constrained animation. */
+		var generateSpringRK4 = (function() {
+			function springAccelerationForState(state) {
+				return (-state.tension * state.x) - (state.friction * state.v);
+			}
+
+			function springEvaluateStateWithDerivative(initialState, dt, derivative) {
+				var state = {
+					x: initialState.x + derivative.dx * dt,
+					v: initialState.v + derivative.dv * dt,
+					tension: initialState.tension,
+					friction: initialState.friction
+				};
+
+				return {dx: state.v, dv: springAccelerationForState(state)};
+			}
+
+			function springIntegrateState(state, dt) {
+				var a = {
+					dx: state.v,
+					dv: springAccelerationForState(state)
+				},
+						b = springEvaluateStateWithDerivative(state, dt * 0.5, a),
+						c = springEvaluateStateWithDerivative(state, dt * 0.5, b),
+						d = springEvaluateStateWithDerivative(state, dt, c),
+						dxdt = 1.0 / 6.0 * (a.dx + 2.0 * (b.dx + c.dx) + d.dx),
+						dvdt = 1.0 / 6.0 * (a.dv + 2.0 * (b.dv + c.dv) + d.dv);
+
+				state.x = state.x + dxdt * dt;
+				state.v = state.v + dvdt * dt;
+
+				return state;
+			}
+
+			return function springRK4Factory(tension, friction, duration) {
+
+				var initState = {
+					x: -1,
+					v: 0,
+					tension: null,
+					friction: null
+				},
+						path = [0],
+						time_lapsed = 0,
+						tolerance = 1 / 10000,
+						DT = 16 / 1000,
+						have_duration, dt, last_state;
+
+				tension = parseFloat(tension) || 500;
+				friction = parseFloat(friction) || 20;
+				duration = duration || null;
+
+				initState.tension = tension;
+				initState.friction = friction;
+
+				have_duration = duration !== null;
+
+				/* Calculate the actual time it takes for this animation to complete with the provided conditions. */
+				if (have_duration) {
+					/* Run the simulation without a duration. */
+					time_lapsed = springRK4Factory(tension, friction);
+					/* Compute the adjusted time delta. */
+					dt = time_lapsed / duration * DT;
+				} else {
+					dt = DT;
+				}
+
+				while (true) {
+					/* Next/step function .*/
+					last_state = springIntegrateState(last_state || initState, dt);
+					/* Store the position. */
+					path.push(1 + last_state.x);
+					time_lapsed += 16;
+					/* If the change threshold is reached, break. */
+					if (!(Math.abs(last_state.x) > tolerance && Math.abs(last_state.v) > tolerance)) {
+						break;
+					}
+				}
+
+				/* If duration is not defined, return the actual time required for completing this animation. Otherwise, return a closure that holds the
+				 computed path and returns a snapshot of the position according to a given percentComplete. */
+				return !have_duration ? time_lapsed : function(percentComplete) {
+					return path[ (percentComplete * (path.length - 1)) | 0 ];
+				};
+			};
+		}());
+
+		/* jQuery easings. */
+		Velocity.Easings = {
+			linear: function(p) {
+				return p;
+			},
+			swing: function(p) {
+				return 0.5 - Math.cos(p * Math.PI) / 2;
+			},
+			/* Bonus "spring" easing, which is a less exaggerated version of easeInOutElastic. */
+			spring: function(p) {
+				return 1 - (Math.cos(p * 4.5 * Math.PI) * Math.exp(-p * 6));
+			}
+		};
+
+		/* CSS3 and Robert Penner easings. */
+		$.each(
+				[
+					["ease", [0.25, 0.1, 0.25, 1.0]],
+					["ease-in", [0.42, 0.0, 1.00, 1.0]],
+					["ease-out", [0.00, 0.0, 0.58, 1.0]],
+					["ease-in-out", [0.42, 0.0, 0.58, 1.0]],
+					["easeInSine", [0.47, 0, 0.745, 0.715]],
+					["easeOutSine", [0.39, 0.575, 0.565, 1]],
+					["easeInOutSine", [0.445, 0.05, 0.55, 0.95]],
+					["easeInQuad", [0.55, 0.085, 0.68, 0.53]],
+					["easeOutQuad", [0.25, 0.46, 0.45, 0.94]],
+					["easeInOutQuad", [0.455, 0.03, 0.515, 0.955]],
+					["easeInCubic", [0.55, 0.055, 0.675, 0.19]],
+					["easeOutCubic", [0.215, 0.61, 0.355, 1]],
+					["easeInOutCubic", [0.645, 0.045, 0.355, 1]],
+					["easeInQuart", [0.895, 0.03, 0.685, 0.22]],
+					["easeOutQuart", [0.165, 0.84, 0.44, 1]],
+					["easeInOutQuart", [0.77, 0, 0.175, 1]],
+					["easeInQuint", [0.755, 0.05, 0.855, 0.06]],
+					["easeOutQuint", [0.23, 1, 0.32, 1]],
+					["easeInOutQuint", [0.86, 0, 0.07, 1]],
+					["easeInExpo", [0.95, 0.05, 0.795, 0.035]],
+					["easeOutExpo", [0.19, 1, 0.22, 1]],
+					["easeInOutExpo", [1, 0, 0, 1]],
+					["easeInCirc", [0.6, 0.04, 0.98, 0.335]],
+					["easeOutCirc", [0.075, 0.82, 0.165, 1]],
+					["easeInOutCirc", [0.785, 0.135, 0.15, 0.86]]
+				], function(i, easingArray) {
+			Velocity.Easings[easingArray[0]] = generateBezier.apply(null, easingArray[1]);
+		});
+
+		/* Determine the appropriate easing type given an easing input. */
+		function getEasing(value, duration) {
+			var easing = value;
+
+			/* The easing option can either be a string that references a pre-registered easing,
+			 or it can be a two-/four-item array of integers to be converted into a bezier/spring function. */
+			if (Type.isString(value)) {
+				/* Ensure that the easing has been assigned to jQuery's Velocity.Easings object. */
+				if (!Velocity.Easings[value]) {
+					easing = false;
+				}
+			} else if (Type.isArray(value) && value.length === 1) {
+				easing = generateStep.apply(null, value);
+			} else if (Type.isArray(value) && value.length === 2) {
+				/* springRK4 must be passed the animation's duration. */
+				/* Note: If the springRK4 array contains non-numbers, generateSpringRK4() returns an easing
+				 function generated with default tension and friction values. */
+				easing = generateSpringRK4.apply(null, value.concat([duration]));
+			} else if (Type.isArray(value) && value.length === 4) {
+				/* Note: If the bezier array contains non-numbers, generateBezier() returns false. */
+				easing = generateBezier.apply(null, value);
+			} else {
+				easing = false;
+			}
+
+			/* Revert to the Velocity-wide default easing type, or fall back to "swing" (which is also jQuery's default)
+			 if the Velocity-wide default has been incorrectly modified. */
+			if (easing === false) {
+				if (Velocity.Easings[Velocity.defaults.easing]) {
+					easing = Velocity.defaults.easing;
+				} else {
+					easing = EASING_DEFAULT;
+				}
+			}
+
+			return easing;
+		}
+
+		/*****************
+		 CSS Stack
+		 *****************/
+
+		/* The CSS object is a highly condensed and performant CSS stack that fully replaces jQuery's.
+		 It handles the validation, getting, and setting of both standard CSS properties and CSS property hooks. */
+		/* Note: A "CSS" shorthand is aliased so that our code is easier to read. */
+		var CSS = Velocity.CSS = {
+			/*************
+			 RegEx
+			 *************/
+
+			RegEx: {
+				isHex: /^#([A-f\d]{3}){1,2}$/i,
+				/* Unwrap a property value's surrounding text, e.g. "rgba(4, 3, 2, 1)" ==> "4, 3, 2, 1" and "rect(4px 3px 2px 1px)" ==> "4px 3px 2px 1px". */
+				valueUnwrap: /^[A-z]+\((.*)\)$/i,
+				wrappedValueAlreadyExtracted: /[0-9.]+ [0-9.]+ [0-9.]+( [0-9.]+)?/,
+				/* Split a multi-value property into an array of subvalues, e.g. "rgba(4, 3, 2, 1) 4px 3px 2px 1px" ==> [ "rgba(4, 3, 2, 1)", "4px", "3px", "2px", "1px" ]. */
+				valueSplit: /([A-z]+\(.+\))|(([A-z0-9#-.]+?)(?=\s|$))/ig
+			},
+			/************
+			 Lists
+			 ************/
+
+			Lists: {
+				colors: ["fill", "stroke", "stopColor", "color", "backgroundColor", "borderColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor", "outlineColor"],
+				transformsBase: ["translateX", "translateY", "scale", "scaleX", "scaleY", "skewX", "skewY", "rotateZ"],
+				transforms3D: ["transformPerspective", "translateZ", "scaleZ", "rotateX", "rotateY"],
+				units: [
+					"%", // relative
+					"em", "ex", "ch", "rem", // font relative
+					"vw", "vh", "vmin", "vmax", // viewport relative
+					"cm", "mm", "Q", "in", "pc", "pt", "px", // absolute lengths
+					"deg", "grad", "rad", "turn", // angles
+					"s", "ms" // time
+				],
+				colorNames: {
+					"aliceblue": "240,248,255",
+					"antiquewhite": "250,235,215",
+					"aquamarine": "127,255,212",
+					"aqua": "0,255,255",
+					"azure": "240,255,255",
+					"beige": "245,245,220",
+					"bisque": "255,228,196",
+					"black": "0,0,0",
+					"blanchedalmond": "255,235,205",
+					"blueviolet": "138,43,226",
+					"blue": "0,0,255",
+					"brown": "165,42,42",
+					"burlywood": "222,184,135",
+					"cadetblue": "95,158,160",
+					"chartreuse": "127,255,0",
+					"chocolate": "210,105,30",
+					"coral": "255,127,80",
+					"cornflowerblue": "100,149,237",
+					"cornsilk": "255,248,220",
+					"crimson": "220,20,60",
+					"cyan": "0,255,255",
+					"darkblue": "0,0,139",
+					"darkcyan": "0,139,139",
+					"darkgoldenrod": "184,134,11",
+					"darkgray": "169,169,169",
+					"darkgrey": "169,169,169",
+					"darkgreen": "0,100,0",
+					"darkkhaki": "189,183,107",
+					"darkmagenta": "139,0,139",
+					"darkolivegreen": "85,107,47",
+					"darkorange": "255,140,0",
+					"darkorchid": "153,50,204",
+					"darkred": "139,0,0",
+					"darksalmon": "233,150,122",
+					"darkseagreen": "143,188,143",
+					"darkslateblue": "72,61,139",
+					"darkslategray": "47,79,79",
+					"darkturquoise": "0,206,209",
+					"darkviolet": "148,0,211",
+					"deeppink": "255,20,147",
+					"deepskyblue": "0,191,255",
+					"dimgray": "105,105,105",
+					"dimgrey": "105,105,105",
+					"dodgerblue": "30,144,255",
+					"firebrick": "178,34,34",
+					"floralwhite": "255,250,240",
+					"forestgreen": "34,139,34",
+					"fuchsia": "255,0,255",
+					"gainsboro": "220,220,220",
+					"ghostwhite": "248,248,255",
+					"gold": "255,215,0",
+					"goldenrod": "218,165,32",
+					"gray": "128,128,128",
+					"grey": "128,128,128",
+					"greenyellow": "173,255,47",
+					"green": "0,128,0",
+					"honeydew": "240,255,240",
+					"hotpink": "255,105,180",
+					"indianred": "205,92,92",
+					"indigo": "75,0,130",
+					"ivory": "255,255,240",
+					"khaki": "240,230,140",
+					"lavenderblush": "255,240,245",
+					"lavender": "230,230,250",
+					"lawngreen": "124,252,0",
+					"lemonchiffon": "255,250,205",
+					"lightblue": "173,216,230",
+					"lightcoral": "240,128,128",
+					"lightcyan": "224,255,255",
+					"lightgoldenrodyellow": "250,250,210",
+					"lightgray": "211,211,211",
+					"lightgrey": "211,211,211",
+					"lightgreen": "144,238,144",
+					"lightpink": "255,182,193",
+					"lightsalmon": "255,160,122",
+					"lightseagreen": "32,178,170",
+					"lightskyblue": "135,206,250",
+					"lightslategray": "119,136,153",
+					"lightsteelblue": "176,196,222",
+					"lightyellow": "255,255,224",
+					"limegreen": "50,205,50",
+					"lime": "0,255,0",
+					"linen": "250,240,230",
+					"magenta": "255,0,255",
+					"maroon": "128,0,0",
+					"mediumaquamarine": "102,205,170",
+					"mediumblue": "0,0,205",
+					"mediumorchid": "186,85,211",
+					"mediumpurple": "147,112,219",
+					"mediumseagreen": "60,179,113",
+					"mediumslateblue": "123,104,238",
+					"mediumspringgreen": "0,250,154",
+					"mediumturquoise": "72,209,204",
+					"mediumvioletred": "199,21,133",
+					"midnightblue": "25,25,112",
+					"mintcream": "245,255,250",
+					"mistyrose": "255,228,225",
+					"moccasin": "255,228,181",
+					"navajowhite": "255,222,173",
+					"navy": "0,0,128",
+					"oldlace": "253,245,230",
+					"olivedrab": "107,142,35",
+					"olive": "128,128,0",
+					"orangered": "255,69,0",
+					"orange": "255,165,0",
+					"orchid": "218,112,214",
+					"palegoldenrod": "238,232,170",
+					"palegreen": "152,251,152",
+					"paleturquoise": "175,238,238",
+					"palevioletred": "219,112,147",
+					"papayawhip": "255,239,213",
+					"peachpuff": "255,218,185",
+					"peru": "205,133,63",
+					"pink": "255,192,203",
+					"plum": "221,160,221",
+					"powderblue": "176,224,230",
+					"purple": "128,0,128",
+					"red": "255,0,0",
+					"rosybrown": "188,143,143",
+					"royalblue": "65,105,225",
+					"saddlebrown": "139,69,19",
+					"salmon": "250,128,114",
+					"sandybrown": "244,164,96",
+					"seagreen": "46,139,87",
+					"seashell": "255,245,238",
+					"sienna": "160,82,45",
+					"silver": "192,192,192",
+					"skyblue": "135,206,235",
+					"slateblue": "106,90,205",
+					"slategray": "112,128,144",
+					"snow": "255,250,250",
+					"springgreen": "0,255,127",
+					"steelblue": "70,130,180",
+					"tan": "210,180,140",
+					"teal": "0,128,128",
+					"thistle": "216,191,216",
+					"tomato": "255,99,71",
+					"turquoise": "64,224,208",
+					"violet": "238,130,238",
+					"wheat": "245,222,179",
+					"whitesmoke": "245,245,245",
+					"white": "255,255,255",
+					"yellowgreen": "154,205,50",
+					"yellow": "255,255,0"
+				}
+			},
+			/************
+			 Hooks
+			 ************/
+
+			/* Hooks allow a subproperty (e.g. "boxShadowBlur") of a compound-value CSS property
+			 (e.g. "boxShadow: X Y Blur Spread Color") to be animated as if it were a discrete property. */
+			/* Note: Beyond enabling fine-grained property animation, hooking is necessary since Velocity only
+			 tweens properties with single numeric values; unlike CSS transitions, Velocity does not interpolate compound-values. */
+			Hooks: {
+				/********************
+				 Registration
+				 ********************/
+
+				/* Templates are a concise way of indicating which subproperties must be individually registered for each compound-value CSS property. */
+				/* Each template consists of the compound-value's base name, its constituent subproperty names, and those subproperties' default values. */
+				templates: {
+					"textShadow": ["Color X Y Blur", "black 0px 0px 0px"],
+					"boxShadow": ["Color X Y Blur Spread", "black 0px 0px 0px 0px"],
+					"clip": ["Top Right Bottom Left", "0px 0px 0px 0px"],
+					"backgroundPosition": ["X Y", "0% 0%"],
+					"transformOrigin": ["X Y Z", "50% 50% 0px"],
+					"perspectiveOrigin": ["X Y", "50% 50%"]
+				},
+				/* A "registered" hook is one that has been converted from its template form into a live,
+				 tweenable property. It contains data to associate it with its root property. */
+				registered: {
+					/* Note: A registered hook looks like this ==> textShadowBlur: [ "textShadow", 3 ],
+					 which consists of the subproperty's name, the associated root property's name,
+					 and the subproperty's position in the root's value. */
+				},
+				/* Convert the templates into individual hooks then append them to the registered object above. */
+				register: function() {
+					/* Color hooks registration: Colors are defaulted to white -- as opposed to black -- since colors that are
+					 currently set to "transparent" default to their respective template below when color-animated,
+					 and white is typically a closer match to transparent than black is. An exception is made for text ("color"),
+					 which is almost always set closer to black than white. */
+					for (var i = 0; i < CSS.Lists.colors.length; i++) {
+						var rgbComponents = (CSS.Lists.colors[i] === "color") ? "0 0 0 1" : "255 255 255 1";
+						CSS.Hooks.templates[CSS.Lists.colors[i]] = ["Red Green Blue Alpha", rgbComponents];
+					}
+
+					var rootProperty,
+							hookTemplate,
+							hookNames;
+
+					/* In IE, color values inside compound-value properties are positioned at the end the value instead of at the beginning.
+					 Thus, we re-arrange the templates accordingly. */
+					if (IE) {
+						for (rootProperty in CSS.Hooks.templates) {
+							if (!CSS.Hooks.templates.hasOwnProperty(rootProperty)) {
+								continue;
+							}
+							hookTemplate = CSS.Hooks.templates[rootProperty];
+							hookNames = hookTemplate[0].split(" ");
+
+							var defaultValues = hookTemplate[1].match(CSS.RegEx.valueSplit);
+
+							if (hookNames[0] === "Color") {
+								/* Reposition both the hook's name and its default value to the end of their respective strings. */
+								hookNames.push(hookNames.shift());
+								defaultValues.push(defaultValues.shift());
+
+								/* Replace the existing template for the hook's root property. */
+								CSS.Hooks.templates[rootProperty] = [hookNames.join(" "), defaultValues.join(" ")];
+							}
+						}
+					}
+
+					/* Hook registration. */
+					for (rootProperty in CSS.Hooks.templates) {
+						if (!CSS.Hooks.templates.hasOwnProperty(rootProperty)) {
+							continue;
+						}
+						hookTemplate = CSS.Hooks.templates[rootProperty];
+						hookNames = hookTemplate[0].split(" ");
+
+						for (var j in hookNames) {
+							if (!hookNames.hasOwnProperty(j)) {
+								continue;
+							}
+							var fullHookName = rootProperty + hookNames[j],
+									hookPosition = j;
+
+							/* For each hook, register its full name (e.g. textShadowBlur) with its root property (e.g. textShadow)
+							 and the hook's position in its template's default value string. */
+							CSS.Hooks.registered[fullHookName] = [rootProperty, hookPosition];
+						}
+					}
+				},
+				/*****************************
+				 Injection and Extraction
+				 *****************************/
+
+				/* Look up the root property associated with the hook (e.g. return "textShadow" for "textShadowBlur"). */
+				/* Since a hook cannot be set directly (the browser won't recognize it), style updating for hooks is routed through the hook's root property. */
+				getRoot: function(property) {
+					var hookData = CSS.Hooks.registered[property];
+
+					if (hookData) {
+						return hookData[0];
+					} else {
+						/* If there was no hook match, return the property name untouched. */
+						return property;
+					}
+				},
+				getUnit: function(str, start) {
+					var unit = (str.substr(start || 0, 5).match(/^[a-z%]+/) || [])[0] || "";
+
+					if (unit && _inArray(CSS.Lists.units, unit)) {
+						return unit;
+					}
+					return "";
+				},
+				fixColors: function(str) {
+					return str.replace(/(rgba?\(\s*)?(\b[a-z]+\b)/g, function($0, $1, $2) {
+						if (CSS.Lists.colorNames.hasOwnProperty($2)) {
+							return ($1 ? $1 : "rgba(") + CSS.Lists.colorNames[$2] + ($1 ? "" : ",1)");
+						}
+						return $1 + $2;
+					});
+				},
+				/* Convert any rootPropertyValue, null or otherwise, into a space-delimited list of hook values so that
+				 the targeted hook can be injected or extracted at its standard position. */
+				cleanRootPropertyValue: function(rootProperty, rootPropertyValue) {
+					/* If the rootPropertyValue is wrapped with "rgb()", "clip()", etc., remove the wrapping to normalize the value before manipulation. */
+					if (CSS.RegEx.valueUnwrap.test(rootPropertyValue)) {
+						rootPropertyValue = rootPropertyValue.match(CSS.RegEx.valueUnwrap)[1];
+					}
+
+					/* If rootPropertyValue is a CSS null-value (from which there's inherently no hook value to extract),
+					 default to the root's default value as defined in CSS.Hooks.templates. */
+					/* Note: CSS null-values include "none", "auto", and "transparent". They must be converted into their
+					 zero-values (e.g. textShadow: "none" ==> textShadow: "0px 0px 0px black") for hook manipulation to proceed. */
+					if (CSS.Values.isCSSNullValue(rootPropertyValue)) {
+						rootPropertyValue = CSS.Hooks.templates[rootProperty][1];
+					}
+
+					return rootPropertyValue;
+				},
+				/* Extracted the hook's value from its root property's value. This is used to get the starting value of an animating hook. */
+				extractValue: function(fullHookName, rootPropertyValue) {
+					var hookData = CSS.Hooks.registered[fullHookName];
+
+					if (hookData) {
+						var hookRoot = hookData[0],
+								hookPosition = hookData[1];
+
+						rootPropertyValue = CSS.Hooks.cleanRootPropertyValue(hookRoot, rootPropertyValue);
+
+						/* Split rootPropertyValue into its constituent hook values then grab the desired hook at its standard position. */
+						return rootPropertyValue.toString().match(CSS.RegEx.valueSplit)[hookPosition];
+					} else {
+						/* If the provided fullHookName isn't a registered hook, return the rootPropertyValue that was passed in. */
+						return rootPropertyValue;
+					}
+				},
+				/* Inject the hook's value into its root property's value. This is used to piece back together the root property
+				 once Velocity has updated one of its individually hooked values through tweening. */
+				injectValue: function(fullHookName, hookValue, rootPropertyValue) {
+					var hookData = CSS.Hooks.registered[fullHookName];
+
+					if (hookData) {
+						var hookRoot = hookData[0],
+								hookPosition = hookData[1],
+								rootPropertyValueParts,
+								rootPropertyValueUpdated;
+
+						rootPropertyValue = CSS.Hooks.cleanRootPropertyValue(hookRoot, rootPropertyValue);
+
+						/* Split rootPropertyValue into its individual hook values, replace the targeted value with hookValue,
+						 then reconstruct the rootPropertyValue string. */
+						rootPropertyValueParts = rootPropertyValue.toString().match(CSS.RegEx.valueSplit);
+						rootPropertyValueParts[hookPosition] = hookValue;
+						rootPropertyValueUpdated = rootPropertyValueParts.join(" ");
+
+						return rootPropertyValueUpdated;
+					} else {
+						/* If the provided fullHookName isn't a registered hook, return the rootPropertyValue that was passed in. */
+						return rootPropertyValue;
+					}
+				}
+			},
+			/*******************
+			 Normalizations
+			 *******************/
+
+			/* Normalizations standardize CSS property manipulation by pollyfilling browser-specific implementations (e.g. opacity)
+			 and reformatting special properties (e.g. clip, rgba) to look like standard ones. */
+			Normalizations: {
+				/* Normalizations are passed a normalization target (either the property's name, its extracted value, or its injected value),
+				 the targeted element (which may need to be queried), and the targeted property value. */
+				registered: {
+					clip: function(type, element, propertyValue) {
+						switch (type) {
+							case "name":
+								return "clip";
+								/* Clip needs to be unwrapped and stripped of its commas during extraction. */
+							case "extract":
+								var extracted;
+
+								/* If Velocity also extracted this value, skip extraction. */
+								if (CSS.RegEx.wrappedValueAlreadyExtracted.test(propertyValue)) {
+									extracted = propertyValue;
+								} else {
+									/* Remove the "rect()" wrapper. */
+									extracted = propertyValue.toString().match(CSS.RegEx.valueUnwrap);
+
+									/* Strip off commas. */
+									extracted = extracted ? extracted[1].replace(/,(\s+)?/g, " ") : propertyValue;
+								}
+
+								return extracted;
+								/* Clip needs to be re-wrapped during injection. */
+							case "inject":
+								return "rect(" + propertyValue + ")";
+						}
+					},
+					blur: function(type, element, propertyValue) {
+						switch (type) {
+							case "name":
+								return Velocity.State.isFirefox ? "filter" : "-webkit-filter";
+							case "extract":
+								var extracted = parseFloat(propertyValue);
+
+								/* If extracted is NaN, meaning the value isn't already extracted. */
+								if (!(extracted || extracted === 0)) {
+									var blurComponent = propertyValue.toString().match(/blur\(([0-9]+[A-z]+)\)/i);
+
+									/* If the filter string had a blur component, return just the blur value and unit type. */
+									if (blurComponent) {
+										extracted = blurComponent[1];
+										/* If the component doesn't exist, default blur to 0. */
+									} else {
+										extracted = 0;
+									}
+								}
+
+								return extracted;
+								/* Blur needs to be re-wrapped during injection. */
+							case "inject":
+								/* For the blur effect to be fully de-applied, it needs to be set to "none" instead of 0. */
+								if (!parseFloat(propertyValue)) {
+									return "none";
+								} else {
+									return "blur(" + propertyValue + ")";
+								}
+						}
+					},
+					/* <=IE8 do not support the standard opacity property. They use filter:alpha(opacity=INT) instead. */
+					opacity: function(type, element, propertyValue) {
+						if (IE <= 8) {
+							switch (type) {
+								case "name":
+									return "filter";
+								case "extract":
+									/* <=IE8 return a "filter" value of "alpha(opacity=\d{1,3})".
+									 Extract the value and convert it to a decimal value to match the standard CSS opacity property's formatting. */
+									var extracted = propertyValue.toString().match(/alpha\(opacity=(.*)\)/i);
+
+									if (extracted) {
+										/* Convert to decimal value. */
+										propertyValue = extracted[1] / 100;
+									} else {
+										/* When extracting opacity, default to 1 since a null value means opacity hasn't been set. */
+										propertyValue = 1;
+									}
+
+									return propertyValue;
+								case "inject":
+									/* Opacified elements are required to have their zoom property set to a non-zero value. */
+									element.style.zoom = 1;
+
+									/* Setting the filter property on elements with certain font property combinations can result in a
+									 highly unappealing ultra-bolding effect. There's no way to remedy this throughout a tween, but dropping the
+									 value altogether (when opacity hits 1) at leasts ensures that the glitch is gone post-tweening. */
+									if (parseFloat(propertyValue) >= 1) {
+										return "";
+									} else {
+										/* As per the filter property's spec, convert the decimal value to a whole number and wrap the value. */
+										return "alpha(opacity=" + parseInt(parseFloat(propertyValue) * 100, 10) + ")";
+									}
+							}
+							/* With all other browsers, normalization is not required; return the same values that were passed in. */
+						} else {
+							switch (type) {
+								case "name":
+									return "opacity";
+								case "extract":
+									return propertyValue;
+								case "inject":
+									return propertyValue;
+							}
+						}
+					}
+				},
+				/*****************************
+				 Batched Registrations
+				 *****************************/
+
+				/* Note: Batched normalizations extend the CSS.Normalizations.registered object. */
+				register: function() {
+
+					/*****************
+					 Transforms
+					 *****************/
+
+					/* Transforms are the subproperties contained by the CSS "transform" property. Transforms must undergo normalization
+					 so that they can be referenced in a properties map by their individual names. */
+					/* Note: When transforms are "set", they are actually assigned to a per-element transformCache. When all transform
+					 setting is complete complete, CSS.flushTransformCache() must be manually called to flush the values to the DOM.
+					 Transform setting is batched in this way to improve performance: the transform style only needs to be updated
+					 once when multiple transform subproperties are being animated simultaneously. */
+					/* Note: IE9 and Android Gingerbread have support for 2D -- but not 3D -- transforms. Since animating unsupported
+					 transform properties results in the browser ignoring the *entire* transform string, we prevent these 3D values
+					 from being normalized for these browsers so that tweening skips these properties altogether
+					 (since it will ignore them as being unsupported by the browser.) */
+					if ((!IE || IE > 9) && !Velocity.State.isGingerbread) {
+						/* Note: Since the standalone CSS "perspective" property and the CSS transform "perspective" subproperty
+						 share the same name, the latter is given a unique token within Velocity: "transformPerspective". */
+						CSS.Lists.transformsBase = CSS.Lists.transformsBase.concat(CSS.Lists.transforms3D);
+					}
+
+					for (var i = 0; i < CSS.Lists.transformsBase.length; i++) {
+						/* Wrap the dynamically generated normalization function in a new scope so that transformName's value is
+						 paired with its respective function. (Otherwise, all functions would take the final for loop's transformName.) */
+						(function() {
+							var transformName = CSS.Lists.transformsBase[i];
+
+							CSS.Normalizations.registered[transformName] = function(type, element, propertyValue) {
+								switch (type) {
+									/* The normalized property name is the parent "transform" property -- the property that is actually set in CSS. */
+									case "name":
+										return "transform";
+										/* Transform values are cached onto a per-element transformCache object. */
+									case "extract":
+										/* If this transform has yet to be assigned a value, return its null value. */
+										if (Data(element) === undefined || Data(element).transformCache[transformName] === undefined) {
+											/* Scale CSS.Lists.transformsBase default to 1 whereas all other transform properties default to 0. */
+											return /^scale/i.test(transformName) ? 1 : 0;
+											/* When transform values are set, they are wrapped in parentheses as per the CSS spec.
+											 Thus, when extracting their values (for tween calculations), we strip off the parentheses. */
+										}
+										return Data(element).transformCache[transformName].replace(/[()]/g, "");
+									case "inject":
+										var invalid = false;
+
+										/* If an individual transform property contains an unsupported unit type, the browser ignores the *entire* transform property.
+										 Thus, protect users from themselves by skipping setting for transform values supplied with invalid unit types. */
+										/* Switch on the base transform type; ignore the axis by removing the last letter from the transform's name. */
+										switch (transformName.substr(0, transformName.length - 1)) {
+											/* Whitelist unit types for each transform. */
+											case "translate":
+												invalid = !/(%|px|em|rem|vw|vh|\d)$/i.test(propertyValue);
+												break;
+												/* Since an axis-free "scale" property is supported as well, a little hack is used here to detect it by chopping off its last letter. */
+											case "scal":
+											case "scale":
+												/* Chrome on Android has a bug in which scaled elements blur if their initial scale
+												 value is below 1 (which can happen with forcefeeding). Thus, we detect a yet-unset scale property
+												 and ensure that its first value is always 1. More info: http://stackoverflow.com/questions/10417890/css3-animations-with-transform-causes-blurred-elements-on-webkit/10417962#10417962 */
+												if (Velocity.State.isAndroid && Data(element).transformCache[transformName] === undefined && propertyValue < 1) {
+													propertyValue = 1;
+												}
+
+												invalid = !/(\d)$/i.test(propertyValue);
+												break;
+											case "skew":
+												invalid = !/(deg|\d)$/i.test(propertyValue);
+												break;
+											case "rotate":
+												invalid = !/(deg|\d)$/i.test(propertyValue);
+												break;
+										}
+
+										if (!invalid) {
+											/* As per the CSS spec, wrap the value in parentheses. */
+											Data(element).transformCache[transformName] = "(" + propertyValue + ")";
+										}
+
+										/* Although the value is set on the transformCache object, return the newly-updated value for the calling code to process as normal. */
+										return Data(element).transformCache[transformName];
+								}
+							};
+						})();
+					}
+
+					/*************
+					 Colors
+					 *************/
+
+					/* Since Velocity only animates a single numeric value per property, color animation is achieved by hooking the individual RGBA components of CSS color properties.
+					 Accordingly, color values must be normalized (e.g. "#ff0000", "red", and "rgb(255, 0, 0)" ==> "255 0 0 1") so that their components can be injected/extracted by CSS.Hooks logic. */
+					for (var j = 0; j < CSS.Lists.colors.length; j++) {
+						/* Wrap the dynamically generated normalization function in a new scope so that colorName's value is paired with its respective function.
+						 (Otherwise, all functions would take the final for loop's colorName.) */
+						(function() {
+							var colorName = CSS.Lists.colors[j];
+
+							/* Note: In IE<=8, which support rgb but not rgba, color properties are reverted to rgb by stripping off the alpha component. */
+							CSS.Normalizations.registered[colorName] = function(type, element, propertyValue) {
+								switch (type) {
+									case "name":
+										return colorName;
+										/* Convert all color values into the rgb format. (Old IE can return hex values and color names instead of rgb/rgba.) */
+									case "extract":
+										var extracted;
+
+										/* If the color is already in its hookable form (e.g. "255 255 255 1") due to having been previously extracted, skip extraction. */
+										if (CSS.RegEx.wrappedValueAlreadyExtracted.test(propertyValue)) {
+											extracted = propertyValue;
+										} else {
+											var converted,
+													colorNames = {
+														black: "rgb(0, 0, 0)",
+														blue: "rgb(0, 0, 255)",
+														gray: "rgb(128, 128, 128)",
+														green: "rgb(0, 128, 0)",
+														red: "rgb(255, 0, 0)",
+														white: "rgb(255, 255, 255)"
+													};
+
+											/* Convert color names to rgb. */
+											if (/^[A-z]+$/i.test(propertyValue)) {
+												if (colorNames[propertyValue] !== undefined) {
+													converted = colorNames[propertyValue];
+												} else {
+													/* If an unmatched color name is provided, default to black. */
+													converted = colorNames.black;
+												}
+												/* Convert hex values to rgb. */
+											} else if (CSS.RegEx.isHex.test(propertyValue)) {
+												converted = "rgb(" + CSS.Values.hexToRgb(propertyValue).join(" ") + ")";
+												/* If the provided color doesn't match any of the accepted color formats, default to black. */
+											} else if (!(/^rgba?\(/i.test(propertyValue))) {
+												converted = colorNames.black;
+											}
+
+											/* Remove the surrounding "rgb/rgba()" string then replace commas with spaces and strip
+											 repeated spaces (in case the value included spaces to begin with). */
+											extracted = (converted || propertyValue).toString().match(CSS.RegEx.valueUnwrap)[1].replace(/,(\s+)?/g, " ");
+										}
+
+										/* So long as this isn't <=IE8, add a fourth (alpha) component if it's missing and default it to 1 (visible). */
+										if ((!IE || IE > 8) && extracted.split(" ").length === 3) {
+											extracted += " 1";
+										}
+
+										return extracted;
+									case "inject":
+										/* If we have a pattern then it might already have the right values */
+										if (/^rgb/.test(propertyValue)) {
+											return propertyValue;
+										}
+
+										/* If this is IE<=8 and an alpha component exists, strip it off. */
+										if (IE <= 8) {
+											if (propertyValue.split(" ").length === 4) {
+												propertyValue = propertyValue.split(/\s+/).slice(0, 3).join(" ");
+											}
+											/* Otherwise, add a fourth (alpha) component if it's missing and default it to 1 (visible). */
+										} else if (propertyValue.split(" ").length === 3) {
+											propertyValue += " 1";
+										}
+
+										/* Re-insert the browser-appropriate wrapper("rgb/rgba()"), insert commas, and strip off decimal units
+										 on all values but the fourth (R, G, and B only accept whole numbers). */
+										return (IE <= 8 ? "rgb" : "rgba") + "(" + propertyValue.replace(/\s+/g, ",").replace(/\.(\d)+(?=,)/g, "") + ")";
+								}
+							};
+						})();
+					}
+
+					/**************
+					 Dimensions
+					 **************/
+					function augmentDimension(name, element, wantInner) {
+						var isBorderBox = CSS.getPropertyValue(element, "boxSizing").toString().toLowerCase() === "border-box";
+
+						if (isBorderBox === (wantInner || false)) {
+							/* in box-sizing mode, the CSS width / height accessors already give the outerWidth / outerHeight. */
+							var i,
+									value,
+									augment = 0,
+									sides = name === "width" ? ["Left", "Right"] : ["Top", "Bottom"],
+									fields = ["padding" + sides[0], "padding" + sides[1], "border" + sides[0] + "Width", "border" + sides[1] + "Width"];
+
+							for (i = 0; i < fields.length; i++) {
+								value = parseFloat(CSS.getPropertyValue(element, fields[i]));
+								if (!isNaN(value)) {
+									augment += value;
+								}
+							}
+							return wantInner ? -augment : augment;
+						}
+						return 0;
+					}
+					function getDimension(name, wantInner) {
+						return function(type, element, propertyValue) {
+							switch (type) {
+								case "name":
+									return name;
+								case "extract":
+									return parseFloat(propertyValue) + augmentDimension(name, element, wantInner);
+								case "inject":
+									return (parseFloat(propertyValue) - augmentDimension(name, element, wantInner)) + "px";
+							}
+						};
+					}
+					CSS.Normalizations.registered.innerWidth = getDimension("width", true);
+					CSS.Normalizations.registered.innerHeight = getDimension("height", true);
+					CSS.Normalizations.registered.outerWidth = getDimension("width");
+					CSS.Normalizations.registered.outerHeight = getDimension("height");
+				}
+			},
+			/************************
+			 CSS Property Names
+			 ************************/
+
+			Names: {
+				/* Camelcase a property name into its JavaScript notation (e.g. "background-color" ==> "backgroundColor").
+				 Camelcasing is used to normalize property names between and across calls. */
+				camelCase: function(property) {
+					return property.replace(/-(\w)/g, function(match, subMatch) {
+						return subMatch.toUpperCase();
+					});
+				},
+				/* For SVG elements, some properties (namely, dimensional ones) are GET/SET via the element's HTML attributes (instead of via CSS styles). */
+				SVGAttribute: function(property) {
+					var SVGAttributes = "width|height|x|y|cx|cy|r|rx|ry|x1|x2|y1|y2";
+
+					/* Certain browsers require an SVG transform to be applied as an attribute. (Otherwise, application via CSS is preferable due to 3D support.) */
+					if (IE || (Velocity.State.isAndroid && !Velocity.State.isChrome)) {
+						SVGAttributes += "|transform";
+					}
+
+					return new RegExp("^(" + SVGAttributes + ")$", "i").test(property);
+				},
+				/* Determine whether a property should be set with a vendor prefix. */
+				/* If a prefixed version of the property exists, return it. Otherwise, return the original property name.
+				 If the property is not at all supported by the browser, return a false flag. */
+				prefixCheck: function(property) {
+					/* If this property has already been checked, return the cached value. */
+					if (Velocity.State.prefixMatches[property]) {
+						return [Velocity.State.prefixMatches[property], true];
+					} else {
+						var vendors = ["", "Webkit", "Moz", "ms", "O"];
+
+						for (var i = 0, vendorsLength = vendors.length; i < vendorsLength; i++) {
+							var propertyPrefixed;
+
+							if (i === 0) {
+								propertyPrefixed = property;
+							} else {
+								/* Capitalize the first letter of the property to conform to JavaScript vendor prefix notation (e.g. webkitFilter). */
+								propertyPrefixed = vendors[i] + property.replace(/^\w/, function(match) {
+									return match.toUpperCase();
+								});
+							}
+
+							/* Check if the browser supports this property as prefixed. */
+							if (Type.isString(Velocity.State.prefixElement.style[propertyPrefixed])) {
+								/* Cache the match. */
+								Velocity.State.prefixMatches[property] = propertyPrefixed;
+
+								return [propertyPrefixed, true];
+							}
+						}
+
+						/* If the browser doesn't support this property in any form, include a false flag so that the caller can decide how to proceed. */
+						return [property, false];
+					}
+				}
+			},
+			/************************
+			 CSS Property Values
+			 ************************/
+
+			Values: {
+				/* Hex to RGB conversion. Copyright Tim Down: http://stackoverflow.com/questions/5623838/rgb-to-hex-and-hex-to-rgb */
+				hexToRgb: function(hex) {
+					var shortformRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i,
+							longformRegex = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i,
+							rgbParts;
+
+					hex = hex.replace(shortformRegex, function(m, r, g, b) {
+						return r + r + g + g + b + b;
+					});
+
+					rgbParts = longformRegex.exec(hex);
+
+					return rgbParts ? [parseInt(rgbParts[1], 16), parseInt(rgbParts[2], 16), parseInt(rgbParts[3], 16)] : [0, 0, 0];
+				},
+				isCSSNullValue: function(value) {
+					/* The browser defaults CSS values that have not been set to either 0 or one of several possible null-value strings.
+					 Thus, we check for both falsiness and these special strings. */
+					/* Null-value checking is performed to default the special strings to 0 (for the sake of tweening) or their hook
+					 templates as defined as CSS.Hooks (for the sake of hook injection/extraction). */
+					/* Note: Chrome returns "rgba(0, 0, 0, 0)" for an undefined color whereas IE returns "transparent". */
+					return (!value || /^(none|auto|transparent|(rgba\(0, ?0, ?0, ?0\)))$/i.test(value));
+				},
+				/* Retrieve a property's default unit type. Used for assigning a unit type when one is not supplied by the user. */
+				getUnitType: function(property) {
+					if (/^(rotate|skew)/i.test(property)) {
+						return "deg";
+					} else if (/(^(scale|scaleX|scaleY|scaleZ|alpha|flexGrow|flexHeight|zIndex|fontWeight)$)|((opacity|red|green|blue|alpha)$)/i.test(property)) {
+						/* The above properties are unitless. */
+						return "";
+					} else {
+						/* Default to px for all other properties. */
+						return "px";
+					}
+				},
+				/* HTML elements default to an associated display type when they're not set to display:none. */
+				/* Note: This function is used for correctly setting the non-"none" display value in certain Velocity redirects, such as fadeIn/Out. */
+				getDisplayType: function(element) {
+					var tagName = element && element.tagName.toString().toLowerCase();
+
+					if (/^(b|big|i|small|tt|abbr|acronym|cite|code|dfn|em|kbd|strong|samp|var|a|bdo|br|img|map|object|q|script|span|sub|sup|button|input|label|select|textarea)$/i.test(tagName)) {
+						return "inline";
+					} else if (/^(li)$/i.test(tagName)) {
+						return "list-item";
+					} else if (/^(tr)$/i.test(tagName)) {
+						return "table-row";
+					} else if (/^(table)$/i.test(tagName)) {
+						return "table";
+					} else if (/^(tbody)$/i.test(tagName)) {
+						return "table-row-group";
+						/* Default to "block" when no match is found. */
+					} else {
+						return "block";
+					}
+				},
+				/* The class add/remove functions are used to temporarily apply a "velocity-animating" class to elements while they're animating. */
+				addClass: function(element, className) {
+					if (element) {
+						if (element.classList) {
+							element.classList.add(className);
+						} else if (Type.isString(element.className)) {
+							// Element.className is around 15% faster then set/getAttribute
+							element.className += (element.className.length ? " " : "") + className;
+						} else {
+							// Work around for IE strict mode animating SVG - and anything else that doesn't behave correctly - the same way jQuery does it
+							var currentClass = element.getAttribute(IE <= 7 ? "className" : "class") || "";
+
+							element.setAttribute("class", currentClass + (currentClass ? " " : "") + className);
+						}
+					}
+				},
+				removeClass: function(element, className) {
+					if (element) {
+						if (element.classList) {
+							element.classList.remove(className);
+						} else if (Type.isString(element.className)) {
+							// Element.className is around 15% faster then set/getAttribute
+							// TODO: Need some jsperf tests on performance - can we get rid of the regex and maybe use split / array manipulation?
+							element.className = element.className.toString().replace(new RegExp("(^|\\s)" + className.split(" ").join("|") + "(\\s|$)", "gi"), " ");
+						} else {
+							// Work around for IE strict mode animating SVG - and anything else that doesn't behave correctly - the same way jQuery does it
+							var currentClass = element.getAttribute(IE <= 7 ? "className" : "class") || "";
+
+							element.setAttribute("class", currentClass.replace(new RegExp("(^|\s)" + className.split(" ").join("|") + "(\s|$)", "gi"), " "));
+						}
+					}
+				}
+			},
+			/****************************
+			 Style Getting & Setting
+			 ****************************/
+
+			/* The singular getPropertyValue, which routes the logic for all normalizations, hooks, and standard CSS properties. */
+			getPropertyValue: function(element, property, rootPropertyValue, forceStyleLookup) {
+				/* Get an element's computed property value. */
+				/* Note: Retrieving the value of a CSS property cannot simply be performed by checking an element's
+				 style attribute (which only reflects user-defined values). Instead, the browser must be queried for a property's
+				 *computed* value. You can read more about getComputedStyle here: https://developer.mozilla.org/en/docs/Web/API/window.getComputedStyle */
+				function computePropertyValue(element, property) {
+					/* When box-sizing isn't set to border-box, height and width style values are incorrectly computed when an
+					 element's scrollbars are visible (which expands the element's dimensions). Thus, we defer to the more accurate
+					 offsetHeight/Width property, which includes the total dimensions for interior, border, padding, and scrollbar.
+					 We subtract border and padding to get the sum of interior + scrollbar. */
+					var computedValue = 0;
+
+					/* IE<=8 doesn't support window.getComputedStyle, thus we defer to jQuery, which has an extensive array
+					 of hacks to accurately retrieve IE8 property values. Re-implementing that logic here is not worth bloating the
+					 codebase for a dying browser. The performance repercussions of using jQuery here are minimal since
+					 Velocity is optimized to rarely (and sometimes never) query the DOM. Further, the $.css() codepath isn't that slow. */
+					if (IE <= 8) {
+						computedValue = $.css(element, property); /* GET */
+						/* All other browsers support getComputedStyle. The returned live object reference is cached onto its
+						 associated element so that it does not need to be refetched upon every GET. */
+					} else {
+						/* Browsers do not return height and width values for elements that are set to display:"none". Thus, we temporarily
+						 toggle display to the element type's default value. */
+						var toggleDisplay = false;
+
+						if (/^(width|height)$/.test(property) && CSS.getPropertyValue(element, "display") === 0) {
+							toggleDisplay = true;
+							CSS.setPropertyValue(element, "display", CSS.Values.getDisplayType(element));
+						}
+
+						var revertDisplay = function() {
+							if (toggleDisplay) {
+								CSS.setPropertyValue(element, "display", "none");
+							}
+						};
+
+						if (!forceStyleLookup) {
+							if (property === "height" && CSS.getPropertyValue(element, "boxSizing").toString().toLowerCase() !== "border-box") {
+								var contentBoxHeight = element.offsetHeight - (parseFloat(CSS.getPropertyValue(element, "borderTopWidth")) || 0) - (parseFloat(CSS.getPropertyValue(element, "borderBottomWidth")) || 0) - (parseFloat(CSS.getPropertyValue(element, "paddingTop")) || 0) - (parseFloat(CSS.getPropertyValue(element, "paddingBottom")) || 0);
+								revertDisplay();
+
+								return contentBoxHeight;
+							} else if (property === "width" && CSS.getPropertyValue(element, "boxSizing").toString().toLowerCase() !== "border-box") {
+								var contentBoxWidth = element.offsetWidth - (parseFloat(CSS.getPropertyValue(element, "borderLeftWidth")) || 0) - (parseFloat(CSS.getPropertyValue(element, "borderRightWidth")) || 0) - (parseFloat(CSS.getPropertyValue(element, "paddingLeft")) || 0) - (parseFloat(CSS.getPropertyValue(element, "paddingRight")) || 0);
+								revertDisplay();
+
+								return contentBoxWidth;
+							}
+						}
+
+						var computedStyle;
+
+						/* For elements that Velocity hasn't been called on directly (e.g. when Velocity queries the DOM on behalf
+						 of a parent of an element its animating), perform a direct getComputedStyle lookup since the object isn't cached. */
+						if (Data(element) === undefined) {
+							computedStyle = window.getComputedStyle(element, null); /* GET */
+							/* If the computedStyle object has yet to be cached, do so now. */
+						} else if (!Data(element).computedStyle) {
+							computedStyle = Data(element).computedStyle = window.getComputedStyle(element, null); /* GET */
+							/* If computedStyle is cached, use it. */
+						} else {
+							computedStyle = Data(element).computedStyle;
+						}
+
+						/* IE and Firefox do not return a value for the generic borderColor -- they only return individual values for each border side's color.
+						 Also, in all browsers, when border colors aren't all the same, a compound value is returned that Velocity isn't setup to parse.
+						 So, as a polyfill for querying individual border side colors, we just return the top border's color and animate all borders from that value. */
+						if (property === "borderColor") {
+							property = "borderTopColor";
+						}
+
+						/* IE9 has a bug in which the "filter" property must be accessed from computedStyle using the getPropertyValue method
+						 instead of a direct property lookup. The getPropertyValue method is slower than a direct lookup, which is why we avoid it by default. */
+						if (IE === 9 && property === "filter") {
+							computedValue = computedStyle.getPropertyValue(property); /* GET */
+						} else {
+							computedValue = computedStyle[property];
+						}
+
+						/* Fall back to the property's style value (if defined) when computedValue returns nothing,
+						 which can happen when the element hasn't been painted. */
+						if (computedValue === "" || computedValue === null) {
+							computedValue = element.style[property];
+						}
+
+						revertDisplay();
+					}
+
+					/* For top, right, bottom, and left (TRBL) values that are set to "auto" on elements of "fixed" or "absolute" position,
+					 defer to jQuery for converting "auto" to a numeric value. (For elements with a "static" or "relative" position, "auto" has the same
+					 effect as being set to 0, so no conversion is necessary.) */
+					/* An example of why numeric conversion is necessary: When an element with "position:absolute" has an untouched "left"
+					 property, which reverts to "auto", left's value is 0 relative to its parent element, but is often non-zero relative
+					 to its *containing* (not parent) element, which is the nearest "position:relative" ancestor or the viewport (and always the viewport in the case of "position:fixed"). */
+					if (computedValue === "auto" && /^(top|right|bottom|left)$/i.test(property)) {
+						var position = computePropertyValue(element, "position"); /* GET */
+
+						/* For absolute positioning, jQuery's $.position() only returns values for top and left;
+						 right and bottom will have their "auto" value reverted to 0. */
+						/* Note: A jQuery object must be created here since jQuery doesn't have a low-level alias for $.position().
+						 Not a big deal since we're currently in a GET batch anyway. */
+						if (position === "fixed" || (position === "absolute" && /top|left/i.test(property))) {
+							/* Note: jQuery strips the pixel unit from its returned values; we re-add it here to conform with computePropertyValue's behavior. */
+							computedValue = $(element).position()[property] + "px"; /* GET */
+						}
+					}
+
+					return computedValue;
+				}
+
+				var propertyValue;
+
+				/* If this is a hooked property (e.g. "clipLeft" instead of the root property of "clip"),
+				 extract the hook's value from a normalized rootPropertyValue using CSS.Hooks.extractValue(). */
+				if (CSS.Hooks.registered[property]) {
+					var hook = property,
+							hookRoot = CSS.Hooks.getRoot(hook);
+
+					/* If a cached rootPropertyValue wasn't passed in (which Velocity always attempts to do in order to avoid requerying the DOM),
+					 query the DOM for the root property's value. */
+					if (rootPropertyValue === undefined) {
+						/* Since the browser is now being directly queried, use the official post-prefixing property name for this lookup. */
+						rootPropertyValue = CSS.getPropertyValue(element, CSS.Names.prefixCheck(hookRoot)[0]); /* GET */
+					}
+
+					/* If this root has a normalization registered, peform the associated normalization extraction. */
+					if (CSS.Normalizations.registered[hookRoot]) {
+						rootPropertyValue = CSS.Normalizations.registered[hookRoot]("extract", element, rootPropertyValue);
+					}
+
+					/* Extract the hook's value. */
+					propertyValue = CSS.Hooks.extractValue(hook, rootPropertyValue);
+
+					/* If this is a normalized property (e.g. "opacity" becomes "filter" in <=IE8) or "translateX" becomes "transform"),
+					 normalize the property's name and value, and handle the special case of transforms. */
+					/* Note: Normalizing a property is mutually exclusive from hooking a property since hook-extracted values are strictly
+					 numerical and therefore do not require normalization extraction. */
+				} else if (CSS.Normalizations.registered[property]) {
+					var normalizedPropertyName,
+							normalizedPropertyValue;
+
+					normalizedPropertyName = CSS.Normalizations.registered[property]("name", element);
+
+					/* Transform values are calculated via normalization extraction (see below), which checks against the element's transformCache.
+					 At no point do transform GETs ever actually query the DOM; initial stylesheet values are never processed.
+					 This is because parsing 3D transform matrices is not always accurate and would bloat our codebase;
+					 thus, normalization extraction defaults initial transform values to their zero-values (e.g. 1 for scaleX and 0 for translateX). */
+					if (normalizedPropertyName !== "transform") {
+						normalizedPropertyValue = computePropertyValue(element, CSS.Names.prefixCheck(normalizedPropertyName)[0]); /* GET */
+
+						/* If the value is a CSS null-value and this property has a hook template, use that zero-value template so that hooks can be extracted from it. */
+						if (CSS.Values.isCSSNullValue(normalizedPropertyValue) && CSS.Hooks.templates[property]) {
+							normalizedPropertyValue = CSS.Hooks.templates[property][1];
+						}
+					}
+
+					propertyValue = CSS.Normalizations.registered[property]("extract", element, normalizedPropertyValue);
+				}
+
+				/* If a (numeric) value wasn't produced via hook extraction or normalization, query the DOM. */
+				if (!/^[\d-]/.test(propertyValue)) {
+					/* For SVG elements, dimensional properties (which SVGAttribute() detects) are tweened via
+					 their HTML attribute values instead of their CSS style values. */
+					var data = Data(element);
+
+					if (data && data.isSVG && CSS.Names.SVGAttribute(property)) {
+						/* Since the height/width attribute values must be set manually, they don't reflect computed values.
+						 Thus, we use use getBBox() to ensure we always get values for elements with undefined height/width attributes. */
+						if (/^(height|width)$/i.test(property)) {
+							/* Firefox throws an error if .getBBox() is called on an SVG that isn't attached to the DOM. */
+							try {
+								propertyValue = element.getBBox()[property];
+							} catch (error) {
+								propertyValue = 0;
+							}
+							/* Otherwise, access the attribute value directly. */
+						} else {
+							propertyValue = element.getAttribute(property);
+						}
+					} else {
+						propertyValue = computePropertyValue(element, CSS.Names.prefixCheck(property)[0]); /* GET */
+					}
+				}
+
+				/* Since property lookups are for animation purposes (which entails computing the numeric delta between start and end values),
+				 convert CSS null-values to an integer of value 0. */
+				if (CSS.Values.isCSSNullValue(propertyValue)) {
+					propertyValue = 0;
+				}
+
+				if (Velocity.debug >= 2) {
+					console.log("Get " + property + ": " + propertyValue);
+				}
+
+				return propertyValue;
+			},
+			/* The singular setPropertyValue, which routes the logic for all normalizations, hooks, and standard CSS properties. */
+			setPropertyValue: function(element, property, propertyValue, rootPropertyValue, scrollData) {
+				var propertyName = property;
+
+				/* In order to be subjected to call options and element queueing, scroll animation is routed through Velocity as if it were a standard CSS property. */
+				if (property === "scroll") {
+					/* If a container option is present, scroll the container instead of the browser window. */
+					if (scrollData.container) {
+						scrollData.container["scroll" + scrollData.direction] = propertyValue;
+						/* Otherwise, Velocity defaults to scrolling the browser window. */
+					} else {
+						if (scrollData.direction === "Left") {
+							window.scrollTo(propertyValue, scrollData.alternateValue);
+						} else {
+							window.scrollTo(scrollData.alternateValue, propertyValue);
+						}
+					}
+				} else {
+					/* Transforms (translateX, rotateZ, etc.) are applied to a per-element transformCache object, which is manually flushed via flushTransformCache().
+					 Thus, for now, we merely cache transforms being SET. */
+					if (CSS.Normalizations.registered[property] && CSS.Normalizations.registered[property]("name", element) === "transform") {
+						/* Perform a normalization injection. */
+						/* Note: The normalization logic handles the transformCache updating. */
+						CSS.Normalizations.registered[property]("inject", element, propertyValue);
+
+						propertyName = "transform";
+						propertyValue = Data(element).transformCache[property];
+					} else {
+						/* Inject hooks. */
+						if (CSS.Hooks.registered[property]) {
+							var hookName = property,
+									hookRoot = CSS.Hooks.getRoot(property);
+
+							/* If a cached rootPropertyValue was not provided, query the DOM for the hookRoot's current value. */
+							rootPropertyValue = rootPropertyValue || CSS.getPropertyValue(element, hookRoot); /* GET */
+
+							propertyValue = CSS.Hooks.injectValue(hookName, propertyValue, rootPropertyValue);
+							property = hookRoot;
+						}
+
+						/* Normalize names and values. */
+						if (CSS.Normalizations.registered[property]) {
+							propertyValue = CSS.Normalizations.registered[property]("inject", element, propertyValue);
+							property = CSS.Normalizations.registered[property]("name", element);
+						}
+
+						/* Assign the appropriate vendor prefix before performing an official style update. */
+						propertyName = CSS.Names.prefixCheck(property)[0];
+
+						/* A try/catch is used for IE<=8, which throws an error when "invalid" CSS values are set, e.g. a negative width.
+						 Try/catch is avoided for other browsers since it incurs a performance overhead. */
+						if (IE <= 8) {
+							try {
+								element.style[propertyName] = propertyValue;
+							} catch (error) {
+								if (Velocity.debug) {
+									console.log("Browser does not support [" + propertyValue + "] for [" + propertyName + "]");
+								}
+							}
+							/* SVG elements have their dimensional properties (width, height, x, y, cx, etc.) applied directly as attributes instead of as styles. */
+							/* Note: IE8 does not support SVG elements, so it's okay that we skip it for SVG animation. */
+						} else {
+							var data = Data(element);
+
+							if (data && data.isSVG && CSS.Names.SVGAttribute(property)) {
+								/* Note: For SVG attributes, vendor-prefixed property names are never used. */
+								/* Note: Not all CSS properties can be animated via attributes, but the browser won't throw an error for unsupported properties. */
+								element.setAttribute(property, propertyValue);
+							} else {
+								element.style[propertyName] = propertyValue;
+							}
+						}
+
+						if (Velocity.debug >= 2) {
+							console.log("Set " + property + " (" + propertyName + "): " + propertyValue);
+						}
+					}
+				}
+
+				/* Return the normalized property name and value in case the caller wants to know how these values were modified before being applied to the DOM. */
+				return [propertyName, propertyValue];
+			},
+			/* To increase performance by batching transform updates into a single SET, transforms are not directly applied to an element until flushTransformCache() is called. */
+			/* Note: Velocity applies transform properties in the same order that they are chronogically introduced to the element's CSS styles. */
+			flushTransformCache: function(element) {
+				var transformString = "",
+						data = Data(element);
+
+				/* Certain browsers require that SVG transforms be applied as an attribute. However, the SVG transform attribute takes a modified version of CSS's transform string
+				 (units are dropped and, except for skewX/Y, subproperties are merged into their master property -- e.g. scaleX and scaleY are merged into scale(X Y). */
+				if ((IE || (Velocity.State.isAndroid && !Velocity.State.isChrome)) && data && data.isSVG) {
+					/* Since transform values are stored in their parentheses-wrapped form, we use a helper function to strip out their numeric values.
+					 Further, SVG transform properties only take unitless (representing pixels) values, so it's okay that parseFloat() strips the unit suffixed to the float value. */
+					var getTransformFloat = function(transformProperty) {
+						return parseFloat(CSS.getPropertyValue(element, transformProperty));
+					};
+
+					/* Create an object to organize all the transforms that we'll apply to the SVG element. To keep the logic simple,
+					 we process *all* transform properties -- even those that may not be explicitly applied (since they default to their zero-values anyway). */
+					var SVGTransforms = {
+						translate: [getTransformFloat("translateX"), getTransformFloat("translateY")],
+						skewX: [getTransformFloat("skewX")], skewY: [getTransformFloat("skewY")],
+						/* If the scale property is set (non-1), use that value for the scaleX and scaleY values
+						 (this behavior mimics the result of animating all these properties at once on HTML elements). */
+						scale: getTransformFloat("scale") !== 1 ? [getTransformFloat("scale"), getTransformFloat("scale")] : [getTransformFloat("scaleX"), getTransformFloat("scaleY")],
+						/* Note: SVG's rotate transform takes three values: rotation degrees followed by the X and Y values
+						 defining the rotation's origin point. We ignore the origin values (default them to 0). */
+						rotate: [getTransformFloat("rotateZ"), 0, 0]
+					};
+
+					/* Iterate through the transform properties in the user-defined property map order.
+					 (This mimics the behavior of non-SVG transform animation.) */
+					$.each(Data(element).transformCache, function(transformName) {
+						/* Except for with skewX/Y, revert the axis-specific transform subproperties to their axis-free master
+						 properties so that they match up with SVG's accepted transform properties. */
+						if (/^translate/i.test(transformName)) {
+							transformName = "translate";
+						} else if (/^scale/i.test(transformName)) {
+							transformName = "scale";
+						} else if (/^rotate/i.test(transformName)) {
+							transformName = "rotate";
+						}
+
+						/* Check that we haven't yet deleted the property from the SVGTransforms container. */
+						if (SVGTransforms[transformName]) {
+							/* Append the transform property in the SVG-supported transform format. As per the spec, surround the space-delimited values in parentheses. */
+							transformString += transformName + "(" + SVGTransforms[transformName].join(" ") + ")" + " ";
+
+							/* After processing an SVG transform property, delete it from the SVGTransforms container so we don't
+							 re-insert the same master property if we encounter another one of its axis-specific properties. */
+							delete SVGTransforms[transformName];
+						}
+					});
+				} else {
+					var transformValue,
+							perspective;
+
+					/* Transform properties are stored as members of the transformCache object. Concatenate all the members into a string. */
+					$.each(Data(element).transformCache, function(transformName) {
+						transformValue = Data(element).transformCache[transformName];
+
+						/* Transform's perspective subproperty must be set first in order to take effect. Store it temporarily. */
+						if (transformName === "transformPerspective") {
+							perspective = transformValue;
+							return true;
+						}
+
+						/* IE9 only supports one rotation type, rotateZ, which it refers to as "rotate". */
+						if (IE === 9 && transformName === "rotateZ") {
+							transformName = "rotate";
+						}
+
+						transformString += transformName + transformValue + " ";
+					});
+
+					/* If present, set the perspective subproperty first. */
+					if (perspective) {
+						transformString = "perspective" + perspective + " " + transformString;
+					}
+				}
+
+				CSS.setPropertyValue(element, "transform", transformString);
+			}
+		};
+
+		/* Register hooks and normalizations. */
+		CSS.Hooks.register();
+		CSS.Normalizations.register();
+
+		/* Allow hook setting in the same fashion as jQuery's $.css(). */
+		Velocity.hook = function(elements, arg2, arg3) {
+			var value;
+
+			elements = sanitizeElements(elements);
+
+			$.each(elements, function(i, element) {
+				/* Initialize Velocity's per-element data cache if this element hasn't previously been animated. */
+				if (Data(element) === undefined) {
+					Velocity.init(element);
+				}
+
+				/* Get property value. If an element set was passed in, only return the value for the first element. */
+				if (arg3 === undefined) {
+					if (value === undefined) {
+						value = CSS.getPropertyValue(element, arg2);
+					}
+					/* Set property value. */
+				} else {
+					/* sPV returns an array of the normalized propertyName/propertyValue pair used to update the DOM. */
+					var adjustedSet = CSS.setPropertyValue(element, arg2, arg3);
+
+					/* Transform properties don't automatically set. They have to be flushed to the DOM. */
+					if (adjustedSet[0] === "transform") {
+						Velocity.CSS.flushTransformCache(element);
+					}
+
+					value = adjustedSet;
+				}
+			});
+
+			return value;
+		};
+
+		/*****************
+		 Animation
+		 *****************/
+
+		var animate = function() {
+			var opts;
+
+			/******************
+			 Call Chain
+			 ******************/
+
+			/* Logic for determining what to return to the call stack when exiting out of Velocity. */
+			function getChain() {
+				/* If we are using the utility function, attempt to return this call's promise. If no promise library was detected,
+				 default to null instead of returning the targeted elements so that utility function's return value is standardized. */
+				if (isUtility) {
+					return promiseData.promise || null;
+					/* Otherwise, if we're using $.fn, return the jQuery-/Zepto-wrapped element set. */
+				} else {
+					return elementsWrapped;
+				}
+			}
+
+			/*************************
+			 Arguments Assignment
+			 *************************/
+
+			/* To allow for expressive CoffeeScript code, Velocity supports an alternative syntax in which "elements" (or "e"), "properties" (or "p"), and "options" (or "o")
+			 objects are defined on a container object that's passed in as Velocity's sole argument. */
+			/* Note: Some browsers automatically populate arguments with a "properties" object. We detect it by checking for its default "names" property. */
+			var syntacticSugar = (arguments[0] && (arguments[0].p || (($.isPlainObject(arguments[0].properties) && !arguments[0].properties.names) || Type.isString(arguments[0].properties)))),
+					/* Whether Velocity was called via the utility function (as opposed to on a jQuery/Zepto object). */
+					isUtility,
+					/* When Velocity is called via the utility function ($.Velocity()/Velocity()), elements are explicitly
+					 passed in as the first parameter. Thus, argument positioning varies. We normalize them here. */
+					elementsWrapped,
+					argumentIndex;
+
+			var elements,
+					propertiesMap,
+					options;
+
+			/* Detect jQuery/Zepto elements being animated via the $.fn method. */
+			if (Type.isWrapped(this)) {
+				isUtility = false;
+
+				argumentIndex = 0;
+				elements = this;
+				elementsWrapped = this;
+				/* Otherwise, raw elements are being animated via the utility function. */
+			} else {
+				isUtility = true;
+
+				argumentIndex = 1;
+				elements = syntacticSugar ? (arguments[0].elements || arguments[0].e) : arguments[0];
+			}
+
+			/***************
+			 Promises
+			 ***************/
+
+			var promiseData = {
+				promise: null,
+				resolver: null,
+				rejecter: null
+			};
+
+			/* If this call was made via the utility function (which is the default method of invocation when jQuery/Zepto are not being used), and if
+			 promise support was detected, create a promise object for this call and store references to its resolver and rejecter methods. The resolve
+			 method is used when a call completes naturally or is prematurely stopped by the user. In both cases, completeCall() handles the associated
+			 call cleanup and promise resolving logic. The reject method is used when an invalid set of arguments is passed into a Velocity call. */
+			/* Note: Velocity employs a call-based queueing architecture, which means that stopping an animating element actually stops the full call that
+			 triggered it -- not that one element exclusively. Similarly, there is one promise per call, and all elements targeted by a Velocity call are
+			 grouped together for the purposes of resolving and rejecting a promise. */
+			if (isUtility && Velocity.Promise) {
+				promiseData.promise = new Velocity.Promise(function(resolve, reject) {
+					promiseData.resolver = resolve;
+					promiseData.rejecter = reject;
+				});
+			}
+
+			if (syntacticSugar) {
+				propertiesMap = arguments[0].properties || arguments[0].p;
+				options = arguments[0].options || arguments[0].o;
+			} else {
+				propertiesMap = arguments[argumentIndex];
+				options = arguments[argumentIndex + 1];
+			}
+
+			elements = sanitizeElements(elements);
+
+			if (!elements) {
+				if (promiseData.promise) {
+					if (!propertiesMap || !options || options.promiseRejectEmpty !== false) {
+						promiseData.rejecter();
+					} else {
+						promiseData.resolver();
+					}
+				}
+				return;
+			}
+
+			/* The length of the element set (in the form of a nodeList or an array of elements) is defaulted to 1 in case a
+			 single raw DOM element is passed in (which doesn't contain a length property). */
+			var elementsLength = elements.length,
+					elementsIndex = 0;
+
+			/***************************
+			 Argument Overloading
+			 ***************************/
+
+			/* Support is included for jQuery's argument overloading: $.animate(propertyMap [, duration] [, easing] [, complete]).
+			 Overloading is detected by checking for the absence of an object being passed into options. */
+			/* Note: The stop/finish/pause/resume actions do not accept animation options, and are therefore excluded from this check. */
+			if (!/^(stop|finish|finishAll|pause|resume)$/i.test(propertiesMap) && !$.isPlainObject(options)) {
+				/* The utility function shifts all arguments one position to the right, so we adjust for that offset. */
+				var startingArgumentPosition = argumentIndex + 1;
+
+				options = {};
+
+				/* Iterate through all options arguments */
+				for (var i = startingArgumentPosition; i < arguments.length; i++) {
+					/* Treat a number as a duration. Parse it out. */
+					/* Note: The following RegEx will return true if passed an array with a number as its first item.
+					 Thus, arrays are skipped from this check. */
+					if (!Type.isArray(arguments[i]) && (/^(fast|normal|slow)$/i.test(arguments[i]) || /^\d/.test(arguments[i]))) {
+						options.duration = arguments[i];
+						/* Treat strings and arrays as easings. */
+					} else if (Type.isString(arguments[i]) || Type.isArray(arguments[i])) {
+						options.easing = arguments[i];
+						/* Treat a function as a complete callback. */
+					} else if (Type.isFunction(arguments[i])) {
+						options.complete = arguments[i];
+					}
+				}
+			}
+
+			/*********************
+			 Action Detection
+			 *********************/
+
+			/* Velocity's behavior is categorized into "actions": Elements can either be specially scrolled into view,
+			 or they can be started, stopped, paused, resumed, or reversed . If a literal or referenced properties map is passed in as Velocity's
+			 first argument, the associated action is "start". Alternatively, "scroll", "reverse", "pause", "resume" or "stop" can be passed in 
+			 instead of a properties map. */
+			var action;
+
+			switch (propertiesMap) {
+				case "scroll":
+					action = "scroll";
+					break;
+
+				case "reverse":
+					action = "reverse";
+					break;
+
+				case "pause":
+
+					/*******************
+					 Action: Pause
+					 *******************/
+
+					var currentTime = (new Date()).getTime();
+
+					/* Handle delay timers */
+					$.each(elements, function(i, element) {
+						pauseDelayOnElement(element, currentTime);
+					});
+
+					/* Pause and Resume are call-wide (not on a per element basis). Thus, calling pause or resume on a 
+					 single element will cause any calls that containt tweens for that element to be paused/resumed
+					 as well. */
+
+					/* Iterate through all calls and pause any that contain any of our elements */
+					$.each(Velocity.State.calls, function(i, activeCall) {
+
+						var found = false;
+						/* Inactive calls are set to false by the logic inside completeCall(). Skip them. */
+						if (activeCall) {
+							/* Iterate through the active call's targeted elements. */
+							$.each(activeCall[1], function(k, activeElement) {
+								var queueName = (options === undefined) ? "" : options;
+
+								if (queueName !== true && (activeCall[2].queue !== queueName) && !(options === undefined && activeCall[2].queue === false)) {
+									return true;
+								}
+
+								/* Iterate through the calls targeted by the stop command. */
+								$.each(elements, function(l, element) {
+									/* Check that this call was applied to the target element. */
+									if (element === activeElement) {
+
+										/* Set call to paused */
+										activeCall[5] = {
+											resume: false
+										};
+
+										/* Once we match an element, we can bounce out to the next call entirely */
+										found = true;
+										return false;
+									}
+								});
+
+								/* Proceed to check next call if we have already matched */
+								if (found) {
+									return false;
+								}
+							});
+						}
+
+					});
+
+					/* Since pause creates no new tweens, exit out of Velocity. */
+					return getChain();
+
+				case "resume":
+
+					/*******************
+					 Action: Resume
+					 *******************/
+
+					/* Handle delay timers */
+					$.each(elements, function(i, element) {
+						resumeDelayOnElement(element, currentTime);
+					});
+
+					/* Pause and Resume are call-wide (not on a per elemnt basis). Thus, calling pause or resume on a 
+					 single element will cause any calls that containt tweens for that element to be paused/resumed
+					 as well. */
+
+					/* Iterate through all calls and pause any that contain any of our elements */
+					$.each(Velocity.State.calls, function(i, activeCall) {
+						var found = false;
+						/* Inactive calls are set to false by the logic inside completeCall(). Skip them. */
+						if (activeCall) {
+							/* Iterate through the active call's targeted elements. */
+							$.each(activeCall[1], function(k, activeElement) {
+								var queueName = (options === undefined) ? "" : options;
+
+								if (queueName !== true && (activeCall[2].queue !== queueName) && !(options === undefined && activeCall[2].queue === false)) {
+									return true;
+								}
+
+								/* Skip any calls that have never been paused */
+								if (!activeCall[5]) {
+									return true;
+								}
+
+								/* Iterate through the calls targeted by the stop command. */
+								$.each(elements, function(l, element) {
+									/* Check that this call was applied to the target element. */
+									if (element === activeElement) {
+
+										/* Flag a pause object to be resumed, which will occur during the next tick. In
+										 addition, the pause object will at that time be deleted */
+										activeCall[5].resume = true;
+
+										/* Once we match an element, we can bounce out to the next call entirely */
+										found = true;
+										return false;
+									}
+								});
+
+								/* Proceed to check next call if we have already matched */
+								if (found) {
+									return false;
+								}
+							});
+						}
+
+					});
+
+					/* Since resume creates no new tweens, exit out of Velocity. */
+					return getChain();
+
+				case "finish":
+				case "finishAll":
+				case "stop":
+					/*******************
+					 Action: Stop
+					 *******************/
+
+					/* Clear the currently-active delay on each targeted element. */
+					$.each(elements, function(i, element) {
+						if (Data(element) && Data(element).delayTimer) {
+							/* Stop the timer from triggering its cached next() function. */
+							clearTimeout(Data(element).delayTimer.setTimeout);
+
+							/* Manually call the next() function so that the subsequent queue items can progress. */
+							if (Data(element).delayTimer.next) {
+								Data(element).delayTimer.next();
+							}
+
+							delete Data(element).delayTimer;
+						}
+
+						/* If we want to finish everything in the queue, we have to iterate through it
+						 and call each function. This will make them active calls below, which will
+						 cause them to be applied via the duration setting. */
+						if (propertiesMap === "finishAll" && (options === true || Type.isString(options))) {
+							/* Iterate through the items in the element's queue. */
+							$.each($.queue(element, Type.isString(options) ? options : ""), function(_, item) {
+								/* The queue array can contain an "inprogress" string, which we skip. */
+								if (Type.isFunction(item)) {
+									item();
+								}
+							});
+
+							/* Clearing the $.queue() array is achieved by resetting it to []. */
+							$.queue(element, Type.isString(options) ? options : "", []);
+						}
+					});
+
+					var callsToStop = [];
+
+					/* When the stop action is triggered, the elements' currently active call is immediately stopped. The active call might have
+					 been applied to multiple elements, in which case all of the call's elements will be stopped. When an element
+					 is stopped, the next item in its animation queue is immediately triggered. */
+					/* An additional argument may be passed in to clear an element's remaining queued calls. Either true (which defaults to the "fx" queue)
+					 or a custom queue string can be passed in. */
+					/* Note: The stop command runs prior to Velocity's Queueing phase since its behavior is intended to take effect *immediately*,
+					 regardless of the element's current queue state. */
+
+					/* Iterate through every active call. */
+					$.each(Velocity.State.calls, function(i, activeCall) {
+						/* Inactive calls are set to false by the logic inside completeCall(). Skip them. */
+						if (activeCall) {
+							/* Iterate through the active call's targeted elements. */
+							$.each(activeCall[1], function(k, activeElement) {
+								/* If true was passed in as a secondary argument, clear absolutely all calls on this element. Otherwise, only
+								 clear calls associated with the relevant queue. */
+								/* Call stopping logic works as follows:
+								 - options === true --> stop current default queue calls (and queue:false calls), including remaining queued ones.
+								 - options === undefined --> stop current queue:"" call and all queue:false calls.
+								 - options === false --> stop only queue:false calls.
+								 - options === "custom" --> stop current queue:"custom" call, including remaining queued ones (there is no functionality to only clear the currently-running queue:"custom" call). */
+								var queueName = (options === undefined) ? "" : options;
+
+								if (queueName !== true && (activeCall[2].queue !== queueName) && !(options === undefined && activeCall[2].queue === false)) {
+									return true;
+								}
+
+								/* Iterate through the calls targeted by the stop command. */
+								$.each(elements, function(l, element) {
+									/* Check that this call was applied to the target element. */
+									if (element === activeElement) {
+										/* Optionally clear the remaining queued calls. If we're doing "finishAll" this won't find anything,
+										 due to the queue-clearing above. */
+										if (options === true || Type.isString(options)) {
+											/* Iterate through the items in the element's queue. */
+											$.each($.queue(element, Type.isString(options) ? options : ""), function(_, item) {
+												/* The queue array can contain an "inprogress" string, which we skip. */
+												if (Type.isFunction(item)) {
+													/* Pass the item's callback a flag indicating that we want to abort from the queue call.
+													 (Specifically, the queue will resolve the call's associated promise then abort.)  */
+													item(null, true);
+												}
+											});
+
+											/* Clearing the $.queue() array is achieved by resetting it to []. */
+											$.queue(element, Type.isString(options) ? options : "", []);
+										}
+
+										if (propertiesMap === "stop") {
+											/* Since "reverse" uses cached start values (the previous call's endValues), these values must be
+											 changed to reflect the final value that the elements were actually tweened to. */
+											/* Note: If only queue:false animations are currently running on an element, it won't have a tweensContainer
+											 object. Also, queue:false animations can't be reversed. */
+											var data = Data(element);
+											if (data && data.tweensContainer && queueName !== false) {
+												$.each(data.tweensContainer, function(m, activeTween) {
+													activeTween.endValue = activeTween.currentValue;
+												});
+											}
+
+											callsToStop.push(i);
+										} else if (propertiesMap === "finish" || propertiesMap === "finishAll") {
+											/* To get active tweens to finish immediately, we forcefully shorten their durations to 1ms so that
+											 they finish upon the next rAf tick then proceed with normal call completion logic. */
+											activeCall[2].duration = 1;
+										}
+									}
+								});
+							});
+						}
+					});
+
+					/* Prematurely call completeCall() on each matched active call. Pass an additional flag for "stop" to indicate
+					 that the complete callback and display:none setting should be skipped since we're completing prematurely. */
+					if (propertiesMap === "stop") {
+						$.each(callsToStop, function(i, j) {
+							completeCall(j, true);
+						});
+
+						if (promiseData.promise) {
+							/* Immediately resolve the promise associated with this stop call since stop runs synchronously. */
+							promiseData.resolver(elements);
+						}
+					}
+
+					/* Since we're stopping, and not proceeding with queueing, exit out of Velocity. */
+					return getChain();
+
+				default:
+					/* Treat a non-empty plain object as a literal properties map. */
+					if ($.isPlainObject(propertiesMap) && !Type.isEmptyObject(propertiesMap)) {
+						action = "start";
+
+						/****************
+						 Redirects
+						 ****************/
+
+						/* Check if a string matches a registered redirect (see Redirects above). */
+					} else if (Type.isString(propertiesMap) && Velocity.Redirects[propertiesMap]) {
+						opts = $.extend({}, options);
+
+						var durationOriginal = opts.duration,
+								delayOriginal = opts.delay || 0;
+
+						/* If the backwards option was passed in, reverse the element set so that elements animate from the last to the first. */
+						if (opts.backwards === true) {
+							elements = $.extend(true, [], elements).reverse();
+						}
+
+						/* Individually trigger the redirect for each element in the set to prevent users from having to handle iteration logic in their redirect. */
+						$.each(elements, function(elementIndex, element) {
+							/* If the stagger option was passed in, successively delay each element by the stagger value (in ms). Retain the original delay value. */
+							if (parseFloat(opts.stagger)) {
+								opts.delay = delayOriginal + (parseFloat(opts.stagger) * elementIndex);
+							} else if (Type.isFunction(opts.stagger)) {
+								opts.delay = delayOriginal + opts.stagger.call(element, elementIndex, elementsLength);
+							}
+
+							/* If the drag option was passed in, successively increase/decrease (depending on the presense of opts.backwards)
+							 the duration of each element's animation, using floors to prevent producing very short durations. */
+							if (opts.drag) {
+								/* Default the duration of UI pack effects (callouts and transitions) to 1000ms instead of the usual default duration of 400ms. */
+								opts.duration = parseFloat(durationOriginal) || (/^(callout|transition)/.test(propertiesMap) ? 1000 : DURATION_DEFAULT);
+
+								/* For each element, take the greater duration of: A) animation completion percentage relative to the original duration,
+								 B) 75% of the original duration, or C) a 200ms fallback (in case duration is already set to a low value).
+								 The end result is a baseline of 75% of the redirect's duration that increases/decreases as the end of the element set is approached. */
+								opts.duration = Math.max(opts.duration * (opts.backwards ? 1 - elementIndex / elementsLength : (elementIndex + 1) / elementsLength), opts.duration * 0.75, 200);
+							}
+
+							/* Pass in the call's opts object so that the redirect can optionally extend it. It defaults to an empty object instead of null to
+							 reduce the opts checking logic required inside the redirect. */
+							Velocity.Redirects[propertiesMap].call(element, element, opts || {}, elementIndex, elementsLength, elements, promiseData.promise ? promiseData : undefined);
+						});
+
+						/* Since the animation logic resides within the redirect's own code, abort the remainder of this call.
+						 (The performance overhead up to this point is virtually non-existant.) */
+						/* Note: The jQuery call chain is kept intact by returning the complete element set. */
+						return getChain();
+					} else {
+						var abortError = "Velocity: First argument (" + propertiesMap + ") was not a property map, a known action, or a registered redirect. Aborting.";
+
+						if (promiseData.promise) {
+							promiseData.rejecter(new Error(abortError));
+						} else if (window.console) {
+							console.log(abortError);
+						}
+
+						return getChain();
+					}
+			}
+
+			/**************************
+			 Call-Wide Variables
+			 **************************/
+
+			/* A container for CSS unit conversion ratios (e.g. %, rem, and em ==> px) that is used to cache ratios across all elements
+			 being animated in a single Velocity call. Calculating unit ratios necessitates DOM querying and updating, and is therefore
+			 avoided (via caching) wherever possible. This container is call-wide instead of page-wide to avoid the risk of using stale
+			 conversion metrics across Velocity animations that are not immediately consecutively chained. */
+			var callUnitConversionData = {
+				lastParent: null,
+				lastPosition: null,
+				lastFontSize: null,
+				lastPercentToPxWidth: null,
+				lastPercentToPxHeight: null,
+				lastEmToPx: null,
+				remToPx: null,
+				vwToPx: null,
+				vhToPx: null
+			};
+
+			/* A container for all the ensuing tween data and metadata associated with this call. This container gets pushed to the page-wide
+			 Velocity.State.calls array that is processed during animation ticking. */
+			var call = [];
+
+			/************************
+			 Element Processing
+			 ************************/
+
+			/* Element processing consists of three parts -- data processing that cannot go stale and data processing that *can* go stale (i.e. third-party style modifications):
+			 1) Pre-Queueing: Element-wide variables, including the element's data storage, are instantiated. Call options are prepared. If triggered, the Stop action is executed.
+			 2) Queueing: The logic that runs once this call has reached its point of execution in the element's $.queue() stack. Most logic is placed here to avoid risking it becoming stale.
+			 3) Pushing: Consolidation of the tween data followed by its push onto the global in-progress calls container.
+			 `elementArrayIndex` allows passing index of the element in the original array to value functions.
+			 If `elementsIndex` were used instead the index would be determined by the elements' per-element queue.
+			 */
+			function processElement(element, elementArrayIndex) {
+
+				/*************************
+				 Part I: Pre-Queueing
+				 *************************/
+
+				/***************************
+				 Element-Wide Variables
+				 ***************************/
+
+				var /* The runtime opts object is the extension of the current call's options and Velocity's page-wide option defaults. */
+						opts = $.extend({}, Velocity.defaults, options),
+						/* A container for the processed data associated with each property in the propertyMap.
+						 (Each property in the map produces its own "tween".) */
+						tweensContainer = {},
+						elementUnitConversionData;
+
+				/******************
+				 Element Init
+				 ******************/
+
+				if (Data(element) === undefined) {
+					Velocity.init(element);
+				}
+
+				/******************
+				 Option: Delay
+				 ******************/
+
+				/* Since queue:false doesn't respect the item's existing queue, we avoid injecting its delay here (it's set later on). */
+				/* Note: Velocity rolls its own delay function since jQuery doesn't have a utility alias for $.fn.delay()
+				 (and thus requires jQuery element creation, which we avoid since its overhead includes DOM querying). */
+				if (parseFloat(opts.delay) && opts.queue !== false) {
+					$.queue(element, opts.queue, function(next, clearQueue) {
+						if (clearQueue === true) {
+							/* Do not continue with animation queueing. */
+							return true;
+						}
+
+						/* This is a flag used to indicate to the upcoming completeCall() function that this queue entry was initiated by Velocity. See completeCall() for further details. */
+						Velocity.velocityQueueEntryFlag = true;
+
+						/* The ensuing queue item (which is assigned to the "next" argument that $.queue() automatically passes in) will be triggered after a setTimeout delay.
+						 The setTimeout is stored so that it can be subjected to clearTimeout() if this animation is prematurely stopped via Velocity's "stop" command, and
+						 delayBegin/delayTime is used to ensure we can "pause" and "resume" a tween that is still mid-delay. */
+
+						/* Temporarily store delayed elements to facilite access for global pause/resume */
+						var callIndex = Velocity.State.delayedElements.count++;
+						Velocity.State.delayedElements[callIndex] = element;
+
+						var delayComplete = (function(index) {
+							return function() {
+								/* Clear the temporary element */
+								Velocity.State.delayedElements[index] = false;
+
+								/* Finally, issue the call */
+								next();
+							};
+						})(callIndex);
+
+
+						Data(element).delayBegin = (new Date()).getTime();
+						Data(element).delay = parseFloat(opts.delay);
+						Data(element).delayTimer = {
+							setTimeout: setTimeout(next, parseFloat(opts.delay)),
+							next: delayComplete
+						};
+					});
+				}
+
+				/*********************
+				 Option: Duration
+				 *********************/
+
+				/* Support for jQuery's named durations. */
+				switch (opts.duration.toString().toLowerCase()) {
+					case "fast":
+						opts.duration = 200;
+						break;
+
+					case "normal":
+						opts.duration = DURATION_DEFAULT;
+						break;
+
+					case "slow":
+						opts.duration = 600;
+						break;
+
+					default:
+						/* Remove the potential "ms" suffix and default to 1 if the user is attempting to set a duration of 0 (in order to produce an immediate style change). */
+						opts.duration = parseFloat(opts.duration) || 1;
+				}
+
+				/************************
+				 Global Option: Mock
+				 ************************/
+
+				if (Velocity.mock !== false) {
+					/* In mock mode, all animations are forced to 1ms so that they occur immediately upon the next rAF tick.
+					 Alternatively, a multiplier can be passed in to time remap all delays and durations. */
+					if (Velocity.mock === true) {
+						opts.duration = opts.delay = 1;
+					} else {
+						opts.duration *= parseFloat(Velocity.mock) || 1;
+						opts.delay *= parseFloat(Velocity.mock) || 1;
+					}
+				}
+
+				/*******************
+				 Option: Easing
+				 *******************/
+
+				opts.easing = getEasing(opts.easing, opts.duration);
+
+				/**********************
+				 Option: Callbacks
+				 **********************/
+
+				/* Callbacks must functions. Otherwise, default to null. */
+				if (opts.begin && !Type.isFunction(opts.begin)) {
+					opts.begin = null;
+				}
+
+				if (opts.progress && !Type.isFunction(opts.progress)) {
+					opts.progress = null;
+				}
+
+				if (opts.complete && !Type.isFunction(opts.complete)) {
+					opts.complete = null;
+				}
+
+				/*********************************
+				 Option: Display & Visibility
+				 *********************************/
+
+				/* Refer to Velocity's documentation (VelocityJS.org/#displayAndVisibility) for a description of the display and visibility options' behavior. */
+				/* Note: We strictly check for undefined instead of falsiness because display accepts an empty string value. */
+				if (opts.display !== undefined && opts.display !== null) {
+					opts.display = opts.display.toString().toLowerCase();
+
+					/* Users can pass in a special "auto" value to instruct Velocity to set the element to its default display value. */
+					if (opts.display === "auto") {
+						opts.display = Velocity.CSS.Values.getDisplayType(element);
+					}
+				}
+
+				if (opts.visibility !== undefined && opts.visibility !== null) {
+					opts.visibility = opts.visibility.toString().toLowerCase();
+				}
+
+				/**********************
+				 Option: mobileHA
+				 **********************/
+
+				/* When set to true, and if this is a mobile device, mobileHA automatically enables hardware acceleration (via a null transform hack)
+				 on animating elements. HA is removed from the element at the completion of its animation. */
+				/* Note: Android Gingerbread doesn't support HA. If a null transform hack (mobileHA) is in fact set, it will prevent other tranform subproperties from taking effect. */
+				/* Note: You can read more about the use of mobileHA in Velocity's documentation: VelocityJS.org/#mobileHA. */
+				opts.mobileHA = (opts.mobileHA && Velocity.State.isMobile && !Velocity.State.isGingerbread);
+
+				/***********************
+				 Part II: Queueing
+				 ***********************/
+
+				/* When a set of elements is targeted by a Velocity call, the set is broken up and each element has the current Velocity call individually queued onto it.
+				 In this way, each element's existing queue is respected; some elements may already be animating and accordingly should not have this current Velocity call triggered immediately. */
+				/* In each queue, tween data is processed for each animating property then pushed onto the call-wide calls array. When the last element in the set has had its tweens processed,
+				 the call array is pushed to Velocity.State.calls for live processing by the requestAnimationFrame tick. */
+				function buildQueue(next) {
+					var data, lastTweensContainer;
+
+					/*******************
+					 Option: Begin
+					 *******************/
+
+					/* The begin callback is fired once per call -- not once per elemenet -- and is passed the full raw DOM element set as both its context and its first argument. */
+					if (opts.begin && elementsIndex === 0) {
+						/* We throw callbacks in a setTimeout so that thrown errors don't halt the execution of Velocity itself. */
+						try {
+							opts.begin.call(elements, elements);
+						} catch (error) {
+							setTimeout(function() {
+								throw error;
+							}, 1);
+						}
+					}
+
+					/*****************************************
+					 Tween Data Construction (for Scroll)
+					 *****************************************/
+
+					/* Note: In order to be subjected to chaining and animation options, scroll's tweening is routed through Velocity as if it were a standard CSS property animation. */
+					if (action === "scroll") {
+						/* The scroll action uniquely takes an optional "offset" option -- specified in pixels -- that offsets the targeted scroll position. */
+						var scrollDirection = (/^x$/i.test(opts.axis) ? "Left" : "Top"),
+								scrollOffset = parseFloat(opts.offset) || 0,
+								scrollPositionCurrent,
+								scrollPositionCurrentAlternate,
+								scrollPositionEnd;
+
+						/* Scroll also uniquely takes an optional "container" option, which indicates the parent element that should be scrolled --
+						 as opposed to the browser window itself. This is useful for scrolling toward an element that's inside an overflowing parent element. */
+						if (opts.container) {
+							/* Ensure that either a jQuery object or a raw DOM element was passed in. */
+							if (Type.isWrapped(opts.container) || Type.isNode(opts.container)) {
+								/* Extract the raw DOM element from the jQuery wrapper. */
+								opts.container = opts.container[0] || opts.container;
+								/* Note: Unlike other properties in Velocity, the browser's scroll position is never cached since it so frequently changes
+								 (due to the user's natural interaction with the page). */
+								scrollPositionCurrent = opts.container["scroll" + scrollDirection]; /* GET */
+
+								/* $.position() values are relative to the container's currently viewable area (without taking into account the container's true dimensions
+								 -- say, for example, if the container was not overflowing). Thus, the scroll end value is the sum of the child element's position *and*
+								 the scroll container's current scroll position. */
+								scrollPositionEnd = (scrollPositionCurrent + $(element).position()[scrollDirection.toLowerCase()]) + scrollOffset; /* GET */
+								/* If a value other than a jQuery object or a raw DOM element was passed in, default to null so that this option is ignored. */
+							} else {
+								opts.container = null;
+							}
+						} else {
+							/* If the window itself is being scrolled -- not a containing element -- perform a live scroll position lookup using
+							 the appropriate cached property names (which differ based on browser type). */
+							scrollPositionCurrent = Velocity.State.scrollAnchor[Velocity.State["scrollProperty" + scrollDirection]]; /* GET */
+							/* When scrolling the browser window, cache the alternate axis's current value since window.scrollTo() doesn't let us change only one value at a time. */
+							scrollPositionCurrentAlternate = Velocity.State.scrollAnchor[Velocity.State["scrollProperty" + (scrollDirection === "Left" ? "Top" : "Left")]]; /* GET */
+
+							/* Unlike $.position(), $.offset() values are relative to the browser window's true dimensions -- not merely its currently viewable area --
+							 and therefore end values do not need to be compounded onto current values. */
+							scrollPositionEnd = $(element).offset()[scrollDirection.toLowerCase()] + scrollOffset; /* GET */
+						}
+
+						/* Since there's only one format that scroll's associated tweensContainer can take, we create it manually. */
+						tweensContainer = {
+							scroll: {
+								rootPropertyValue: false,
+								startValue: scrollPositionCurrent,
+								currentValue: scrollPositionCurrent,
+								endValue: scrollPositionEnd,
+								unitType: "",
+								easing: opts.easing,
+								scrollData: {
+									container: opts.container,
+									direction: scrollDirection,
+									alternateValue: scrollPositionCurrentAlternate
+								}
+							},
+							element: element
+						};
+
+						if (Velocity.debug) {
+							console.log("tweensContainer (scroll): ", tweensContainer.scroll, element);
+						}
+
+						/******************************************
+						 Tween Data Construction (for Reverse)
+						 ******************************************/
+
+						/* Reverse acts like a "start" action in that a property map is animated toward. The only difference is
+						 that the property map used for reverse is the inverse of the map used in the previous call. Thus, we manipulate
+						 the previous call to construct our new map: use the previous map's end values as our new map's start values. Copy over all other data. */
+						/* Note: Reverse can be directly called via the "reverse" parameter, or it can be indirectly triggered via the loop option. (Loops are composed of multiple reverses.) */
+						/* Note: Reverse calls do not need to be consecutively chained onto a currently-animating element in order to operate on cached values;
+						 there is no harm to reverse being called on a potentially stale data cache since reverse's behavior is simply defined
+						 as reverting to the element's values as they were prior to the previous *Velocity* call. */
+					} else if (action === "reverse") {
+						data = Data(element);
+
+						/* Abort if there is no prior animation data to reverse to. */
+						if (!data) {
+							return;
+						}
+
+						if (!data.tweensContainer) {
+							/* Dequeue the element so that this queue entry releases itself immediately, allowing subsequent queue entries to run. */
+							$.dequeue(element, opts.queue);
+
+							return;
+						} else {
+							/*********************
+							 Options Parsing
+							 *********************/
+
+							/* If the element was hidden via the display option in the previous call,
+							 revert display to "auto" prior to reversal so that the element is visible again. */
+							if (data.opts.display === "none") {
+								data.opts.display = "auto";
+							}
+
+							if (data.opts.visibility === "hidden") {
+								data.opts.visibility = "visible";
+							}
+
+							/* If the loop option was set in the previous call, disable it so that "reverse" calls aren't recursively generated.
+							 Further, remove the previous call's callback options; typically, users do not want these to be refired. */
+							data.opts.loop = false;
+							data.opts.begin = null;
+							data.opts.complete = null;
+
+							/* Since we're extending an opts object that has already been extended with the defaults options object,
+							 we remove non-explicitly-defined properties that are auto-assigned values. */
+							if (!options.easing) {
+								delete opts.easing;
+							}
+
+							if (!options.duration) {
+								delete opts.duration;
+							}
+
+							/* The opts object used for reversal is an extension of the options object optionally passed into this
+							 reverse call plus the options used in the previous Velocity call. */
+							opts = $.extend({}, data.opts, opts);
+
+							/*************************************
+							 Tweens Container Reconstruction
+							 *************************************/
+
+							/* Create a deepy copy (indicated via the true flag) of the previous call's tweensContainer. */
+							lastTweensContainer = $.extend(true, {}, data ? data.tweensContainer : null);
+
+							/* Manipulate the previous tweensContainer by replacing its end values and currentValues with its start values. */
+							for (var lastTween in lastTweensContainer) {
+								/* In addition to tween data, tweensContainers contain an element property that we ignore here. */
+								if (lastTweensContainer.hasOwnProperty(lastTween) && lastTween !== "element") {
+									var lastStartValue = lastTweensContainer[lastTween].startValue;
+
+									lastTweensContainer[lastTween].startValue = lastTweensContainer[lastTween].currentValue = lastTweensContainer[lastTween].endValue;
+									lastTweensContainer[lastTween].endValue = lastStartValue;
+
+									/* Easing is the only option that embeds into the individual tween data (since it can be defined on a per-property basis).
+									 Accordingly, every property's easing value must be updated when an options object is passed in with a reverse call.
+									 The side effect of this extensibility is that all per-property easing values are forcefully reset to the new value. */
+									if (!Type.isEmptyObject(options)) {
+										lastTweensContainer[lastTween].easing = opts.easing;
+									}
+
+									if (Velocity.debug) {
+										console.log("reverse tweensContainer (" + lastTween + "): " + JSON.stringify(lastTweensContainer[lastTween]), element);
+									}
+								}
+							}
+
+							tweensContainer = lastTweensContainer;
+						}
+
+						/*****************************************
+						 Tween Data Construction (for Start)
+						 *****************************************/
+
+					} else if (action === "start") {
+
+						/*************************
+						 Value Transferring
+						 *************************/
+
+						/* If this queue entry follows a previous Velocity-initiated queue entry *and* if this entry was created
+						 while the element was in the process of being animated by Velocity, then this current call is safe to use
+						 the end values from the prior call as its start values. Velocity attempts to perform this value transfer
+						 process whenever possible in order to avoid requerying the DOM. */
+						/* If values aren't transferred from a prior call and start values were not forcefed by the user (more on this below),
+						 then the DOM is queried for the element's current values as a last resort. */
+						/* Note: Conversely, animation reversal (and looping) *always* perform inter-call value transfers; they never requery the DOM. */
+
+						data = Data(element);
+
+						/* The per-element isAnimating flag is used to indicate whether it's safe (i.e. the data isn't stale)
+						 to transfer over end values to use as start values. If it's set to true and there is a previous
+						 Velocity call to pull values from, do so. */
+						if (data && data.tweensContainer && data.isAnimating === true) {
+							lastTweensContainer = data.tweensContainer;
+						}
+
+						/***************************
+						 Tween Data Calculation
+						 ***************************/
+
+						/* This function parses property data and defaults endValue, easing, and startValue as appropriate. */
+						/* Property map values can either take the form of 1) a single value representing the end value,
+						 or 2) an array in the form of [ endValue, [, easing] [, startValue] ].
+						 The optional third parameter is a forcefed startValue to be used instead of querying the DOM for
+						 the element's current value. Read Velocity's docmentation to learn more about forcefeeding: VelocityJS.org/#forcefeeding */
+						var parsePropertyValue = function(valueData, skipResolvingEasing) {
+							var endValue, easing, startValue;
+
+							/* If we have a function as the main argument then resolve it first, in case it returns an array that needs to be split */
+							if (Type.isFunction(valueData)) {
+								valueData = valueData.call(element, elementArrayIndex, elementsLength);
+							}
+
+							/* Handle the array format, which can be structured as one of three potential overloads:
+							 A) [ endValue, easing, startValue ], B) [ endValue, easing ], or C) [ endValue, startValue ] */
+							if (Type.isArray(valueData)) {
+								/* endValue is always the first item in the array. Don't bother validating endValue's value now
+								 since the ensuing property cycling logic does that. */
+								endValue = valueData[0];
+
+								/* Two-item array format: If the second item is a number, function, or hex string, treat it as a
+								 start value since easings can only be non-hex strings or arrays. */
+								if ((!Type.isArray(valueData[1]) && /^[\d-]/.test(valueData[1])) || Type.isFunction(valueData[1]) || CSS.RegEx.isHex.test(valueData[1])) {
+									startValue = valueData[1];
+									/* Two or three-item array: If the second item is a non-hex string easing name or an array, treat it as an easing. */
+								} else if ((Type.isString(valueData[1]) && !CSS.RegEx.isHex.test(valueData[1]) && Velocity.Easings[valueData[1]]) || Type.isArray(valueData[1])) {
+									easing = skipResolvingEasing ? valueData[1] : getEasing(valueData[1], opts.duration);
+
+									/* Don't bother validating startValue's value now since the ensuing property cycling logic inherently does that. */
+									startValue = valueData[2];
+								} else {
+									startValue = valueData[1] || valueData[2];
+								}
+								/* Handle the single-value format. */
+							} else {
+								endValue = valueData;
+							}
+
+							/* Default to the call's easing if a per-property easing type was not defined. */
+							if (!skipResolvingEasing) {
+								easing = easing || opts.easing;
+							}
+
+							/* If functions were passed in as values, pass the function the current element as its context,
+							 plus the element's index and the element set's size as arguments. Then, assign the returned value. */
+							if (Type.isFunction(endValue)) {
+								endValue = endValue.call(element, elementArrayIndex, elementsLength);
+							}
+
+							if (Type.isFunction(startValue)) {
+								startValue = startValue.call(element, elementArrayIndex, elementsLength);
+							}
+
+							/* Allow startValue to be left as undefined to indicate to the ensuing code that its value was not forcefed. */
+							return [endValue || 0, easing, startValue];
+						};
+
+						var fixPropertyValue = function(property, valueData) {
+							/* In case this property is a hook, there are circumstances where we will intend to work on the hook's root property and not the hooked subproperty. */
+							var rootProperty = CSS.Hooks.getRoot(property),
+									rootPropertyValue = false,
+									/* Parse out endValue, easing, and startValue from the property's data. */
+									endValue = valueData[0],
+									easing = valueData[1],
+									startValue = valueData[2],
+									pattern;
+
+							/**************************
+							 Start Value Sourcing
+							 **************************/
+
+							/* Other than for the dummy tween property, properties that are not supported by the browser (and do not have an associated normalization) will
+							 inherently produce no style changes when set, so they are skipped in order to decrease animation tick overhead.
+							 Property support is determined via prefixCheck(), which returns a false flag when no supported is detected. */
+							/* Note: Since SVG elements have some of their properties directly applied as HTML attributes,
+							 there is no way to check for their explicit browser support, and so we skip skip this check for them. */
+							if ((!data || !data.isSVG) && rootProperty !== "tween" && CSS.Names.prefixCheck(rootProperty)[1] === false && CSS.Normalizations.registered[rootProperty] === undefined) {
+								if (Velocity.debug) {
+									console.log("Skipping [" + rootProperty + "] due to a lack of browser support.");
+								}
+								return;
+							}
+
+							/* If the display option is being set to a non-"none" (e.g. "block") and opacity (filter on IE<=8) is being
+							 animated to an endValue of non-zero, the user's intention is to fade in from invisible, thus we forcefeed opacity
+							 a startValue of 0 if its startValue hasn't already been sourced by value transferring or prior forcefeeding. */
+							if (((opts.display !== undefined && opts.display !== null && opts.display !== "none") || (opts.visibility !== undefined && opts.visibility !== "hidden")) && /opacity|filter/.test(property) && !startValue && endValue !== 0) {
+								startValue = 0;
+							}
+
+							/* If values have been transferred from the previous Velocity call, extract the endValue and rootPropertyValue
+							 for all of the current call's properties that were *also* animated in the previous call. */
+							/* Note: Value transferring can optionally be disabled by the user via the _cacheValues option. */
+							if (opts._cacheValues && lastTweensContainer && lastTweensContainer[property]) {
+								if (startValue === undefined) {
+									startValue = lastTweensContainer[property].endValue + lastTweensContainer[property].unitType;
+								}
+
+								/* The previous call's rootPropertyValue is extracted from the element's data cache since that's the
+								 instance of rootPropertyValue that gets freshly updated by the tweening process, whereas the rootPropertyValue
+								 attached to the incoming lastTweensContainer is equal to the root property's value prior to any tweening. */
+								rootPropertyValue = data.rootPropertyValueCache[rootProperty];
+								/* If values were not transferred from a previous Velocity call, query the DOM as needed. */
+							} else {
+								/* Handle hooked properties. */
+								if (CSS.Hooks.registered[property]) {
+									if (startValue === undefined) {
+										rootPropertyValue = CSS.getPropertyValue(element, rootProperty); /* GET */
+										/* Note: The following getPropertyValue() call does not actually trigger a DOM query;
+										 getPropertyValue() will extract the hook from rootPropertyValue. */
+										startValue = CSS.getPropertyValue(element, property, rootPropertyValue);
+										/* If startValue is already defined via forcefeeding, do not query the DOM for the root property's value;
+										 just grab rootProperty's zero-value template from CSS.Hooks. This overwrites the element's actual
+										 root property value (if one is set), but this is acceptable since the primary reason users forcefeed is
+										 to avoid DOM queries, and thus we likewise avoid querying the DOM for the root property's value. */
+									} else {
+										/* Grab this hook's zero-value template, e.g. "0px 0px 0px black". */
+										rootPropertyValue = CSS.Hooks.templates[rootProperty][1];
+									}
+									/* Handle non-hooked properties that haven't already been defined via forcefeeding. */
+								} else if (startValue === undefined) {
+									startValue = CSS.getPropertyValue(element, property); /* GET */
+								}
+							}
+
+							/**************************
+							 Value Data Extraction
+							 **************************/
+
+							var separatedValue,
+									endValueUnitType,
+									startValueUnitType,
+									operator = false;
+
+							/* Separates a property value into its numeric value and its unit type. */
+							var separateValue = function(property, value) {
+								var unitType,
+										numericValue;
+
+								numericValue = (value || "0")
+										.toString()
+										.toLowerCase()
+										/* Match the unit type at the end of the value. */
+										.replace(/[%A-z]+$/, function(match) {
+											/* Grab the unit type. */
+											unitType = match;
+
+											/* Strip the unit type off of value. */
+											return "";
+										});
+
+								/* If no unit type was supplied, assign one that is appropriate for this property (e.g. "deg" for rotateZ or "px" for width). */
+								if (!unitType) {
+									unitType = CSS.Values.getUnitType(property);
+								}
+
+								return [numericValue, unitType];
+							};
+
+							if (startValue !== endValue && Type.isString(startValue) && Type.isString(endValue)) {
+								pattern = "";
+								var iStart = 0, // index in startValue
+										iEnd = 0, // index in endValue
+										aStart = [], // array of startValue numbers
+										aEnd = [], // array of endValue numbers
+										inCalc = 0, // Keep track of being inside a "calc()" so we don't duplicate it
+										inRGB = 0, // Keep track of being inside an RGB as we can't use fractional values
+										inRGBA = 0; // Keep track of being inside an RGBA as we must pass fractional for the alpha channel
+
+								startValue = CSS.Hooks.fixColors(startValue);
+								endValue = CSS.Hooks.fixColors(endValue);
+								while (iStart < startValue.length && iEnd < endValue.length) {
+									var cStart = startValue[iStart],
+											cEnd = endValue[iEnd];
+
+									if (/[\d\.-]/.test(cStart) && /[\d\.-]/.test(cEnd)) {
+										var tStart = cStart, // temporary character buffer
+												tEnd = cEnd, // temporary character buffer
+												dotStart = ".", // Make sure we can only ever match a single dot in a decimal
+												dotEnd = "."; // Make sure we can only ever match a single dot in a decimal
+
+										while (++iStart < startValue.length) {
+											cStart = startValue[iStart];
+											if (cStart === dotStart) {
+												dotStart = ".."; // Can never match two characters
+											} else if (!/\d/.test(cStart)) {
+												break;
+											}
+											tStart += cStart;
+										}
+										while (++iEnd < endValue.length) {
+											cEnd = endValue[iEnd];
+											if (cEnd === dotEnd) {
+												dotEnd = ".."; // Can never match two characters
+											} else if (!/\d/.test(cEnd)) {
+												break;
+											}
+											tEnd += cEnd;
+										}
+										var uStart = CSS.Hooks.getUnit(startValue, iStart), // temporary unit type
+												uEnd = CSS.Hooks.getUnit(endValue, iEnd); // temporary unit type
+
+										iStart += uStart.length;
+										iEnd += uEnd.length;
+										if (uStart === uEnd) {
+											// Same units
+											if (tStart === tEnd) {
+												// Same numbers, so just copy over
+												pattern += tStart + uStart;
+											} else {
+												// Different numbers, so store them
+												pattern += "{" + aStart.length + (inRGB ? "!" : "") + "}" + uStart;
+												aStart.push(parseFloat(tStart));
+												aEnd.push(parseFloat(tEnd));
+											}
+										} else {
+											// Different units, so put into a "calc(from + to)" and animate each side to/from zero
+											var nStart = parseFloat(tStart),
+													nEnd = parseFloat(tEnd);
+
+											pattern += (inCalc < 5 ? "calc" : "") + "("
+													+ (nStart ? "{" + aStart.length + (inRGB ? "!" : "") + "}" : "0") + uStart
+													+ " + "
+													+ (nEnd ? "{" + (aStart.length + (nStart ? 1 : 0)) + (inRGB ? "!" : "") + "}" : "0") + uEnd
+													+ ")";
+											if (nStart) {
+												aStart.push(nStart);
+												aEnd.push(0);
+											}
+											if (nEnd) {
+												aStart.push(0);
+												aEnd.push(nEnd);
+											}
+										}
+									} else if (cStart === cEnd) {
+										pattern += cStart;
+										iStart++;
+										iEnd++;
+										// Keep track of being inside a calc()
+										if (inCalc === 0 && cStart === "c"
+												|| inCalc === 1 && cStart === "a"
+												|| inCalc === 2 && cStart === "l"
+												|| inCalc === 3 && cStart === "c"
+												|| inCalc >= 4 && cStart === "("
+												) {
+											inCalc++;
+										} else if ((inCalc && inCalc < 5)
+												|| inCalc >= 4 && cStart === ")" && --inCalc < 5) {
+											inCalc = 0;
+										}
+										// Keep track of being inside an rgb() / rgba()
+										if (inRGB === 0 && cStart === "r"
+												|| inRGB === 1 && cStart === "g"
+												|| inRGB === 2 && cStart === "b"
+												|| inRGB === 3 && cStart === "a"
+												|| inRGB >= 3 && cStart === "("
+												) {
+											if (inRGB === 3 && cStart === "a") {
+												inRGBA = 1;
+											}
+											inRGB++;
+										} else if (inRGBA && cStart === ",") {
+											if (++inRGBA > 3) {
+												inRGB = inRGBA = 0;
+											}
+										} else if ((inRGBA && inRGB < (inRGBA ? 5 : 4))
+												|| inRGB >= (inRGBA ? 4 : 3) && cStart === ")" && --inRGB < (inRGBA ? 5 : 4)) {
+											inRGB = inRGBA = 0;
+										}
+									} else {
+										inCalc = 0;
+										// TODO: changing units, fixing colours
+										break;
+									}
+								}
+								if (iStart !== startValue.length || iEnd !== endValue.length) {
+									if (Velocity.debug) {
+										console.error("Trying to pattern match mis-matched strings [\"" + endValue + "\", \"" + startValue + "\"]");
+									}
+									pattern = undefined;
+								}
+								if (pattern) {
+									if (aStart.length) {
+										if (Velocity.debug) {
+											console.log("Pattern found \"" + pattern + "\" -> ", aStart, aEnd, "[" + startValue + "," + endValue + "]");
+										}
+										startValue = aStart;
+										endValue = aEnd;
+										endValueUnitType = startValueUnitType = "";
+									} else {
+										pattern = undefined;
+									}
+								}
+							}
+
+							if (!pattern) {
+								/* Separate startValue. */
+								separatedValue = separateValue(property, startValue);
+								startValue = separatedValue[0];
+								startValueUnitType = separatedValue[1];
+
+								/* Separate endValue, and extract a value operator (e.g. "+=", "-=") if one exists. */
+								separatedValue = separateValue(property, endValue);
+								endValue = separatedValue[0].replace(/^([+-\/*])=/, function(match, subMatch) {
+									operator = subMatch;
+
+									/* Strip the operator off of the value. */
+									return "";
+								});
+								endValueUnitType = separatedValue[1];
+
+								/* Parse float values from endValue and startValue. Default to 0 if NaN is returned. */
+								startValue = parseFloat(startValue) || 0;
+								endValue = parseFloat(endValue) || 0;
+
+								/***************************************
+								 Property-Specific Value Conversion
+								 ***************************************/
+
+								/* Custom support for properties that don't actually accept the % unit type, but where pollyfilling is trivial and relatively foolproof. */
+								if (endValueUnitType === "%") {
+									/* A %-value fontSize/lineHeight is relative to the parent's fontSize (as opposed to the parent's dimensions),
+									 which is identical to the em unit's behavior, so we piggyback off of that. */
+									if (/^(fontSize|lineHeight)$/.test(property)) {
+										/* Convert % into an em decimal value. */
+										endValue = endValue / 100;
+										endValueUnitType = "em";
+										/* For scaleX and scaleY, convert the value into its decimal format and strip off the unit type. */
+									} else if (/^scale/.test(property)) {
+										endValue = endValue / 100;
+										endValueUnitType = "";
+										/* For RGB components, take the defined percentage of 255 and strip off the unit type. */
+									} else if (/(Red|Green|Blue)$/i.test(property)) {
+										endValue = (endValue / 100) * 255;
+										endValueUnitType = "";
+									}
+								}
+							}
+
+							/***************************
+							 Unit Ratio Calculation
+							 ***************************/
+
+							/* When queried, the browser returns (most) CSS property values in pixels. Therefore, if an endValue with a unit type of
+							 %, em, or rem is animated toward, startValue must be converted from pixels into the same unit type as endValue in order
+							 for value manipulation logic (increment/decrement) to proceed. Further, if the startValue was forcefed or transferred
+							 from a previous call, startValue may also not be in pixels. Unit conversion logic therefore consists of two steps:
+							 1) Calculating the ratio of %/em/rem/vh/vw relative to pixels
+							 2) Converting startValue into the same unit of measurement as endValue based on these ratios. */
+							/* Unit conversion ratios are calculated by inserting a sibling node next to the target node, copying over its position property,
+							 setting values with the target unit type then comparing the returned pixel value. */
+							/* Note: Even if only one of these unit types is being animated, all unit ratios are calculated at once since the overhead
+							 of batching the SETs and GETs together upfront outweights the potential overhead
+							 of layout thrashing caused by re-querying for uncalculated ratios for subsequently-processed properties. */
+							/* Todo: Shift this logic into the calls' first tick instance so that it's synced with RAF. */
+							var calculateUnitRatios = function() {
+
+								/************************
+								 Same Ratio Checks
+								 ************************/
+
+								/* The properties below are used to determine whether the element differs sufficiently from this call's
+								 previously iterated element to also differ in its unit conversion ratios. If the properties match up with those
+								 of the prior element, the prior element's conversion ratios are used. Like most optimizations in Velocity,
+								 this is done to minimize DOM querying. */
+								var sameRatioIndicators = {
+									myParent: element.parentNode || document.body, /* GET */
+									position: CSS.getPropertyValue(element, "position"), /* GET */
+									fontSize: CSS.getPropertyValue(element, "fontSize") /* GET */
+								},
+										/* Determine if the same % ratio can be used. % is based on the element's position value and its parent's width and height dimensions. */
+										samePercentRatio = ((sameRatioIndicators.position === callUnitConversionData.lastPosition) && (sameRatioIndicators.myParent === callUnitConversionData.lastParent)),
+										/* Determine if the same em ratio can be used. em is relative to the element's fontSize. */
+										sameEmRatio = (sameRatioIndicators.fontSize === callUnitConversionData.lastFontSize);
+
+								/* Store these ratio indicators call-wide for the next element to compare against. */
+								callUnitConversionData.lastParent = sameRatioIndicators.myParent;
+								callUnitConversionData.lastPosition = sameRatioIndicators.position;
+								callUnitConversionData.lastFontSize = sameRatioIndicators.fontSize;
+
+								/***************************
+								 Element-Specific Units
+								 ***************************/
+
+								/* Note: IE8 rounds to the nearest pixel when returning CSS values, thus we perform conversions using a measurement
+								 of 100 (instead of 1) to give our ratios a precision of at least 2 decimal values. */
+								var measurement = 100,
+										unitRatios = {};
+
+								if (!sameEmRatio || !samePercentRatio) {
+									var dummy = data && data.isSVG ? document.createElementNS("http://www.w3.org/2000/svg", "rect") : document.createElement("div");
+
+									Velocity.init(dummy);
+									sameRatioIndicators.myParent.appendChild(dummy);
+
+									/* To accurately and consistently calculate conversion ratios, the element's cascaded overflow and box-sizing are stripped.
+									 Similarly, since width/height can be artificially constrained by their min-/max- equivalents, these are controlled for as well. */
+									/* Note: Overflow must be also be controlled for per-axis since the overflow property overwrites its per-axis values. */
+									$.each(["overflow", "overflowX", "overflowY"], function(i, property) {
+										Velocity.CSS.setPropertyValue(dummy, property, "hidden");
+									});
+									Velocity.CSS.setPropertyValue(dummy, "position", sameRatioIndicators.position);
+									Velocity.CSS.setPropertyValue(dummy, "fontSize", sameRatioIndicators.fontSize);
+									Velocity.CSS.setPropertyValue(dummy, "boxSizing", "content-box");
+
+									/* width and height act as our proxy properties for measuring the horizontal and vertical % ratios. */
+									$.each(["minWidth", "maxWidth", "width", "minHeight", "maxHeight", "height"], function(i, property) {
+										Velocity.CSS.setPropertyValue(dummy, property, measurement + "%");
+									});
+									/* paddingLeft arbitrarily acts as our proxy property for the em ratio. */
+									Velocity.CSS.setPropertyValue(dummy, "paddingLeft", measurement + "em");
+
+									/* Divide the returned value by the measurement to get the ratio between 1% and 1px. Default to 1 since working with 0 can produce Infinite. */
+									unitRatios.percentToPxWidth = callUnitConversionData.lastPercentToPxWidth = (parseFloat(CSS.getPropertyValue(dummy, "width", null, true)) || 1) / measurement; /* GET */
+									unitRatios.percentToPxHeight = callUnitConversionData.lastPercentToPxHeight = (parseFloat(CSS.getPropertyValue(dummy, "height", null, true)) || 1) / measurement; /* GET */
+									unitRatios.emToPx = callUnitConversionData.lastEmToPx = (parseFloat(CSS.getPropertyValue(dummy, "paddingLeft")) || 1) / measurement; /* GET */
+
+									sameRatioIndicators.myParent.removeChild(dummy);
+								} else {
+									unitRatios.emToPx = callUnitConversionData.lastEmToPx;
+									unitRatios.percentToPxWidth = callUnitConversionData.lastPercentToPxWidth;
+									unitRatios.percentToPxHeight = callUnitConversionData.lastPercentToPxHeight;
+								}
+
+								/***************************
+								 Element-Agnostic Units
+								 ***************************/
+
+								/* Whereas % and em ratios are determined on a per-element basis, the rem unit only needs to be checked
+								 once per call since it's exclusively dependant upon document.body's fontSize. If this is the first time
+								 that calculateUnitRatios() is being run during this call, remToPx will still be set to its default value of null,
+								 so we calculate it now. */
+								if (callUnitConversionData.remToPx === null) {
+									/* Default to browsers' default fontSize of 16px in the case of 0. */
+									callUnitConversionData.remToPx = parseFloat(CSS.getPropertyValue(document.body, "fontSize")) || 16; /* GET */
+								}
+
+								/* Similarly, viewport units are %-relative to the window's inner dimensions. */
+								if (callUnitConversionData.vwToPx === null) {
+									callUnitConversionData.vwToPx = parseFloat(window.innerWidth) / 100; /* GET */
+									callUnitConversionData.vhToPx = parseFloat(window.innerHeight) / 100; /* GET */
+								}
+
+								unitRatios.remToPx = callUnitConversionData.remToPx;
+								unitRatios.vwToPx = callUnitConversionData.vwToPx;
+								unitRatios.vhToPx = callUnitConversionData.vhToPx;
+
+								if (Velocity.debug >= 1) {
+									console.log("Unit ratios: " + JSON.stringify(unitRatios), element);
+								}
+								return unitRatios;
+							};
+
+							/********************
+							 Unit Conversion
+							 ********************/
+
+							/* The * and / operators, which are not passed in with an associated unit, inherently use startValue's unit. Skip value and unit conversion. */
+							if (/[\/*]/.test(operator)) {
+								endValueUnitType = startValueUnitType;
+								/* If startValue and endValue differ in unit type, convert startValue into the same unit type as endValue so that if endValueUnitType
+								 is a relative unit (%, em, rem), the values set during tweening will continue to be accurately relative even if the metrics they depend
+								 on are dynamically changing during the course of the animation. Conversely, if we always normalized into px and used px for setting values, the px ratio
+								 would become stale if the original unit being animated toward was relative and the underlying metrics change during the animation. */
+								/* Since 0 is 0 in any unit type, no conversion is necessary when startValue is 0 -- we just start at 0 with endValueUnitType. */
+							} else if ((startValueUnitType !== endValueUnitType) && startValue !== 0) {
+								/* Unit conversion is also skipped when endValue is 0, but *startValueUnitType* must be used for tween values to remain accurate. */
+								/* Note: Skipping unit conversion here means that if endValueUnitType was originally a relative unit, the animation won't relatively
+								 match the underlying metrics if they change, but this is acceptable since we're animating toward invisibility instead of toward visibility,
+								 which remains past the point of the animation's completion. */
+								if (endValue === 0) {
+									endValueUnitType = startValueUnitType;
+								} else {
+									/* By this point, we cannot avoid unit conversion (it's undesirable since it causes layout thrashing).
+									 If we haven't already, we trigger calculateUnitRatios(), which runs once per element per call. */
+									elementUnitConversionData = elementUnitConversionData || calculateUnitRatios();
+
+									/* The following RegEx matches CSS properties that have their % values measured relative to the x-axis. */
+									/* Note: W3C spec mandates that all of margin and padding's properties (even top and bottom) are %-relative to the *width* of the parent element. */
+									var axis = (/margin|padding|left|right|width|text|word|letter/i.test(property) || /X$/.test(property) || property === "x") ? "x" : "y";
+
+									/* In order to avoid generating n^2 bespoke conversion functions, unit conversion is a two-step process:
+									 1) Convert startValue into pixels. 2) Convert this new pixel value into endValue's unit type. */
+									switch (startValueUnitType) {
+										case "%":
+											/* Note: translateX and translateY are the only properties that are %-relative to an element's own dimensions -- not its parent's dimensions.
+											 Velocity does not include a special conversion process to account for this behavior. Therefore, animating translateX/Y from a % value
+											 to a non-% value will produce an incorrect start value. Fortunately, this sort of cross-unit conversion is rarely done by users in practice. */
+											startValue *= (axis === "x" ? elementUnitConversionData.percentToPxWidth : elementUnitConversionData.percentToPxHeight);
+											break;
+
+										case "px":
+											/* px acts as our midpoint in the unit conversion process; do nothing. */
+											break;
+
+										default:
+											startValue *= elementUnitConversionData[startValueUnitType + "ToPx"];
+									}
+
+									/* Invert the px ratios to convert into to the target unit. */
+									switch (endValueUnitType) {
+										case "%":
+											startValue *= 1 / (axis === "x" ? elementUnitConversionData.percentToPxWidth : elementUnitConversionData.percentToPxHeight);
+											break;
+
+										case "px":
+											/* startValue is already in px, do nothing; we're done. */
+											break;
+
+										default:
+											startValue *= 1 / elementUnitConversionData[endValueUnitType + "ToPx"];
+									}
+								}
+							}
+
+							/*********************
+							 Relative Values
+							 *********************/
+
+							/* Operator logic must be performed last since it requires unit-normalized start and end values. */
+							/* Note: Relative *percent values* do not behave how most people think; while one would expect "+=50%"
+							 to increase the property 1.5x its current value, it in fact increases the percent units in absolute terms:
+							 50 points is added on top of the current % value. */
+							switch (operator) {
+								case "+":
+									endValue = startValue + endValue;
+									break;
+
+								case "-":
+									endValue = startValue - endValue;
+									break;
+
+								case "*":
+									endValue = startValue * endValue;
+									break;
+
+								case "/":
+									endValue = startValue / endValue;
+									break;
+							}
+
+							/**************************
+							 tweensContainer Push
+							 **************************/
+
+							/* Construct the per-property tween object, and push it to the element's tweensContainer. */
+							tweensContainer[property] = {
+								rootPropertyValue: rootPropertyValue,
+								startValue: startValue,
+								currentValue: startValue,
+								endValue: endValue,
+								unitType: endValueUnitType,
+								easing: easing
+							};
+							if (pattern) {
+								tweensContainer[property].pattern = pattern;
+							}
+
+							if (Velocity.debug) {
+								console.log("tweensContainer (" + property + "): " + JSON.stringify(tweensContainer[property]), element);
+							}
+						};
+
+						/* Create a tween out of each property, and append its associated data to tweensContainer. */
+						for (var property in propertiesMap) {
+
+							if (!propertiesMap.hasOwnProperty(property)) {
+								continue;
+							}
+							/* The original property name's format must be used for the parsePropertyValue() lookup,
+							 but we then use its camelCase styling to normalize it for manipulation. */
+							var propertyName = CSS.Names.camelCase(property),
+									valueData = parsePropertyValue(propertiesMap[property]);
+
+							/* Find shorthand color properties that have been passed a hex string. */
+							/* Would be quicker to use CSS.Lists.colors.includes() if possible */
+							if (_inArray(CSS.Lists.colors, propertyName)) {
+								/* Parse the value data for each shorthand. */
+								var endValue = valueData[0],
+										easing = valueData[1],
+										startValue = valueData[2];
+
+								if (CSS.RegEx.isHex.test(endValue)) {
+									/* Convert the hex strings into their RGB component arrays. */
+									var colorComponents = ["Red", "Green", "Blue"],
+											endValueRGB = CSS.Values.hexToRgb(endValue),
+											startValueRGB = startValue ? CSS.Values.hexToRgb(startValue) : undefined;
+
+									/* Inject the RGB component tweens into propertiesMap. */
+									for (var i = 0; i < colorComponents.length; i++) {
+										var dataArray = [endValueRGB[i]];
+
+										if (easing) {
+											dataArray.push(easing);
+										}
+
+										if (startValueRGB !== undefined) {
+											dataArray.push(startValueRGB[i]);
+										}
+
+										fixPropertyValue(propertyName + colorComponents[i], dataArray);
+									}
+									/* If we have replaced a shortcut color value then don't update the standard property name */
+									continue;
+								}
+							}
+							fixPropertyValue(propertyName, valueData);
+						}
+
+						/* Along with its property data, store a reference to the element itself onto tweensContainer. */
+						tweensContainer.element = element;
+					}
+
+					/*****************
+					 Call Push
+					 *****************/
+
+					/* Note: tweensContainer can be empty if all of the properties in this call's property map were skipped due to not
+					 being supported by the browser. The element property is used for checking that the tweensContainer has been appended to. */
+					if (tweensContainer.element) {
+						/* Apply the "velocity-animating" indicator class. */
+						CSS.Values.addClass(element, "velocity-animating");
+
+						/* The call array houses the tweensContainers for each element being animated in the current call. */
+						call.push(tweensContainer);
+
+						data = Data(element);
+
+						if (data) {
+							/* Store the tweensContainer and options if we're working on the default effects queue, so that they can be used by the reverse command. */
+							if (opts.queue === "") {
+
+								data.tweensContainer = tweensContainer;
+								data.opts = opts;
+							}
+
+							/* Switch on the element's animating flag. */
+							data.isAnimating = true;
+						}
+
+						/* Once the final element in this call's element set has been processed, push the call array onto
+						 Velocity.State.calls for the animation tick to immediately begin processing. */
+						if (elementsIndex === elementsLength - 1) {
+							/* Add the current call plus its associated metadata (the element set and the call's options) onto the global call container.
+							 Anything on this call container is subjected to tick() processing. */
+							Velocity.State.calls.push([call, elements, opts, null, promiseData.resolver, null, 0]);
+
+							/* If the animation tick isn't running, start it. (Velocity shuts it off when there are no active calls to process.) */
+							if (Velocity.State.isTicking === false) {
+								Velocity.State.isTicking = true;
+
+								/* Start the tick loop. */
+								tick();
+							}
+						} else {
+							elementsIndex++;
+						}
+					}
+				}
+
+				/* When the queue option is set to false, the call skips the element's queue and fires immediately. */
+				if (opts.queue === false) {
+					/* Since this buildQueue call doesn't respect the element's existing queue (which is where a delay option would have been appended),
+					 we manually inject the delay property here with an explicit setTimeout. */
+					if (opts.delay) {
+
+						/* Temporarily store delayed elements to facilitate access for global pause/resume */
+						var callIndex = Velocity.State.delayedElements.count++;
+						Velocity.State.delayedElements[callIndex] = element;
+
+						var delayComplete = (function(index) {
+							return function() {
+								/* Clear the temporary element */
+								Velocity.State.delayedElements[index] = false;
+
+								/* Finally, issue the call */
+								buildQueue();
+							};
+						})(callIndex);
+
+						Data(element).delayBegin = (new Date()).getTime();
+						Data(element).delay = parseFloat(opts.delay);
+						Data(element).delayTimer = {
+							setTimeout: setTimeout(buildQueue, parseFloat(opts.delay)),
+							next: delayComplete
+						};
+					} else {
+						buildQueue();
+					}
+					/* Otherwise, the call undergoes element queueing as normal. */
+					/* Note: To interoperate with jQuery, Velocity uses jQuery's own $.queue() stack for queuing logic. */
+				} else {
+					$.queue(element, opts.queue, function(next, clearQueue) {
+						/* If the clearQueue flag was passed in by the stop command, resolve this call's promise. (Promises can only be resolved once,
+						 so it's fine if this is repeatedly triggered for each element in the associated call.) */
+						if (clearQueue === true) {
+							if (promiseData.promise) {
+								promiseData.resolver(elements);
+							}
+
+							/* Do not continue with animation queueing. */
+							return true;
+						}
+
+						/* This flag indicates to the upcoming completeCall() function that this queue entry was initiated by Velocity.
+						 See completeCall() for further details. */
+						Velocity.velocityQueueEntryFlag = true;
+
+						buildQueue(next);
+					});
+				}
+
+				/*********************
+				 Auto-Dequeuing
+				 *********************/
+
+				/* As per jQuery's $.queue() behavior, to fire the first non-custom-queue entry on an element, the element
+				 must be dequeued if its queue stack consists *solely* of the current call. (This can be determined by checking
+				 for the "inprogress" item that jQuery prepends to active queue stack arrays.) Regardless, whenever the element's
+				 queue is further appended with additional items -- including $.delay()'s or even $.animate() calls, the queue's
+				 first entry is automatically fired. This behavior contrasts that of custom queues, which never auto-fire. */
+				/* Note: When an element set is being subjected to a non-parallel Velocity call, the animation will not begin until
+				 each one of the elements in the set has reached the end of its individually pre-existing queue chain. */
+				/* Note: Unfortunately, most people don't fully grasp jQuery's powerful, yet quirky, $.queue() function.
+				 Lean more here: http://stackoverflow.com/questions/1058158/can-somebody-explain-jquery-queue-to-me */
+				if ((opts.queue === "" || opts.queue === "fx") && $.queue(element)[0] !== "inprogress") {
+					$.dequeue(element);
+				}
+			}
+
+			/**************************
+			 Element Set Iteration
+			 **************************/
+
+			/* If the "nodeType" property exists on the elements variable, we're animating a single element.
+			 Place it in an array so that $.each() can iterate over it. */
+			$.each(elements, function(i, element) {
+				/* Ensure each element in a set has a nodeType (is a real element) to avoid throwing errors. */
+				if (Type.isNode(element)) {
+					processElement(element, i);
+				}
+			});
+
+			/******************
+			 Option: Loop
+			 ******************/
+
+			/* The loop option accepts an integer indicating how many times the element should loop between the values in the
+			 current call's properties map and the element's property values prior to this call. */
+			/* Note: The loop option's logic is performed here -- after element processing -- because the current call needs
+			 to undergo its queue insertion prior to the loop option generating its series of constituent "reverse" calls,
+			 which chain after the current call. Two reverse calls (two "alternations") constitute one loop. */
+			opts = $.extend({}, Velocity.defaults, options);
+			opts.loop = parseInt(opts.loop, 10);
+			var reverseCallsCount = (opts.loop * 2) - 1;
+
+			if (opts.loop) {
+				/* Double the loop count to convert it into its appropriate number of "reverse" calls.
+				 Subtract 1 from the resulting value since the current call is included in the total alternation count. */
+				for (var x = 0; x < reverseCallsCount; x++) {
+					/* Since the logic for the reverse action occurs inside Queueing and therefore this call's options object
+					 isn't parsed until then as well, the current call's delay option must be explicitly passed into the reverse
+					 call so that the delay logic that occurs inside *Pre-Queueing* can process it. */
+					var reverseOptions = {
+						delay: opts.delay,
+						progress: opts.progress
+					};
+
+					/* If a complete callback was passed into this call, transfer it to the loop redirect's final "reverse" call
+					 so that it's triggered when the entire redirect is complete (and not when the very first animation is complete). */
+					if (x === reverseCallsCount - 1) {
+						reverseOptions.display = opts.display;
+						reverseOptions.visibility = opts.visibility;
+						reverseOptions.complete = opts.complete;
+					}
+
+					animate(elements, "reverse", reverseOptions);
+				}
+			}
+
+			/***************
+			 Chaining
+			 ***************/
+
+			/* Return the elements back to the call chain, with wrapped elements taking precedence in case Velocity was called via the $.fn. extension. */
+			return getChain();
+		};
+
+		/* Turn Velocity into the animation function, extended with the pre-existing Velocity object. */
+		Velocity = $.extend(animate, Velocity);
+		/* For legacy support, also expose the literal animate method. */
+		Velocity.animate = animate;
+
+		/**************
+		 Timing
+		 **************/
+
+		/* Ticker function. */
+		var ticker = window.requestAnimationFrame || rAFShim;
+
+		/* Inactive browser tabs pause rAF, which results in all active animations immediately sprinting to their completion states when the tab refocuses.
+		 To get around this, we dynamically switch rAF to setTimeout (which the browser *doesn't* pause) when the tab loses focus. We skip this for mobile
+		 devices to avoid wasting battery power on inactive tabs. */
+		/* Note: Tab focus detection doesn't work on older versions of IE, but that's okay since they don't support rAF to begin with. */
+		if (!Velocity.State.isMobile && document.hidden !== undefined) {
+			var updateTicker = function() {
+				/* Reassign the rAF function (which the global tick() function uses) based on the tab's focus state. */
+				if (document.hidden) {
+					ticker = function(callback) {
+						/* The tick function needs a truthy first argument in order to pass its internal timestamp check. */
+						return setTimeout(function() {
+							callback(true);
+						}, 16);
+					};
+
+					/* The rAF loop has been paused by the browser, so we manually restart the tick. */
+					tick();
+				} else {
+					ticker = window.requestAnimationFrame || rAFShim;
+				}
+			};
+
+			/* Page could be sitting in the background at this time (i.e. opened as new tab) so making sure we use correct ticker from the start */
+			updateTicker();
+
+			/* And then run check again every time visibility changes */
+			document.addEventListener("visibilitychange", updateTicker);
+		}
+
+		/************
+		 Tick
+		 ************/
+
+		/* Note: All calls to Velocity are pushed to the Velocity.State.calls array, which is fully iterated through upon each tick. */
+		function tick(timestamp) {
+			/* An empty timestamp argument indicates that this is the first tick occurence since ticking was turned on.
+			 We leverage this metadata to fully ignore the first tick pass since RAF's initial pass is fired whenever
+			 the browser's next tick sync time occurs, which results in the first elements subjected to Velocity
+			 calls being animated out of sync with any elements animated immediately thereafter. In short, we ignore
+			 the first RAF tick pass so that elements being immediately consecutively animated -- instead of simultaneously animated
+			 by the same Velocity call -- are properly batched into the same initial RAF tick and consequently remain in sync thereafter. */
+			if (timestamp) {
+				/* We normally use RAF's high resolution timestamp but as it can be significantly offset when the browser is
+				 under high stress we give the option for choppiness over allowing the browser to drop huge chunks of frames.
+				 We use performance.now() and shim it if it doesn't exist for when the tab is hidden. */
+				var timeCurrent = Velocity.timestamp && timestamp !== true ? timestamp : performance.now();
+
+				/********************
+				 Call Iteration
+				 ********************/
+
+				var callsLength = Velocity.State.calls.length;
+
+				/* To speed up iterating over this array, it is compacted (falsey items -- calls that have completed -- are removed)
+				 when its length has ballooned to a point that can impact tick performance. This only becomes necessary when animation
+				 has been continuous with many elements over a long period of time; whenever all active calls are completed, completeCall() clears Velocity.State.calls. */
+				if (callsLength > 10000) {
+					Velocity.State.calls = compactSparseArray(Velocity.State.calls);
+					callsLength = Velocity.State.calls.length;
+				}
+
+				/* Iterate through each active call. */
+				for (var i = 0; i < callsLength; i++) {
+					/* When a Velocity call is completed, its Velocity.State.calls entry is set to false. Continue on to the next call. */
+					if (!Velocity.State.calls[i]) {
+						continue;
+					}
+
+					/************************
+					 Call-Wide Variables
+					 ************************/
+
+					var callContainer = Velocity.State.calls[i],
+							call = callContainer[0],
+							opts = callContainer[2],
+							timeStart = callContainer[3],
+							firstTick = !timeStart,
+							tweenDummyValue = null,
+							pauseObject = callContainer[5],
+							millisecondsEllapsed = callContainer[6];
+
+
+
+					/* If timeStart is undefined, then this is the first time that this call has been processed by tick().
+					 We assign timeStart now so that its value is as close to the real animation start time as possible.
+					 (Conversely, had timeStart been defined when this call was added to Velocity.State.calls, the delay
+					 between that time and now would cause the first few frames of the tween to be skipped since
+					 percentComplete is calculated relative to timeStart.) */
+					/* Further, subtract 16ms (the approximate resolution of RAF) from the current time value so that the
+					 first tick iteration isn't wasted by animating at 0% tween completion, which would produce the
+					 same style value as the element's current value. */
+					if (!timeStart) {
+						timeStart = Velocity.State.calls[i][3] = timeCurrent - 16;
+					}
+
+					/* If a pause object is present, skip processing unless it has been set to resume */
+					if (pauseObject) {
+						if (pauseObject.resume === true) {
+							/* Update the time start to accomodate the paused completion amount */
+							timeStart = callContainer[3] = Math.round(timeCurrent - millisecondsEllapsed - 16);
+
+							/* Remove pause object after processing */
+							callContainer[5] = null;
+						} else {
+							continue;
+						}
+					}
+
+					millisecondsEllapsed = callContainer[6] = timeCurrent - timeStart;
+
+					/* The tween's completion percentage is relative to the tween's start time, not the tween's start value
+					 (which would result in unpredictable tween durations since JavaScript's timers are not particularly accurate).
+					 Accordingly, we ensure that percentComplete does not exceed 1. */
+					var percentComplete = Math.min((millisecondsEllapsed) / opts.duration, 1);
+
+					/**********************
+					 Element Iteration
+					 **********************/
+
+					/* For every call, iterate through each of the elements in its set. */
+					for (var j = 0, callLength = call.length; j < callLength; j++) {
+						var tweensContainer = call[j],
+								element = tweensContainer.element;
+
+						/* Check to see if this element has been deleted midway through the animation by checking for the
+						 continued existence of its data cache. If it's gone, or the element is currently paused, skip animating this element. */
+						if (!Data(element)) {
+							continue;
+						}
+
+						var transformPropertyExists = false;
+
+						/**********************************
+						 Display & Visibility Toggling
+						 **********************************/
+
+						/* If the display option is set to non-"none", set it upfront so that the element can become visible before tweening begins.
+						 (Otherwise, display's "none" value is set in completeCall() once the animation has completed.) */
+						if (opts.display !== undefined && opts.display !== null && opts.display !== "none") {
+							if (opts.display === "flex") {
+								var flexValues = ["-webkit-box", "-moz-box", "-ms-flexbox", "-webkit-flex"];
+
+								$.each(flexValues, function(i, flexValue) {
+									CSS.setPropertyValue(element, "display", flexValue);
+								});
+							}
+
+							CSS.setPropertyValue(element, "display", opts.display);
+						}
+
+						/* Same goes with the visibility option, but its "none" equivalent is "hidden". */
+						if (opts.visibility !== undefined && opts.visibility !== "hidden") {
+							CSS.setPropertyValue(element, "visibility", opts.visibility);
+						}
+
+						/************************
+						 Property Iteration
+						 ************************/
+
+						/* For every element, iterate through each property. */
+						for (var property in tweensContainer) {
+							/* Note: In addition to property tween data, tweensContainer contains a reference to its associated element. */
+							if (tweensContainer.hasOwnProperty(property) && property !== "element") {
+								var tween = tweensContainer[property],
+										currentValue,
+										/* Easing can either be a pre-genereated function or a string that references a pre-registered easing
+										 on the Velocity.Easings object. In either case, return the appropriate easing *function*. */
+										easing = Type.isString(tween.easing) ? Velocity.Easings[tween.easing] : tween.easing;
+
+								/******************************
+								 Current Value Calculation
+								 ******************************/
+
+								if (Type.isString(tween.pattern)) {
+									var patternReplace = percentComplete === 1 ?
+											function($0, index, round) {
+												var result = tween.endValue[index];
+
+												return round ? Math.round(result) : result;
+											} :
+											function($0, index, round) {
+												var startValue = tween.startValue[index],
+														tweenDelta = tween.endValue[index] - startValue,
+														result = startValue + (tweenDelta * easing(percentComplete, opts, tweenDelta));
+
+												return round ? Math.round(result) : result;
+											};
+
+									currentValue = tween.pattern.replace(/{(\d+)(!)?}/g, patternReplace);
+								} else if (percentComplete === 1) {
+									/* If this is the last tick pass (if we've reached 100% completion for this tween),
+									 ensure that currentValue is explicitly set to its target endValue so that it's not subjected to any rounding. */
+									currentValue = tween.endValue;
+								} else {
+									/* Otherwise, calculate currentValue based on the current delta from startValue. */
+									var tweenDelta = tween.endValue - tween.startValue;
+
+									currentValue = tween.startValue + (tweenDelta * easing(percentComplete, opts, tweenDelta));
+									/* If no value change is occurring, don't proceed with DOM updating. */
+								}
+								if (!firstTick && (currentValue === tween.currentValue)) {
+									continue;
+								}
+
+								tween.currentValue = currentValue;
+
+								/* If we're tweening a fake 'tween' property in order to log transition values, update the one-per-call variable so that
+								 it can be passed into the progress callback. */
+								if (property === "tween") {
+									tweenDummyValue = currentValue;
+								} else {
+									/******************
+									 Hooks: Part I
+									 ******************/
+									var hookRoot;
+
+									/* For hooked properties, the newly-updated rootPropertyValueCache is cached onto the element so that it can be used
+									 for subsequent hooks in this call that are associated with the same root property. If we didn't cache the updated
+									 rootPropertyValue, each subsequent update to the root property in this tick pass would reset the previous hook's
+									 updates to rootPropertyValue prior to injection. A nice performance byproduct of rootPropertyValue caching is that
+									 subsequently chained animations using the same hookRoot but a different hook can use this cached rootPropertyValue. */
+									if (CSS.Hooks.registered[property]) {
+										hookRoot = CSS.Hooks.getRoot(property);
+
+										var rootPropertyValueCache = Data(element).rootPropertyValueCache[hookRoot];
+
+										if (rootPropertyValueCache) {
+											tween.rootPropertyValue = rootPropertyValueCache;
+										}
+									}
+
+									/*****************
+									 DOM Update
+									 *****************/
+
+									/* setPropertyValue() returns an array of the property name and property value post any normalization that may have been performed. */
+									/* Note: To solve an IE<=8 positioning bug, the unit type is dropped when setting a property value of 0. */
+									var adjustedSetData = CSS.setPropertyValue(element, /* SET */
+											property,
+											tween.currentValue + (IE < 9 && parseFloat(currentValue) === 0 ? "" : tween.unitType),
+											tween.rootPropertyValue,
+											tween.scrollData);
+
+									/*******************
+									 Hooks: Part II
+									 *******************/
+
+									/* Now that we have the hook's updated rootPropertyValue (the post-processed value provided by adjustedSetData), cache it onto the element. */
+									if (CSS.Hooks.registered[property]) {
+										/* Since adjustedSetData contains normalized data ready for DOM updating, the rootPropertyValue needs to be re-extracted from its normalized form. ?? */
+										if (CSS.Normalizations.registered[hookRoot]) {
+											Data(element).rootPropertyValueCache[hookRoot] = CSS.Normalizations.registered[hookRoot]("extract", null, adjustedSetData[1]);
+										} else {
+											Data(element).rootPropertyValueCache[hookRoot] = adjustedSetData[1];
+										}
+									}
+
+									/***************
+									 Transforms
+									 ***************/
+
+									/* Flag whether a transform property is being animated so that flushTransformCache() can be triggered once this tick pass is complete. */
+									if (adjustedSetData[0] === "transform") {
+										transformPropertyExists = true;
+									}
+
+								}
+							}
+						}
+
+						/****************
+						 mobileHA
+						 ****************/
+
+						/* If mobileHA is enabled, set the translate3d transform to null to force hardware acceleration.
+						 It's safe to override this property since Velocity doesn't actually support its animation (hooks are used in its place). */
+						if (opts.mobileHA) {
+							/* Don't set the null transform hack if we've already done so. */
+							if (Data(element).transformCache.translate3d === undefined) {
+								/* All entries on the transformCache object are later concatenated into a single transform string via flushTransformCache(). */
+								Data(element).transformCache.translate3d = "(0px, 0px, 0px)";
+
+								transformPropertyExists = true;
+							}
+						}
+
+						if (transformPropertyExists) {
+							CSS.flushTransformCache(element);
+						}
+					}
+
+					/* The non-"none" display value is only applied to an element once -- when its associated call is first ticked through.
+					 Accordingly, it's set to false so that it isn't re-processed by this call in the next tick. */
+					if (opts.display !== undefined && opts.display !== "none") {
+						Velocity.State.calls[i][2].display = false;
+					}
+					if (opts.visibility !== undefined && opts.visibility !== "hidden") {
+						Velocity.State.calls[i][2].visibility = false;
+					}
+
+					/* Pass the elements and the timing data (percentComplete, msRemaining, timeStart, tweenDummyValue) into the progress callback. */
+					if (opts.progress) {
+						opts.progress.call(callContainer[1],
+								callContainer[1],
+								percentComplete,
+								Math.max(0, (timeStart + opts.duration) - timeCurrent),
+								timeStart,
+								tweenDummyValue);
+					}
+
+					/* If this call has finished tweening, pass its index to completeCall() to handle call cleanup. */
+					if (percentComplete === 1) {
+						completeCall(i);
+					}
+				}
+			}
+
+			/* Note: completeCall() sets the isTicking flag to false when the last call on Velocity.State.calls has completed. */
+			if (Velocity.State.isTicking) {
+				ticker(tick);
+			}
+		}
+
+		/**********************
+		 Call Completion
+		 **********************/
+
+		/* Note: Unlike tick(), which processes all active calls at once, call completion is handled on a per-call basis. */
+		function completeCall(callIndex, isStopped) {
+			/* Ensure the call exists. */
+			if (!Velocity.State.calls[callIndex]) {
+				return false;
+			}
+
+			/* Pull the metadata from the call. */
+			var call = Velocity.State.calls[callIndex][0],
+					elements = Velocity.State.calls[callIndex][1],
+					opts = Velocity.State.calls[callIndex][2],
+					resolver = Velocity.State.calls[callIndex][4];
+
+			var remainingCallsExist = false;
+
+			/*************************
+			 Element Finalization
+			 *************************/
+
+			for (var i = 0, callLength = call.length; i < callLength; i++) {
+				var element = call[i].element;
+
+				/* If the user set display to "none" (intending to hide the element), set it now that the animation has completed. */
+				/* Note: display:none isn't set when calls are manually stopped (via Velocity("stop"). */
+				/* Note: Display gets ignored with "reverse" calls and infinite loops, since this behavior would be undesirable. */
+				if (!isStopped && !opts.loop) {
+					if (opts.display === "none") {
+						CSS.setPropertyValue(element, "display", opts.display);
+					}
+
+					if (opts.visibility === "hidden") {
+						CSS.setPropertyValue(element, "visibility", opts.visibility);
+					}
+				}
+
+				/* If the element's queue is empty (if only the "inprogress" item is left at position 0) or if its queue is about to run
+				 a non-Velocity-initiated entry, turn off the isAnimating flag. A non-Velocity-initiatied queue entry's logic might alter
+				 an element's CSS values and thereby cause Velocity's cached value data to go stale. To detect if a queue entry was initiated by Velocity,
+				 we check for the existence of our special Velocity.queueEntryFlag declaration, which minifiers won't rename since the flag
+				 is assigned to jQuery's global $ object and thus exists out of Velocity's own scope. */
+				var data = Data(element);
+
+				if (opts.loop !== true && ($.queue(element)[1] === undefined || !/\.velocityQueueEntryFlag/i.test($.queue(element)[1]))) {
+					/* The element may have been deleted. Ensure that its data cache still exists before acting on it. */
+					if (data) {
+						data.isAnimating = false;
+						/* Clear the element's rootPropertyValueCache, which will become stale. */
+						data.rootPropertyValueCache = {};
+
+						var transformHAPropertyExists = false;
+						/* If any 3D transform subproperty is at its default value (regardless of unit type), remove it. */
+						$.each(CSS.Lists.transforms3D, function(i, transformName) {
+							var defaultValue = /^scale/.test(transformName) ? 1 : 0,
+									currentValue = data.transformCache[transformName];
+
+							if (data.transformCache[transformName] !== undefined && new RegExp("^\\(" + defaultValue + "[^.]").test(currentValue)) {
+								transformHAPropertyExists = true;
+
+								delete data.transformCache[transformName];
+							}
+						});
+
+						/* Mobile devices have hardware acceleration removed at the end of the animation in order to avoid hogging the GPU's memory. */
+						if (opts.mobileHA) {
+							transformHAPropertyExists = true;
+							delete data.transformCache.translate3d;
+						}
+
+						/* Flush the subproperty removals to the DOM. */
+						if (transformHAPropertyExists) {
+							CSS.flushTransformCache(element);
+						}
+
+						/* Remove the "velocity-animating" indicator class. */
+						CSS.Values.removeClass(element, "velocity-animating");
+					}
+				}
+
+				/*********************
+				 Option: Complete
+				 *********************/
+
+				/* Complete is fired once per call (not once per element) and is passed the full raw DOM element set as both its context and its first argument. */
+				/* Note: Callbacks aren't fired when calls are manually stopped (via Velocity("stop"). */
+				if (!isStopped && opts.complete && !opts.loop && (i === callLength - 1)) {
+					/* We throw callbacks in a setTimeout so that thrown errors don't halt the execution of Velocity itself. */
+					try {
+						opts.complete.call(elements, elements);
+					} catch (error) {
+						setTimeout(function() {
+							throw error;
+						}, 1);
+					}
+				}
+
+				/**********************
+				 Promise Resolving
+				 **********************/
+
+				/* Note: Infinite loops don't return promises. */
+				if (resolver && opts.loop !== true) {
+					resolver(elements);
+				}
+
+				/****************************
+				 Option: Loop (Infinite)
+				 ****************************/
+
+				if (data && opts.loop === true && !isStopped) {
+					/* If a rotateX/Y/Z property is being animated by 360 deg with loop:true, swap tween start/end values to enable
+					 continuous iterative rotation looping. (Otherise, the element would just rotate back and forth.) */
+					$.each(data.tweensContainer, function(propertyName, tweenContainer) {
+						if (/^rotate/.test(propertyName) && ((parseFloat(tweenContainer.startValue) - parseFloat(tweenContainer.endValue)) % 360 === 0)) {
+							var oldStartValue = tweenContainer.startValue;
+
+							tweenContainer.startValue = tweenContainer.endValue;
+							tweenContainer.endValue = oldStartValue;
+						}
+
+						if (/^backgroundPosition/.test(propertyName) && parseFloat(tweenContainer.endValue) === 100 && tweenContainer.unitType === "%") {
+							tweenContainer.endValue = 0;
+							tweenContainer.startValue = 100;
+						}
+					});
+
+					Velocity(element, "reverse", {loop: true, delay: opts.delay});
+				}
+
+				/***************
+				 Dequeueing
+				 ***************/
+
+				/* Fire the next call in the queue so long as this call's queue wasn't set to false (to trigger a parallel animation),
+				 which would have already caused the next call to fire. Note: Even if the end of the animation queue has been reached,
+				 $.dequeue() must still be called in order to completely clear jQuery's animation queue. */
+				if (opts.queue !== false) {
+					$.dequeue(element, opts.queue);
+				}
+			}
+
+			/************************
+			 Calls Array Cleanup
+			 ************************/
+
+			/* Since this call is complete, set it to false so that the rAF tick skips it. This array is later compacted via compactSparseArray().
+			 (For performance reasons, the call is set to false instead of being deleted from the array: http://www.html5rocks.com/en/tutorials/speed/v8/) */
+			Velocity.State.calls[callIndex] = false;
+
+			/* Iterate through the calls array to determine if this was the final in-progress animation.
+			 If so, set a flag to end ticking and clear the calls array. */
+			for (var j = 0, callsLength = Velocity.State.calls.length; j < callsLength; j++) {
+				if (Velocity.State.calls[j] !== false) {
+					remainingCallsExist = true;
+
+					break;
+				}
+			}
+
+			if (remainingCallsExist === false) {
+				/* tick() will detect this flag upon its next iteration and subsequently turn itself off. */
+				Velocity.State.isTicking = false;
+
+				/* Clear the calls array so that its length is reset. */
+				delete Velocity.State.calls;
+				Velocity.State.calls = [];
+			}
+		}
+
+		/******************
+		 Frameworks
+		 ******************/
+
+		/* Both jQuery and Zepto allow their $.fn object to be extended to allow wrapped elements to be subjected to plugin calls.
+		 If either framework is loaded, register a "velocity" extension pointing to Velocity's core animate() method.  Velocity
+		 also registers itself onto a global container (window.jQuery || window.Zepto || window) so that certain features are
+		 accessible beyond just a per-element scope. This master object contains an .animate() method, which is later assigned to $.fn
+		 (if jQuery or Zepto are present). Accordingly, Velocity can both act on wrapped DOM elements and stand alone for targeting raw DOM elements. */
+		global.Velocity = Velocity;
+
+		if (global !== window) {
+			/* Assign the element function to Velocity's core animate() method. */
+			global.fn.velocity = animate;
+			/* Assign the object function's defaults to Velocity's global defaults object. */
+			global.fn.velocity.defaults = Velocity.defaults;
+		}
+
+		/***********************
+		 Packaged Redirects
+		 ***********************/
+
+		/* slideUp, slideDown */
+		$.each(["Down", "Up"], function(i, direction) {
+			Velocity.Redirects["slide" + direction] = function(element, options, elementsIndex, elementsSize, elements, promiseData) {
+				var opts = $.extend({}, options),
+						begin = opts.begin,
+						complete = opts.complete,
+						inlineValues = {},
+						computedValues = {height: "", marginTop: "", marginBottom: "", paddingTop: "", paddingBottom: ""};
+
+				if (opts.display === undefined) {
+					/* Show the element before slideDown begins and hide the element after slideUp completes. */
+					/* Note: Inline elements cannot have dimensions animated, so they're reverted to inline-block. */
+					opts.display = (direction === "Down" ? (Velocity.CSS.Values.getDisplayType(element) === "inline" ? "inline-block" : "block") : "none");
+				}
+
+				opts.begin = function() {
+					/* If the user passed in a begin callback, fire it now. */
+					if (elementsIndex === 0 && begin) {
+						begin.call(elements, elements);
+					}
+
+					/* Cache the elements' original vertical dimensional property values so that we can animate back to them. */
+					for (var property in computedValues) {
+						if (!computedValues.hasOwnProperty(property)) {
+							continue;
+						}
+						inlineValues[property] = element.style[property];
+
+						/* For slideDown, use forcefeeding to animate all vertical properties from 0. For slideUp,
+						 use forcefeeding to start from computed values and animate down to 0. */
+						var propertyValue = CSS.getPropertyValue(element, property);
+						computedValues[property] = (direction === "Down") ? [propertyValue, 0] : [0, propertyValue];
+					}
+
+					/* Force vertical overflow content to clip so that sliding works as expected. */
+					inlineValues.overflow = element.style.overflow;
+					element.style.overflow = "hidden";
+				};
+
+				opts.complete = function() {
+					/* Reset element to its pre-slide inline values once its slide animation is complete. */
+					for (var property in inlineValues) {
+						if (inlineValues.hasOwnProperty(property)) {
+							element.style[property] = inlineValues[property];
+						}
+					}
+
+					/* If the user passed in a complete callback, fire it now. */
+					if (elementsIndex === elementsSize - 1) {
+						if (complete) {
+							complete.call(elements, elements);
+						}
+						if (promiseData) {
+							promiseData.resolver(elements);
+						}
+					}
+				};
+
+				Velocity(element, computedValues, opts);
+			};
+		});
+
+		/* fadeIn, fadeOut */
+		$.each(["In", "Out"], function(i, direction) {
+			Velocity.Redirects["fade" + direction] = function(element, options, elementsIndex, elementsSize, elements, promiseData) {
+				var opts = $.extend({}, options),
+						complete = opts.complete,
+						propertiesMap = {opacity: (direction === "In") ? 1 : 0};
+
+				/* Since redirects are triggered individually for each element in the animated set, avoid repeatedly triggering
+				 callbacks by firing them only when the final element has been reached. */
+				if (elementsIndex !== 0) {
+					opts.begin = null;
+				}
+				if (elementsIndex !== elementsSize - 1) {
+					opts.complete = null;
+				} else {
+					opts.complete = function() {
+						if (complete) {
+							complete.call(elements, elements);
+						}
+						if (promiseData) {
+							promiseData.resolver(elements);
+						}
+					};
+				}
+
+				/* If a display was passed in, use it. Otherwise, default to "none" for fadeOut or the element-specific default for fadeIn. */
+				/* Note: We allow users to pass in "null" to skip display setting altogether. */
+				if (opts.display === undefined) {
+					opts.display = (direction === "In" ? "auto" : "none");
+				}
+
+				Velocity(this, propertiesMap, opts);
+			};
+		});
+
+		return Velocity;
+	}((window.jQuery || window.Zepto || window), window, (window ? window.document : undefined));
+}));
+
+/******************
+ Known Issues
+ ******************/
+
+/* The CSS spec mandates that the translateX/Y/Z transforms are %-relative to the element itself -- not its parent.
+ Velocity, however, doesn't make this distinction. Thus, converting to or from the % unit with these subproperties
+ will produce an inaccurate conversion value. The same issue exists with the cx/cy attributes of SVG circles and ellipses. */
+
+
+/***/ }),
+/* 38 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -39173,7 +44066,7 @@ if (inBrowser && window.Vue) {
 
 
 /***/ }),
-/* 37 */
+/* 39 */
 /***/ (function(module, exports, __webpack_require__) {
 
 "use strict";
@@ -50136,10 +55029,10 @@ Vue.compile = compileToFunctions;
 
 module.exports = Vue;
 
-/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(1), __webpack_require__(38).setImmediate))
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(1), __webpack_require__(40).setImmediate))
 
 /***/ }),
-/* 38 */
+/* 40 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /* WEBPACK VAR INJECTION */(function(global) {var scope = (typeof global !== "undefined" && global) ||
@@ -50195,7 +55088,7 @@ exports._unrefActive = exports.active = function(item) {
 };
 
 // setimmediate attaches itself to the global object
-__webpack_require__(39);
+__webpack_require__(41);
 // On some exotic environments, it's not clear which object `setimmediate` was
 // able to install onto.  Search each possibility in the same order as the
 // `setimmediate` library.
@@ -50209,7 +55102,7 @@ exports.clearImmediate = (typeof self !== "undefined" && self.clearImmediate) ||
 /* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(1)))
 
 /***/ }),
-/* 39 */
+/* 41 */
 /***/ (function(module, exports, __webpack_require__) {
 
 /* WEBPACK VAR INJECTION */(function(global, process) {(function (global, undefined) {
@@ -50402,15 +55295,15 @@ exports.clearImmediate = (typeof self !== "undefined" && self.clearImmediate) ||
 /* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(1), __webpack_require__(4)))
 
 /***/ }),
-/* 40 */
+/* 42 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var disposed = false
-var normalizeComponent = __webpack_require__(41)
+var normalizeComponent = __webpack_require__(9)
 /* script */
-var __vue_script__ = __webpack_require__(42)
+var __vue_script__ = __webpack_require__(43)
 /* template */
-var __vue_template__ = __webpack_require__(43)
+var __vue_template__ = __webpack_require__(44)
 /* template functional */
 var __vue_template_functional__ = false
 /* styles */
@@ -50449,121 +55342,11 @@ module.exports = Component.exports
 
 
 /***/ }),
-/* 41 */
-/***/ (function(module, exports) {
-
-/* globals __VUE_SSR_CONTEXT__ */
-
-// IMPORTANT: Do NOT use ES2015 features in this file.
-// This module is a runtime utility for cleaner component module output and will
-// be included in the final webpack user bundle.
-
-module.exports = function normalizeComponent (
-  rawScriptExports,
-  compiledTemplate,
-  functionalTemplate,
-  injectStyles,
-  scopeId,
-  moduleIdentifier /* server only */
-) {
-  var esModule
-  var scriptExports = rawScriptExports = rawScriptExports || {}
-
-  // ES6 modules interop
-  var type = typeof rawScriptExports.default
-  if (type === 'object' || type === 'function') {
-    esModule = rawScriptExports
-    scriptExports = rawScriptExports.default
-  }
-
-  // Vue.extend constructor export interop
-  var options = typeof scriptExports === 'function'
-    ? scriptExports.options
-    : scriptExports
-
-  // render functions
-  if (compiledTemplate) {
-    options.render = compiledTemplate.render
-    options.staticRenderFns = compiledTemplate.staticRenderFns
-    options._compiled = true
-  }
-
-  // functional template
-  if (functionalTemplate) {
-    options.functional = true
-  }
-
-  // scopedId
-  if (scopeId) {
-    options._scopeId = scopeId
-  }
-
-  var hook
-  if (moduleIdentifier) { // server build
-    hook = function (context) {
-      // 2.3 injection
-      context =
-        context || // cached call
-        (this.$vnode && this.$vnode.ssrContext) || // stateful
-        (this.parent && this.parent.$vnode && this.parent.$vnode.ssrContext) // functional
-      // 2.2 with runInNewContext: true
-      if (!context && typeof __VUE_SSR_CONTEXT__ !== 'undefined') {
-        context = __VUE_SSR_CONTEXT__
-      }
-      // inject component styles
-      if (injectStyles) {
-        injectStyles.call(this, context)
-      }
-      // register component module identifier for async chunk inferrence
-      if (context && context._registeredComponents) {
-        context._registeredComponents.add(moduleIdentifier)
-      }
-    }
-    // used by ssr in case component is cached and beforeCreate
-    // never gets called
-    options._ssrRegister = hook
-  } else if (injectStyles) {
-    hook = injectStyles
-  }
-
-  if (hook) {
-    var functional = options.functional
-    var existing = functional
-      ? options.render
-      : options.beforeCreate
-
-    if (!functional) {
-      // inject component registration as beforeCreate hook
-      options.beforeCreate = existing
-        ? [].concat(existing, hook)
-        : [hook]
-    } else {
-      // for template-only hot-reload because in that case the render fn doesn't
-      // go through the normalizer
-      options._injectStyles = hook
-      // register for functioal component in vue file
-      options.render = function renderWithStyleInjection (h, context) {
-        hook.call(context)
-        return existing(h, context)
-      }
-    }
-  }
-
-  return {
-    esModule: esModule,
-    exports: scriptExports,
-    options: options
-  }
-}
-
-
-/***/ }),
-/* 42 */
+/* 43 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
 Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
-//
 //
 //
 //
@@ -50657,8 +55440,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 				// userid:'',
 			},
 
-			editor: '',
-			text1: ''
+			editor: ''
 		};
 	},
 	mounted: function mounted() {
@@ -50676,15 +55458,23 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 	methods: {
 		submit: function submit() {
 
-			this.article.html = document.getElementById('text1').value;
+			this.article.html = this.editor.txt.html();
 			//判断是否文本输入			
-			if (this.article.html == '') {
-				alert('请编写文章');
+			if (this.editor.txt.text() == '') {
+				new Swal({
+					title: "请编写文章！",
+					timer: 1500,
+					showConfirmButton: false
+				});
 				return false;
 			}
 			//判断是标签是否选择
 			if (this.article.topicid.length == 0) {
-				alert('请选择标签');
+				new Swal({
+					title: "请选择文章标签",
+					timer: 1500,
+					showConfirmButton: false
+				});
 				return false;
 			}
 			this.article.pic = this.dataUrl;
@@ -50707,7 +55497,11 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 					self.list = [];
 					self.editor.txt.html('');
 					self.query = '';
-					alert('发布成功');
+					new Swal({
+						title: "发布文章成功",
+						timer: 1500,
+						showConfirmButton: false
+					});
 					$('#rel').trigger('click');
 				} else {
 					alert('2');
@@ -50743,12 +55537,6 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 			];
 			this.editor.customConfig.showLinkImg = false;
 			this.editor.customConfig.uploadImgShowBase64 = true;
-			this.text1 = document.getElementById('text1');
-			this.editor.customConfig.onchange = function (html) {
-				// 监控变化，同步更新到 textarea
-
-				self.text1.value = html;
-			};
 			this.editor.create();
 			this.editor.txt.html('<p>在此处输入文章内容</p>');
 		},
@@ -50762,31 +55550,37 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 			}
 			//最多选择三个
 			if (this.selectTopic.length < 3) {
+				//向topic更新数据 前台
 				this.selectTopic.push({ id: topicid, topic: topic });
+				//给提交给后台的数据更新
 				this.article.topicid.push(topicid);
 			} else {
 				return false;
 			}
 		},
+		//删除已经选中的标签
 		deleteTopic: function deleteTopic(index) {
 			this.selectTopic.splice(index, 1);
 			this.article.topicid.splice(index, 1);
 			// alert(index);
 		},
+		//题图的点击
 		pic: function pic() {
 			document.getElementById('headpic').click();
 		},
+		//清除题图
 		clearPic: function clearPic() {
-			alert(1);
 			var file = document.getElementById('headpic');
 			this.dataUrl = null;
 			file.value = '';
 			this.show = false;
 			this.showUp = true;
 		},
+		//改变题图
 		change: function change() {
 			document.getElementById('headpic').click();
 		},
+		//转换为base64文件并且产出所缩略图
 		imgPreview: function imgPreview(file) {
 			var self = this;
 			// 看支持不支持FileReader
@@ -50878,7 +55672,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 });
 
 /***/ }),
-/* 43 */
+/* 44 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var render = function() {
@@ -51126,11 +55920,6 @@ var staticRenderFns = [
       _c("div", {
         staticClass: "col-md-12",
         attrs: { id: "editorTwo", require: "" }
-      }),
-      _vm._v(" "),
-      _c("textarea", {
-        staticStyle: { display: "none" },
-        attrs: { id: "text1", name: "html" }
       })
     ])
   },
@@ -51157,4829 +55946,15 @@ if (false) {
 }
 
 /***/ }),
-/* 44 */
-/***/ (function(module, exports) {
-
-// removed by extract-text-webpack-plugin
-
-/***/ }),
-/* 45 */,
-/* 46 */,
-/* 47 */,
-/* 48 */,
-/* 49 */,
-/* 50 */,
-/* 51 */,
-/* 52 */,
-/* 53 */,
-/* 54 */,
-/* 55 */,
-/* 56 */,
-/* 57 */,
-/* 58 */,
-/* 59 */,
-/* 60 */,
-/* 61 */,
-/* 62 */,
-/* 63 */,
-/* 64 */,
-/* 65 */,
-/* 66 */,
-/* 67 */,
-/* 68 */,
-/* 69 */,
-/* 70 */
-/***/ (function(module, exports, __webpack_require__) {
-
-var __WEBPACK_AMD_DEFINE_FACTORY__, __WEBPACK_AMD_DEFINE_RESULT__;/*! VelocityJS.org (1.5.0). (C) 2014 Julian Shapiro. MIT @license: en.wikipedia.org/wiki/MIT_License */
-
-/*************************
- Velocity jQuery Shim
- *************************/
-
-/*! VelocityJS.org jQuery Shim (1.0.1). (C) 2014 The jQuery Foundation. MIT @license: en.wikipedia.org/wiki/MIT_License. */
-
-/* This file contains the jQuery functions that Velocity relies on, thereby removing Velocity's dependency on a full copy of jQuery, and allowing it to work in any environment. */
-/* These shimmed functions are only used if jQuery isn't present. If both this shim and jQuery are loaded, Velocity defaults to jQuery proper. */
-/* Browser support: Using this shim instead of jQuery proper removes support for IE8. */
-
-(function(window) {
-	"use strict";
-	/***************
-	 Setup
-	 ***************/
-
-	/* If jQuery is already loaded, there's no point in loading this shim. */
-	if (window.jQuery) {
-		return;
-	}
-
-	/* jQuery base. */
-	var $ = function(selector, context) {
-		return new $.fn.init(selector, context);
-	};
-
-	/********************
-	 Private Methods
-	 ********************/
-
-	/* jQuery */
-	$.isWindow = function(obj) {
-		/* jshint eqeqeq: false */
-		return obj && obj === obj.window;
-	};
-
-	/* jQuery */
-	$.type = function(obj) {
-		if (!obj) {
-			return obj + "";
-		}
-
-		return typeof obj === "object" || typeof obj === "function" ?
-				class2type[toString.call(obj)] || "object" :
-				typeof obj;
-	};
-
-	/* jQuery */
-	$.isArray = Array.isArray || function(obj) {
-		return $.type(obj) === "array";
-	};
-
-	/* jQuery */
-	function isArraylike(obj) {
-		var length = obj.length,
-				type = $.type(obj);
-
-		if (type === "function" || $.isWindow(obj)) {
-			return false;
-		}
-
-		if (obj.nodeType === 1 && length) {
-			return true;
-		}
-
-		return type === "array" || length === 0 || typeof length === "number" && length > 0 && (length - 1) in obj;
-	}
-
-	/***************
-	 $ Methods
-	 ***************/
-
-	/* jQuery: Support removed for IE<9. */
-	$.isPlainObject = function(obj) {
-		var key;
-
-		if (!obj || $.type(obj) !== "object" || obj.nodeType || $.isWindow(obj)) {
-			return false;
-		}
-
-		try {
-			if (obj.constructor &&
-					!hasOwn.call(obj, "constructor") &&
-					!hasOwn.call(obj.constructor.prototype, "isPrototypeOf")) {
-				return false;
-			}
-		} catch (e) {
-			return false;
-		}
-
-		for (key in obj) {
-		}
-
-		return key === undefined || hasOwn.call(obj, key);
-	};
-
-	/* jQuery */
-	$.each = function(obj, callback, args) {
-		var value,
-				i = 0,
-				length = obj.length,
-				isArray = isArraylike(obj);
-
-		if (args) {
-			if (isArray) {
-				for (; i < length; i++) {
-					value = callback.apply(obj[i], args);
-
-					if (value === false) {
-						break;
-					}
-				}
-			} else {
-				for (i in obj) {
-					if (!obj.hasOwnProperty(i)) {
-						continue;
-					}
-					value = callback.apply(obj[i], args);
-
-					if (value === false) {
-						break;
-					}
-				}
-			}
-
-		} else {
-			if (isArray) {
-				for (; i < length; i++) {
-					value = callback.call(obj[i], i, obj[i]);
-
-					if (value === false) {
-						break;
-					}
-				}
-			} else {
-				for (i in obj) {
-					if (!obj.hasOwnProperty(i)) {
-						continue;
-					}
-					value = callback.call(obj[i], i, obj[i]);
-
-					if (value === false) {
-						break;
-					}
-				}
-			}
-		}
-
-		return obj;
-	};
-
-	/* Custom */
-	$.data = function(node, key, value) {
-		/* $.getData() */
-		if (value === undefined) {
-			var getId = node[$.expando],
-					store = getId && cache[getId];
-
-			if (key === undefined) {
-				return store;
-			} else if (store) {
-				if (key in store) {
-					return store[key];
-				}
-			}
-			/* $.setData() */
-		} else if (key !== undefined) {
-			var setId = node[$.expando] || (node[$.expando] = ++$.uuid);
-
-			cache[setId] = cache[setId] || {};
-			cache[setId][key] = value;
-
-			return value;
-		}
-	};
-
-	/* Custom */
-	$.removeData = function(node, keys) {
-		var id = node[$.expando],
-				store = id && cache[id];
-
-		if (store) {
-			// Cleanup the entire store if no keys are provided.
-			if (!keys) {
-				delete cache[id];
-			} else {
-				$.each(keys, function(_, key) {
-					delete store[key];
-				});
-			}
-		}
-	};
-
-	/* jQuery */
-	$.extend = function() {
-		var src, copyIsArray, copy, name, options, clone,
-				target = arguments[0] || {},
-				i = 1,
-				length = arguments.length,
-				deep = false;
-
-		if (typeof target === "boolean") {
-			deep = target;
-
-			target = arguments[i] || {};
-			i++;
-		}
-
-		if (typeof target !== "object" && $.type(target) !== "function") {
-			target = {};
-		}
-
-		if (i === length) {
-			target = this;
-			i--;
-		}
-
-		for (; i < length; i++) {
-			if ((options = arguments[i])) {
-				for (name in options) {
-					if (!options.hasOwnProperty(name)) {
-						continue;
-					}
-					src = target[name];
-					copy = options[name];
-
-					if (target === copy) {
-						continue;
-					}
-
-					if (deep && copy && ($.isPlainObject(copy) || (copyIsArray = $.isArray(copy)))) {
-						if (copyIsArray) {
-							copyIsArray = false;
-							clone = src && $.isArray(src) ? src : [];
-
-						} else {
-							clone = src && $.isPlainObject(src) ? src : {};
-						}
-
-						target[name] = $.extend(deep, clone, copy);
-
-					} else if (copy !== undefined) {
-						target[name] = copy;
-					}
-				}
-			}
-		}
-
-		return target;
-	};
-
-	/* jQuery 1.4.3 */
-	$.queue = function(elem, type, data) {
-		function $makeArray(arr, results) {
-			var ret = results || [];
-
-			if (arr) {
-				if (isArraylike(Object(arr))) {
-					/* $.merge */
-					(function(first, second) {
-						var len = +second.length,
-								j = 0,
-								i = first.length;
-
-						while (j < len) {
-							first[i++] = second[j++];
-						}
-
-						if (len !== len) {
-							while (second[j] !== undefined) {
-								first[i++] = second[j++];
-							}
-						}
-
-						first.length = i;
-
-						return first;
-					})(ret, typeof arr === "string" ? [arr] : arr);
-				} else {
-					[].push.call(ret, arr);
-				}
-			}
-
-			return ret;
-		}
-
-		if (!elem) {
-			return;
-		}
-
-		type = (type || "fx") + "queue";
-
-		var q = $.data(elem, type);
-
-		if (!data) {
-			return q || [];
-		}
-
-		if (!q || $.isArray(data)) {
-			q = $.data(elem, type, $makeArray(data));
-		} else {
-			q.push(data);
-		}
-
-		return q;
-	};
-
-	/* jQuery 1.4.3 */
-	$.dequeue = function(elems, type) {
-		/* Custom: Embed element iteration. */
-		$.each(elems.nodeType ? [elems] : elems, function(i, elem) {
-			type = type || "fx";
-
-			var queue = $.queue(elem, type),
-					fn = queue.shift();
-
-			if (fn === "inprogress") {
-				fn = queue.shift();
-			}
-
-			if (fn) {
-				if (type === "fx") {
-					queue.unshift("inprogress");
-				}
-
-				fn.call(elem, function() {
-					$.dequeue(elem, type);
-				});
-			}
-		});
-	};
-
-	/******************
-	 $.fn Methods
-	 ******************/
-
-	/* jQuery */
-	$.fn = $.prototype = {
-		init: function(selector) {
-			/* Just return the element wrapped inside an array; don't proceed with the actual jQuery node wrapping process. */
-			if (selector.nodeType) {
-				this[0] = selector;
-
-				return this;
-			} else {
-				throw new Error("Not a DOM node.");
-			}
-		},
-		offset: function() {
-			/* jQuery altered code: Dropped disconnected DOM node checking. */
-			var box = this[0].getBoundingClientRect ? this[0].getBoundingClientRect() : {top: 0, left: 0};
-
-			return {
-				top: box.top + (window.pageYOffset || document.scrollTop || 0) - (document.clientTop || 0),
-				left: box.left + (window.pageXOffset || document.scrollLeft || 0) - (document.clientLeft || 0)
-			};
-		},
-		position: function() {
-			/* jQuery */
-			function offsetParentFn(elem) {
-				var offsetParent = elem.offsetParent;
-
-				while (offsetParent && (offsetParent.nodeName.toLowerCase() !== "html" && offsetParent.style && offsetParent.style.position.toLowerCase() === "static")) {
-					offsetParent = offsetParent.offsetParent;
-				}
-
-				return offsetParent || document;
-			}
-
-			/* Zepto */
-			var elem = this[0],
-					offsetParent = offsetParentFn(elem),
-					offset = this.offset(),
-					parentOffset = /^(?:body|html)$/i.test(offsetParent.nodeName) ? {top: 0, left: 0} : $(offsetParent).offset();
-
-			offset.top -= parseFloat(elem.style.marginTop) || 0;
-			offset.left -= parseFloat(elem.style.marginLeft) || 0;
-
-			if (offsetParent.style) {
-				parentOffset.top += parseFloat(offsetParent.style.borderTopWidth) || 0;
-				parentOffset.left += parseFloat(offsetParent.style.borderLeftWidth) || 0;
-			}
-
-			return {
-				top: offset.top - parentOffset.top,
-				left: offset.left - parentOffset.left
-			};
-		}
-	};
-
-	/**********************
-	 Private Variables
-	 **********************/
-
-	/* For $.data() */
-	var cache = {};
-	$.expando = "velocity" + (new Date().getTime());
-	$.uuid = 0;
-
-	/* For $.queue() */
-	var class2type = {},
-			hasOwn = class2type.hasOwnProperty,
-			toString = class2type.toString;
-
-	var types = "Boolean Number String Function Array Date RegExp Object Error".split(" ");
-	for (var i = 0; i < types.length; i++) {
-		class2type["[object " + types[i] + "]"] = types[i].toLowerCase();
-	}
-
-	/* Makes $(node) possible, without having to call init. */
-	$.fn.init.prototype = $.fn;
-
-	/* Globalize Velocity onto the window, and assign its Utilities property. */
-	window.Velocity = {Utilities: $};
-})(window);
-
-/******************
- Velocity.js
- ******************/
-
-(function(factory) {
-	"use strict";
-	/* CommonJS module. */
-	if (typeof module === "object" && typeof module.exports === "object") {
-		module.exports = factory();
-		/* AMD module. */
-	} else if (true) {
-		!(__WEBPACK_AMD_DEFINE_FACTORY__ = (factory),
-				__WEBPACK_AMD_DEFINE_RESULT__ = (typeof __WEBPACK_AMD_DEFINE_FACTORY__ === 'function' ?
-				(__WEBPACK_AMD_DEFINE_FACTORY__.call(exports, __webpack_require__, exports, module)) :
-				__WEBPACK_AMD_DEFINE_FACTORY__),
-				__WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
-		/* Browser globals. */
-	} else {
-		factory();
-	}
-}(function() {
-	"use strict";
-	return function(global, window, document, undefined) {
-
-		/***************
-		 Summary
-		 ***************/
-
-		/*
-		 - CSS: CSS stack that works independently from the rest of Velocity.
-		 - animate(): Core animation method that iterates over the targeted elements and queues the incoming call onto each element individually.
-		 - Pre-Queueing: Prepare the element for animation by instantiating its data cache and processing the call's options.
-		 - Queueing: The logic that runs once the call has reached its point of execution in the element's $.queue() stack.
-		 Most logic is placed here to avoid risking it becoming stale (if the element's properties have changed).
-		 - Pushing: Consolidation of the tween data followed by its push onto the global in-progress calls container.
-		 - tick(): The single requestAnimationFrame loop responsible for tweening all in-progress calls.
-		 - completeCall(): Handles the cleanup process for each Velocity call.
-		 */
-
-		/*********************
-		 Helper Functions
-		 *********************/
-
-		/* IE detection. Gist: https://gist.github.com/julianshapiro/9098609 */
-		var IE = (function() {
-			if (document.documentMode) {
-				return document.documentMode;
-			} else {
-				for (var i = 7; i > 4; i--) {
-					var div = document.createElement("div");
-
-					div.innerHTML = "<!--[if IE " + i + "]><span></span><![endif]-->";
-
-					if (div.getElementsByTagName("span").length) {
-						div = null;
-
-						return i;
-					}
-				}
-			}
-
-			return undefined;
-		})();
-
-		/* rAF shim. Gist: https://gist.github.com/julianshapiro/9497513 */
-		var rAFShim = (function() {
-			var timeLast = 0;
-
-			return window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || function(callback) {
-				var timeCurrent = (new Date()).getTime(),
-						timeDelta;
-
-				/* Dynamically set delay on a per-tick basis to match 60fps. */
-				/* Technique by Erik Moller. MIT license: https://gist.github.com/paulirish/1579671 */
-				timeDelta = Math.max(0, 16 - (timeCurrent - timeLast));
-				timeLast = timeCurrent + timeDelta;
-
-				return setTimeout(function() {
-					callback(timeCurrent + timeDelta);
-				}, timeDelta);
-			};
-		})();
-
-		var performance = (function() {
-			var perf = window.performance || {};
-
-			if (typeof perf.now !== "function") {
-				var nowOffset = perf.timing && perf.timing.navigationStart ? perf.timing.navigationStart : (new Date()).getTime();
-
-				perf.now = function() {
-					return (new Date()).getTime() - nowOffset;
-				};
-			}
-			return perf;
-		})();
-
-		/* Array compacting. Copyright Lo-Dash. MIT License: https://github.com/lodash/lodash/blob/master/LICENSE.txt */
-		function compactSparseArray(array) {
-			var index = -1,
-					length = array ? array.length : 0,
-					result = [];
-
-			while (++index < length) {
-				var value = array[index];
-
-				if (value) {
-					result.push(value);
-				}
-			}
-
-			return result;
-		}
-
-		/**
-		 * Shim for "fixing" IE's lack of support (IE < 9) for applying slice
-		 * on host objects like NamedNodeMap, NodeList, and HTMLCollection
-		 * (technically, since host objects have been implementation-dependent,
-		 * at least before ES2015, IE hasn't needed to work this way).
-		 * Also works on strings, fixes IE < 9 to allow an explicit undefined
-		 * for the 2nd argument (as in Firefox), and prevents errors when
-		 * called on other DOM objects.
-		 */
-		var _slice = (function() {
-			var slice = Array.prototype.slice;
-
-			try {
-				// Can't be used with DOM elements in IE < 9
-				slice.call(document.documentElement);
-				return slice;
-			} catch (e) { // Fails in IE < 9
-
-				// This will work for genuine arrays, array-like objects, 
-				// NamedNodeMap (attributes, entities, notations),
-				// NodeList (e.g., getElementsByTagName), HTMLCollection (e.g., childNodes),
-				// and will not fail on other DOM objects (as do DOM elements in IE < 9)
-				return function(begin, end) {
-					var len = this.length;
-
-					if (typeof begin !== "number") {
-						begin = 0;
-					}
-					// IE < 9 gets unhappy with an undefined end argument
-					if (typeof end !== "number") {
-						end = len;
-					}
-					// For native Array objects, we use the native slice function
-					if (this.slice) {
-						return slice.call(this, begin, end);
-					}
-					// For array like object we handle it ourselves.
-					var i,
-							cloned = [],
-							// Handle negative value for "begin"
-							start = (begin >= 0) ? begin : Math.max(0, len + begin),
-							// Handle negative value for "end"
-							upTo = end < 0 ? len + end : Math.min(end, len),
-							// Actual expected size of the slice
-							size = upTo - start;
-
-					if (size > 0) {
-						cloned = new Array(size);
-						if (this.charAt) {
-							for (i = 0; i < size; i++) {
-								cloned[i] = this.charAt(start + i);
-							}
-						} else {
-							for (i = 0; i < size; i++) {
-								cloned[i] = this[start + i];
-							}
-						}
-					}
-					return cloned;
-				};
-			}
-		})();
-
-		/* .indexOf doesn't exist in IE<9 */
-		var _inArray = (function() {
-			if (Array.prototype.includes) {
-				return function(arr, val) {
-					return arr.includes(val);
-				};
-			}
-			if (Array.prototype.indexOf) {
-				return function(arr, val) {
-					return arr.indexOf(val) >= 0;
-				};
-			}
-			return function(arr, val) {
-				for (var i = 0; i < arr.length; i++) {
-					if (arr[i] === val) {
-						return true;
-					}
-				}
-				return false;
-			};
-		});
-
-		function sanitizeElements(elements) {
-			/* Unwrap jQuery/Zepto objects. */
-			if (Type.isWrapped(elements)) {
-				elements = _slice.call(elements);
-				/* Wrap a single element in an array so that $.each() can iterate with the element instead of its node's children. */
-			} else if (Type.isNode(elements)) {
-				elements = [elements];
-			}
-
-			return elements;
-		}
-
-		var Type = {
-			isNumber: function(variable) {
-				return (typeof variable === "number");
-			},
-			isString: function(variable) {
-				return (typeof variable === "string");
-			},
-			isArray: Array.isArray || function(variable) {
-				return Object.prototype.toString.call(variable) === "[object Array]";
-			},
-			isFunction: function(variable) {
-				return Object.prototype.toString.call(variable) === "[object Function]";
-			},
-			isNode: function(variable) {
-				return variable && variable.nodeType;
-			},
-			/* Determine if variable is an array-like wrapped jQuery, Zepto or similar element, or even a NodeList etc. */
-			/* NOTE: HTMLFormElements also have a length. */
-			isWrapped: function(variable) {
-				return variable
-						&& variable !== window
-						&& Type.isNumber(variable.length)
-						&& !Type.isString(variable)
-						&& !Type.isFunction(variable)
-						&& !Type.isNode(variable)
-						&& (variable.length === 0 || Type.isNode(variable[0]));
-			},
-			isSVG: function(variable) {
-				return window.SVGElement && (variable instanceof window.SVGElement);
-			},
-			isEmptyObject: function(variable) {
-				for (var name in variable) {
-					if (variable.hasOwnProperty(name)) {
-						return false;
-					}
-				}
-
-				return true;
-			}
-		};
-
-		/*****************
-		 Dependencies
-		 *****************/
-
-		var $,
-				isJQuery = false;
-
-		if (global.fn && global.fn.jquery) {
-			$ = global;
-			isJQuery = true;
-		} else {
-			$ = window.Velocity.Utilities;
-		}
-
-		if (IE <= 8 && !isJQuery) {
-			throw new Error("Velocity: IE8 and below require jQuery to be loaded before Velocity.");
-		} else if (IE <= 7) {
-			/* Revert to jQuery's $.animate(), and lose Velocity's extra features. */
-			jQuery.fn.velocity = jQuery.fn.animate;
-
-			/* Now that $.fn.velocity is aliased, abort this Velocity declaration. */
-			return;
-		}
-
-		/*****************
-		 Constants
-		 *****************/
-
-		var DURATION_DEFAULT = 400,
-				EASING_DEFAULT = "swing";
-
-		/*************
-		 State
-		 *************/
-
-		var Velocity = {
-			/* Container for page-wide Velocity state data. */
-			State: {
-				/* Detect mobile devices to determine if mobileHA should be turned on. */
-				isMobile: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(window.navigator.userAgent),
-				/* The mobileHA option's behavior changes on older Android devices (Gingerbread, versions 2.3.3-2.3.7). */
-				isAndroid: /Android/i.test(window.navigator.userAgent),
-				isGingerbread: /Android 2\.3\.[3-7]/i.test(window.navigator.userAgent),
-				isChrome: window.chrome,
-				isFirefox: /Firefox/i.test(window.navigator.userAgent),
-				/* Create a cached element for re-use when checking for CSS property prefixes. */
-				prefixElement: document.createElement("div"),
-				/* Cache every prefix match to avoid repeating lookups. */
-				prefixMatches: {},
-				/* Cache the anchor used for animating window scrolling. */
-				scrollAnchor: null,
-				/* Cache the browser-specific property names associated with the scroll anchor. */
-				scrollPropertyLeft: null,
-				scrollPropertyTop: null,
-				/* Keep track of whether our RAF tick is running. */
-				isTicking: false,
-				/* Container for every in-progress call to Velocity. */
-				calls: [],
-				delayedElements: {
-					count: 0
-				}
-			},
-			/* Velocity's custom CSS stack. Made global for unit testing. */
-			CSS: {/* Defined below. */},
-			/* A shim of the jQuery utility functions used by Velocity -- provided by Velocity's optional jQuery shim. */
-			Utilities: $,
-			/* Container for the user's custom animation redirects that are referenced by name in place of the properties map argument. */
-			Redirects: {/* Manually registered by the user. */},
-			Easings: {/* Defined below. */},
-			/* Attempt to use ES6 Promises by default. Users can override this with a third-party promises library. */
-			Promise: window.Promise,
-			/* Velocity option defaults, which can be overriden by the user. */
-			defaults: {
-				queue: "",
-				duration: DURATION_DEFAULT,
-				easing: EASING_DEFAULT,
-				begin: undefined,
-				complete: undefined,
-				progress: undefined,
-				display: undefined,
-				visibility: undefined,
-				loop: false,
-				delay: false,
-				mobileHA: true,
-				/* Advanced: Set to false to prevent property values from being cached between consecutive Velocity-initiated chain calls. */
-				_cacheValues: true,
-				/* Advanced: Set to false if the promise should always resolve on empty element lists. */
-				promiseRejectEmpty: true
-			},
-			/* A design goal of Velocity is to cache data wherever possible in order to avoid DOM requerying. Accordingly, each element has a data cache. */
-			init: function(element) {
-				$.data(element, "velocity", {
-					/* Store whether this is an SVG element, since its properties are retrieved and updated differently than standard HTML elements. */
-					isSVG: Type.isSVG(element),
-					/* Keep track of whether the element is currently being animated by Velocity.
-					 This is used to ensure that property values are not transferred between non-consecutive (stale) calls. */
-					isAnimating: false,
-					/* A reference to the element's live computedStyle object. Learn more here: https://developer.mozilla.org/en/docs/Web/API/window.getComputedStyle */
-					computedStyle: null,
-					/* Tween data is cached for each animation on the element so that data can be passed across calls --
-					 in particular, end values are used as subsequent start values in consecutive Velocity calls. */
-					tweensContainer: null,
-					/* The full root property values of each CSS hook being animated on this element are cached so that:
-					 1) Concurrently-animating hooks sharing the same root can have their root values' merged into one while tweening.
-					 2) Post-hook-injection root values can be transferred over to consecutively chained Velocity calls as starting root values. */
-					rootPropertyValueCache: {},
-					/* A cache for transform updates, which must be manually flushed via CSS.flushTransformCache(). */
-					transformCache: {}
-				});
-			},
-			/* A parallel to jQuery's $.css(), used for getting/setting Velocity's hooked CSS properties. */
-			hook: null, /* Defined below. */
-			/* Velocity-wide animation time remapping for testing purposes. */
-			mock: false,
-			version: {major: 1, minor: 5, patch: 1},
-			/* Set to 1 or 2 (most verbose) to output debug info to console. */
-			debug: false,
-			/* Use rAF high resolution timestamp when available */
-			timestamp: true,
-			/* Pause all animations */
-			pauseAll: function(queueName) {
-				var currentTime = (new Date()).getTime();
-
-				$.each(Velocity.State.calls, function(i, activeCall) {
-
-					if (activeCall) {
-
-						/* If we have a queueName and this call is not on that queue, skip */
-						if (queueName !== undefined && ((activeCall[2].queue !== queueName) || (activeCall[2].queue === false))) {
-							return true;
-						}
-
-						/* Set call to paused */
-						activeCall[5] = {
-							resume: false
-						};
-					}
-				});
-
-				/* Pause timers on any currently delayed calls */
-				$.each(Velocity.State.delayedElements, function(k, element) {
-					if (!element) {
-						return;
-					}
-					pauseDelayOnElement(element, currentTime);
-				});
-			},
-			/* Resume all animations */
-			resumeAll: function(queueName) {
-				var currentTime = (new Date()).getTime();
-
-				$.each(Velocity.State.calls, function(i, activeCall) {
-
-					if (activeCall) {
-
-						/* If we have a queueName and this call is not on that queue, skip */
-						if (queueName !== undefined && ((activeCall[2].queue !== queueName) || (activeCall[2].queue === false))) {
-							return true;
-						}
-
-						/* Set call to resumed if it was paused */
-						if (activeCall[5]) {
-							activeCall[5].resume = true;
-						}
-					}
-				});
-				/* Resume timers on any currently delayed calls */
-				$.each(Velocity.State.delayedElements, function(k, element) {
-					if (!element) {
-						return;
-					}
-					resumeDelayOnElement(element, currentTime);
-				});
-			}
-		};
-
-		/* Retrieve the appropriate scroll anchor and property name for the browser: https://developer.mozilla.org/en-US/docs/Web/API/Window.scrollY */
-		if (window.pageYOffset !== undefined) {
-			Velocity.State.scrollAnchor = window;
-			Velocity.State.scrollPropertyLeft = "pageXOffset";
-			Velocity.State.scrollPropertyTop = "pageYOffset";
-		} else {
-			Velocity.State.scrollAnchor = document.documentElement || document.body.parentNode || document.body;
-			Velocity.State.scrollPropertyLeft = "scrollLeft";
-			Velocity.State.scrollPropertyTop = "scrollTop";
-		}
-
-		/* Shorthand alias for jQuery's $.data() utility. */
-		function Data(element) {
-			/* Hardcode a reference to the plugin name. */
-			var response = $.data(element, "velocity");
-
-			/* jQuery <=1.4.2 returns null instead of undefined when no match is found. We normalize this behavior. */
-			return response === null ? undefined : response;
-		}
-
-		/**************
-		 Delay Timer
-		 **************/
-
-		function pauseDelayOnElement(element, currentTime) {
-			/* Check for any delay timers, and pause the set timeouts (while preserving time data)
-			 to be resumed when the "resume" command is issued */
-			var data = Data(element);
-			if (data && data.delayTimer && !data.delayPaused) {
-				data.delayRemaining = data.delay - currentTime + data.delayBegin;
-				data.delayPaused = true;
-				clearTimeout(data.delayTimer.setTimeout);
-			}
-		}
-
-		function resumeDelayOnElement(element, currentTime) {
-			/* Check for any paused timers and resume */
-			var data = Data(element);
-			if (data && data.delayTimer && data.delayPaused) {
-				/* If the element was mid-delay, re initiate the timeout with the remaining delay */
-				data.delayPaused = false;
-				data.delayTimer.setTimeout = setTimeout(data.delayTimer.next, data.delayRemaining);
-			}
-		}
-
-
-
-		/**************
-		 Easing
-		 **************/
-
-		/* Step easing generator. */
-		function generateStep(steps) {
-			return function(p) {
-				return Math.round(p * steps) * (1 / steps);
-			};
-		}
-
-		/* Bezier curve function generator. Copyright Gaetan Renaudeau. MIT License: http://en.wikipedia.org/wiki/MIT_License */
-		function generateBezier(mX1, mY1, mX2, mY2) {
-			var NEWTON_ITERATIONS = 4,
-					NEWTON_MIN_SLOPE = 0.001,
-					SUBDIVISION_PRECISION = 0.0000001,
-					SUBDIVISION_MAX_ITERATIONS = 10,
-					kSplineTableSize = 11,
-					kSampleStepSize = 1.0 / (kSplineTableSize - 1.0),
-					float32ArraySupported = "Float32Array" in window;
-
-			/* Must contain four arguments. */
-			if (arguments.length !== 4) {
-				return false;
-			}
-
-			/* Arguments must be numbers. */
-			for (var i = 0; i < 4; ++i) {
-				if (typeof arguments[i] !== "number" || isNaN(arguments[i]) || !isFinite(arguments[i])) {
-					return false;
-				}
-			}
-
-			/* X values must be in the [0, 1] range. */
-			mX1 = Math.min(mX1, 1);
-			mX2 = Math.min(mX2, 1);
-			mX1 = Math.max(mX1, 0);
-			mX2 = Math.max(mX2, 0);
-
-			var mSampleValues = float32ArraySupported ? new Float32Array(kSplineTableSize) : new Array(kSplineTableSize);
-
-			function A(aA1, aA2) {
-				return 1.0 - 3.0 * aA2 + 3.0 * aA1;
-			}
-			function B(aA1, aA2) {
-				return 3.0 * aA2 - 6.0 * aA1;
-			}
-			function C(aA1) {
-				return 3.0 * aA1;
-			}
-
-			function calcBezier(aT, aA1, aA2) {
-				return ((A(aA1, aA2) * aT + B(aA1, aA2)) * aT + C(aA1)) * aT;
-			}
-
-			function getSlope(aT, aA1, aA2) {
-				return 3.0 * A(aA1, aA2) * aT * aT + 2.0 * B(aA1, aA2) * aT + C(aA1);
-			}
-
-			function newtonRaphsonIterate(aX, aGuessT) {
-				for (var i = 0; i < NEWTON_ITERATIONS; ++i) {
-					var currentSlope = getSlope(aGuessT, mX1, mX2);
-
-					if (currentSlope === 0.0) {
-						return aGuessT;
-					}
-
-					var currentX = calcBezier(aGuessT, mX1, mX2) - aX;
-					aGuessT -= currentX / currentSlope;
-				}
-
-				return aGuessT;
-			}
-
-			function calcSampleValues() {
-				for (var i = 0; i < kSplineTableSize; ++i) {
-					mSampleValues[i] = calcBezier(i * kSampleStepSize, mX1, mX2);
-				}
-			}
-
-			function binarySubdivide(aX, aA, aB) {
-				var currentX, currentT, i = 0;
-
-				do {
-					currentT = aA + (aB - aA) / 2.0;
-					currentX = calcBezier(currentT, mX1, mX2) - aX;
-					if (currentX > 0.0) {
-						aB = currentT;
-					} else {
-						aA = currentT;
-					}
-				} while (Math.abs(currentX) > SUBDIVISION_PRECISION && ++i < SUBDIVISION_MAX_ITERATIONS);
-
-				return currentT;
-			}
-
-			function getTForX(aX) {
-				var intervalStart = 0.0,
-						currentSample = 1,
-						lastSample = kSplineTableSize - 1;
-
-				for (; currentSample !== lastSample && mSampleValues[currentSample] <= aX; ++currentSample) {
-					intervalStart += kSampleStepSize;
-				}
-
-				--currentSample;
-
-				var dist = (aX - mSampleValues[currentSample]) / (mSampleValues[currentSample + 1] - mSampleValues[currentSample]),
-						guessForT = intervalStart + dist * kSampleStepSize,
-						initialSlope = getSlope(guessForT, mX1, mX2);
-
-				if (initialSlope >= NEWTON_MIN_SLOPE) {
-					return newtonRaphsonIterate(aX, guessForT);
-				} else if (initialSlope === 0.0) {
-					return guessForT;
-				} else {
-					return binarySubdivide(aX, intervalStart, intervalStart + kSampleStepSize);
-				}
-			}
-
-			var _precomputed = false;
-
-			function precompute() {
-				_precomputed = true;
-				if (mX1 !== mY1 || mX2 !== mY2) {
-					calcSampleValues();
-				}
-			}
-
-			var f = function(aX) {
-				if (!_precomputed) {
-					precompute();
-				}
-				if (mX1 === mY1 && mX2 === mY2) {
-					return aX;
-				}
-				if (aX === 0) {
-					return 0;
-				}
-				if (aX === 1) {
-					return 1;
-				}
-
-				return calcBezier(getTForX(aX), mY1, mY2);
-			};
-
-			f.getControlPoints = function() {
-				return [{x: mX1, y: mY1}, {x: mX2, y: mY2}];
-			};
-
-			var str = "generateBezier(" + [mX1, mY1, mX2, mY2] + ")";
-			f.toString = function() {
-				return str;
-			};
-
-			return f;
-		}
-
-		/* Runge-Kutta spring physics function generator. Adapted from Framer.js, copyright Koen Bok. MIT License: http://en.wikipedia.org/wiki/MIT_License */
-		/* Given a tension, friction, and duration, a simulation at 60FPS will first run without a defined duration in order to calculate the full path. A second pass
-		 then adjusts the time delta -- using the relation between actual time and duration -- to calculate the path for the duration-constrained animation. */
-		var generateSpringRK4 = (function() {
-			function springAccelerationForState(state) {
-				return (-state.tension * state.x) - (state.friction * state.v);
-			}
-
-			function springEvaluateStateWithDerivative(initialState, dt, derivative) {
-				var state = {
-					x: initialState.x + derivative.dx * dt,
-					v: initialState.v + derivative.dv * dt,
-					tension: initialState.tension,
-					friction: initialState.friction
-				};
-
-				return {dx: state.v, dv: springAccelerationForState(state)};
-			}
-
-			function springIntegrateState(state, dt) {
-				var a = {
-					dx: state.v,
-					dv: springAccelerationForState(state)
-				},
-						b = springEvaluateStateWithDerivative(state, dt * 0.5, a),
-						c = springEvaluateStateWithDerivative(state, dt * 0.5, b),
-						d = springEvaluateStateWithDerivative(state, dt, c),
-						dxdt = 1.0 / 6.0 * (a.dx + 2.0 * (b.dx + c.dx) + d.dx),
-						dvdt = 1.0 / 6.0 * (a.dv + 2.0 * (b.dv + c.dv) + d.dv);
-
-				state.x = state.x + dxdt * dt;
-				state.v = state.v + dvdt * dt;
-
-				return state;
-			}
-
-			return function springRK4Factory(tension, friction, duration) {
-
-				var initState = {
-					x: -1,
-					v: 0,
-					tension: null,
-					friction: null
-				},
-						path = [0],
-						time_lapsed = 0,
-						tolerance = 1 / 10000,
-						DT = 16 / 1000,
-						have_duration, dt, last_state;
-
-				tension = parseFloat(tension) || 500;
-				friction = parseFloat(friction) || 20;
-				duration = duration || null;
-
-				initState.tension = tension;
-				initState.friction = friction;
-
-				have_duration = duration !== null;
-
-				/* Calculate the actual time it takes for this animation to complete with the provided conditions. */
-				if (have_duration) {
-					/* Run the simulation without a duration. */
-					time_lapsed = springRK4Factory(tension, friction);
-					/* Compute the adjusted time delta. */
-					dt = time_lapsed / duration * DT;
-				} else {
-					dt = DT;
-				}
-
-				while (true) {
-					/* Next/step function .*/
-					last_state = springIntegrateState(last_state || initState, dt);
-					/* Store the position. */
-					path.push(1 + last_state.x);
-					time_lapsed += 16;
-					/* If the change threshold is reached, break. */
-					if (!(Math.abs(last_state.x) > tolerance && Math.abs(last_state.v) > tolerance)) {
-						break;
-					}
-				}
-
-				/* If duration is not defined, return the actual time required for completing this animation. Otherwise, return a closure that holds the
-				 computed path and returns a snapshot of the position according to a given percentComplete. */
-				return !have_duration ? time_lapsed : function(percentComplete) {
-					return path[ (percentComplete * (path.length - 1)) | 0 ];
-				};
-			};
-		}());
-
-		/* jQuery easings. */
-		Velocity.Easings = {
-			linear: function(p) {
-				return p;
-			},
-			swing: function(p) {
-				return 0.5 - Math.cos(p * Math.PI) / 2;
-			},
-			/* Bonus "spring" easing, which is a less exaggerated version of easeInOutElastic. */
-			spring: function(p) {
-				return 1 - (Math.cos(p * 4.5 * Math.PI) * Math.exp(-p * 6));
-			}
-		};
-
-		/* CSS3 and Robert Penner easings. */
-		$.each(
-				[
-					["ease", [0.25, 0.1, 0.25, 1.0]],
-					["ease-in", [0.42, 0.0, 1.00, 1.0]],
-					["ease-out", [0.00, 0.0, 0.58, 1.0]],
-					["ease-in-out", [0.42, 0.0, 0.58, 1.0]],
-					["easeInSine", [0.47, 0, 0.745, 0.715]],
-					["easeOutSine", [0.39, 0.575, 0.565, 1]],
-					["easeInOutSine", [0.445, 0.05, 0.55, 0.95]],
-					["easeInQuad", [0.55, 0.085, 0.68, 0.53]],
-					["easeOutQuad", [0.25, 0.46, 0.45, 0.94]],
-					["easeInOutQuad", [0.455, 0.03, 0.515, 0.955]],
-					["easeInCubic", [0.55, 0.055, 0.675, 0.19]],
-					["easeOutCubic", [0.215, 0.61, 0.355, 1]],
-					["easeInOutCubic", [0.645, 0.045, 0.355, 1]],
-					["easeInQuart", [0.895, 0.03, 0.685, 0.22]],
-					["easeOutQuart", [0.165, 0.84, 0.44, 1]],
-					["easeInOutQuart", [0.77, 0, 0.175, 1]],
-					["easeInQuint", [0.755, 0.05, 0.855, 0.06]],
-					["easeOutQuint", [0.23, 1, 0.32, 1]],
-					["easeInOutQuint", [0.86, 0, 0.07, 1]],
-					["easeInExpo", [0.95, 0.05, 0.795, 0.035]],
-					["easeOutExpo", [0.19, 1, 0.22, 1]],
-					["easeInOutExpo", [1, 0, 0, 1]],
-					["easeInCirc", [0.6, 0.04, 0.98, 0.335]],
-					["easeOutCirc", [0.075, 0.82, 0.165, 1]],
-					["easeInOutCirc", [0.785, 0.135, 0.15, 0.86]]
-				], function(i, easingArray) {
-			Velocity.Easings[easingArray[0]] = generateBezier.apply(null, easingArray[1]);
-		});
-
-		/* Determine the appropriate easing type given an easing input. */
-		function getEasing(value, duration) {
-			var easing = value;
-
-			/* The easing option can either be a string that references a pre-registered easing,
-			 or it can be a two-/four-item array of integers to be converted into a bezier/spring function. */
-			if (Type.isString(value)) {
-				/* Ensure that the easing has been assigned to jQuery's Velocity.Easings object. */
-				if (!Velocity.Easings[value]) {
-					easing = false;
-				}
-			} else if (Type.isArray(value) && value.length === 1) {
-				easing = generateStep.apply(null, value);
-			} else if (Type.isArray(value) && value.length === 2) {
-				/* springRK4 must be passed the animation's duration. */
-				/* Note: If the springRK4 array contains non-numbers, generateSpringRK4() returns an easing
-				 function generated with default tension and friction values. */
-				easing = generateSpringRK4.apply(null, value.concat([duration]));
-			} else if (Type.isArray(value) && value.length === 4) {
-				/* Note: If the bezier array contains non-numbers, generateBezier() returns false. */
-				easing = generateBezier.apply(null, value);
-			} else {
-				easing = false;
-			}
-
-			/* Revert to the Velocity-wide default easing type, or fall back to "swing" (which is also jQuery's default)
-			 if the Velocity-wide default has been incorrectly modified. */
-			if (easing === false) {
-				if (Velocity.Easings[Velocity.defaults.easing]) {
-					easing = Velocity.defaults.easing;
-				} else {
-					easing = EASING_DEFAULT;
-				}
-			}
-
-			return easing;
-		}
-
-		/*****************
-		 CSS Stack
-		 *****************/
-
-		/* The CSS object is a highly condensed and performant CSS stack that fully replaces jQuery's.
-		 It handles the validation, getting, and setting of both standard CSS properties and CSS property hooks. */
-		/* Note: A "CSS" shorthand is aliased so that our code is easier to read. */
-		var CSS = Velocity.CSS = {
-			/*************
-			 RegEx
-			 *************/
-
-			RegEx: {
-				isHex: /^#([A-f\d]{3}){1,2}$/i,
-				/* Unwrap a property value's surrounding text, e.g. "rgba(4, 3, 2, 1)" ==> "4, 3, 2, 1" and "rect(4px 3px 2px 1px)" ==> "4px 3px 2px 1px". */
-				valueUnwrap: /^[A-z]+\((.*)\)$/i,
-				wrappedValueAlreadyExtracted: /[0-9.]+ [0-9.]+ [0-9.]+( [0-9.]+)?/,
-				/* Split a multi-value property into an array of subvalues, e.g. "rgba(4, 3, 2, 1) 4px 3px 2px 1px" ==> [ "rgba(4, 3, 2, 1)", "4px", "3px", "2px", "1px" ]. */
-				valueSplit: /([A-z]+\(.+\))|(([A-z0-9#-.]+?)(?=\s|$))/ig
-			},
-			/************
-			 Lists
-			 ************/
-
-			Lists: {
-				colors: ["fill", "stroke", "stopColor", "color", "backgroundColor", "borderColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor", "outlineColor"],
-				transformsBase: ["translateX", "translateY", "scale", "scaleX", "scaleY", "skewX", "skewY", "rotateZ"],
-				transforms3D: ["transformPerspective", "translateZ", "scaleZ", "rotateX", "rotateY"],
-				units: [
-					"%", // relative
-					"em", "ex", "ch", "rem", // font relative
-					"vw", "vh", "vmin", "vmax", // viewport relative
-					"cm", "mm", "Q", "in", "pc", "pt", "px", // absolute lengths
-					"deg", "grad", "rad", "turn", // angles
-					"s", "ms" // time
-				],
-				colorNames: {
-					"aliceblue": "240,248,255",
-					"antiquewhite": "250,235,215",
-					"aquamarine": "127,255,212",
-					"aqua": "0,255,255",
-					"azure": "240,255,255",
-					"beige": "245,245,220",
-					"bisque": "255,228,196",
-					"black": "0,0,0",
-					"blanchedalmond": "255,235,205",
-					"blueviolet": "138,43,226",
-					"blue": "0,0,255",
-					"brown": "165,42,42",
-					"burlywood": "222,184,135",
-					"cadetblue": "95,158,160",
-					"chartreuse": "127,255,0",
-					"chocolate": "210,105,30",
-					"coral": "255,127,80",
-					"cornflowerblue": "100,149,237",
-					"cornsilk": "255,248,220",
-					"crimson": "220,20,60",
-					"cyan": "0,255,255",
-					"darkblue": "0,0,139",
-					"darkcyan": "0,139,139",
-					"darkgoldenrod": "184,134,11",
-					"darkgray": "169,169,169",
-					"darkgrey": "169,169,169",
-					"darkgreen": "0,100,0",
-					"darkkhaki": "189,183,107",
-					"darkmagenta": "139,0,139",
-					"darkolivegreen": "85,107,47",
-					"darkorange": "255,140,0",
-					"darkorchid": "153,50,204",
-					"darkred": "139,0,0",
-					"darksalmon": "233,150,122",
-					"darkseagreen": "143,188,143",
-					"darkslateblue": "72,61,139",
-					"darkslategray": "47,79,79",
-					"darkturquoise": "0,206,209",
-					"darkviolet": "148,0,211",
-					"deeppink": "255,20,147",
-					"deepskyblue": "0,191,255",
-					"dimgray": "105,105,105",
-					"dimgrey": "105,105,105",
-					"dodgerblue": "30,144,255",
-					"firebrick": "178,34,34",
-					"floralwhite": "255,250,240",
-					"forestgreen": "34,139,34",
-					"fuchsia": "255,0,255",
-					"gainsboro": "220,220,220",
-					"ghostwhite": "248,248,255",
-					"gold": "255,215,0",
-					"goldenrod": "218,165,32",
-					"gray": "128,128,128",
-					"grey": "128,128,128",
-					"greenyellow": "173,255,47",
-					"green": "0,128,0",
-					"honeydew": "240,255,240",
-					"hotpink": "255,105,180",
-					"indianred": "205,92,92",
-					"indigo": "75,0,130",
-					"ivory": "255,255,240",
-					"khaki": "240,230,140",
-					"lavenderblush": "255,240,245",
-					"lavender": "230,230,250",
-					"lawngreen": "124,252,0",
-					"lemonchiffon": "255,250,205",
-					"lightblue": "173,216,230",
-					"lightcoral": "240,128,128",
-					"lightcyan": "224,255,255",
-					"lightgoldenrodyellow": "250,250,210",
-					"lightgray": "211,211,211",
-					"lightgrey": "211,211,211",
-					"lightgreen": "144,238,144",
-					"lightpink": "255,182,193",
-					"lightsalmon": "255,160,122",
-					"lightseagreen": "32,178,170",
-					"lightskyblue": "135,206,250",
-					"lightslategray": "119,136,153",
-					"lightsteelblue": "176,196,222",
-					"lightyellow": "255,255,224",
-					"limegreen": "50,205,50",
-					"lime": "0,255,0",
-					"linen": "250,240,230",
-					"magenta": "255,0,255",
-					"maroon": "128,0,0",
-					"mediumaquamarine": "102,205,170",
-					"mediumblue": "0,0,205",
-					"mediumorchid": "186,85,211",
-					"mediumpurple": "147,112,219",
-					"mediumseagreen": "60,179,113",
-					"mediumslateblue": "123,104,238",
-					"mediumspringgreen": "0,250,154",
-					"mediumturquoise": "72,209,204",
-					"mediumvioletred": "199,21,133",
-					"midnightblue": "25,25,112",
-					"mintcream": "245,255,250",
-					"mistyrose": "255,228,225",
-					"moccasin": "255,228,181",
-					"navajowhite": "255,222,173",
-					"navy": "0,0,128",
-					"oldlace": "253,245,230",
-					"olivedrab": "107,142,35",
-					"olive": "128,128,0",
-					"orangered": "255,69,0",
-					"orange": "255,165,0",
-					"orchid": "218,112,214",
-					"palegoldenrod": "238,232,170",
-					"palegreen": "152,251,152",
-					"paleturquoise": "175,238,238",
-					"palevioletred": "219,112,147",
-					"papayawhip": "255,239,213",
-					"peachpuff": "255,218,185",
-					"peru": "205,133,63",
-					"pink": "255,192,203",
-					"plum": "221,160,221",
-					"powderblue": "176,224,230",
-					"purple": "128,0,128",
-					"red": "255,0,0",
-					"rosybrown": "188,143,143",
-					"royalblue": "65,105,225",
-					"saddlebrown": "139,69,19",
-					"salmon": "250,128,114",
-					"sandybrown": "244,164,96",
-					"seagreen": "46,139,87",
-					"seashell": "255,245,238",
-					"sienna": "160,82,45",
-					"silver": "192,192,192",
-					"skyblue": "135,206,235",
-					"slateblue": "106,90,205",
-					"slategray": "112,128,144",
-					"snow": "255,250,250",
-					"springgreen": "0,255,127",
-					"steelblue": "70,130,180",
-					"tan": "210,180,140",
-					"teal": "0,128,128",
-					"thistle": "216,191,216",
-					"tomato": "255,99,71",
-					"turquoise": "64,224,208",
-					"violet": "238,130,238",
-					"wheat": "245,222,179",
-					"whitesmoke": "245,245,245",
-					"white": "255,255,255",
-					"yellowgreen": "154,205,50",
-					"yellow": "255,255,0"
-				}
-			},
-			/************
-			 Hooks
-			 ************/
-
-			/* Hooks allow a subproperty (e.g. "boxShadowBlur") of a compound-value CSS property
-			 (e.g. "boxShadow: X Y Blur Spread Color") to be animated as if it were a discrete property. */
-			/* Note: Beyond enabling fine-grained property animation, hooking is necessary since Velocity only
-			 tweens properties with single numeric values; unlike CSS transitions, Velocity does not interpolate compound-values. */
-			Hooks: {
-				/********************
-				 Registration
-				 ********************/
-
-				/* Templates are a concise way of indicating which subproperties must be individually registered for each compound-value CSS property. */
-				/* Each template consists of the compound-value's base name, its constituent subproperty names, and those subproperties' default values. */
-				templates: {
-					"textShadow": ["Color X Y Blur", "black 0px 0px 0px"],
-					"boxShadow": ["Color X Y Blur Spread", "black 0px 0px 0px 0px"],
-					"clip": ["Top Right Bottom Left", "0px 0px 0px 0px"],
-					"backgroundPosition": ["X Y", "0% 0%"],
-					"transformOrigin": ["X Y Z", "50% 50% 0px"],
-					"perspectiveOrigin": ["X Y", "50% 50%"]
-				},
-				/* A "registered" hook is one that has been converted from its template form into a live,
-				 tweenable property. It contains data to associate it with its root property. */
-				registered: {
-					/* Note: A registered hook looks like this ==> textShadowBlur: [ "textShadow", 3 ],
-					 which consists of the subproperty's name, the associated root property's name,
-					 and the subproperty's position in the root's value. */
-				},
-				/* Convert the templates into individual hooks then append them to the registered object above. */
-				register: function() {
-					/* Color hooks registration: Colors are defaulted to white -- as opposed to black -- since colors that are
-					 currently set to "transparent" default to their respective template below when color-animated,
-					 and white is typically a closer match to transparent than black is. An exception is made for text ("color"),
-					 which is almost always set closer to black than white. */
-					for (var i = 0; i < CSS.Lists.colors.length; i++) {
-						var rgbComponents = (CSS.Lists.colors[i] === "color") ? "0 0 0 1" : "255 255 255 1";
-						CSS.Hooks.templates[CSS.Lists.colors[i]] = ["Red Green Blue Alpha", rgbComponents];
-					}
-
-					var rootProperty,
-							hookTemplate,
-							hookNames;
-
-					/* In IE, color values inside compound-value properties are positioned at the end the value instead of at the beginning.
-					 Thus, we re-arrange the templates accordingly. */
-					if (IE) {
-						for (rootProperty in CSS.Hooks.templates) {
-							if (!CSS.Hooks.templates.hasOwnProperty(rootProperty)) {
-								continue;
-							}
-							hookTemplate = CSS.Hooks.templates[rootProperty];
-							hookNames = hookTemplate[0].split(" ");
-
-							var defaultValues = hookTemplate[1].match(CSS.RegEx.valueSplit);
-
-							if (hookNames[0] === "Color") {
-								/* Reposition both the hook's name and its default value to the end of their respective strings. */
-								hookNames.push(hookNames.shift());
-								defaultValues.push(defaultValues.shift());
-
-								/* Replace the existing template for the hook's root property. */
-								CSS.Hooks.templates[rootProperty] = [hookNames.join(" "), defaultValues.join(" ")];
-							}
-						}
-					}
-
-					/* Hook registration. */
-					for (rootProperty in CSS.Hooks.templates) {
-						if (!CSS.Hooks.templates.hasOwnProperty(rootProperty)) {
-							continue;
-						}
-						hookTemplate = CSS.Hooks.templates[rootProperty];
-						hookNames = hookTemplate[0].split(" ");
-
-						for (var j in hookNames) {
-							if (!hookNames.hasOwnProperty(j)) {
-								continue;
-							}
-							var fullHookName = rootProperty + hookNames[j],
-									hookPosition = j;
-
-							/* For each hook, register its full name (e.g. textShadowBlur) with its root property (e.g. textShadow)
-							 and the hook's position in its template's default value string. */
-							CSS.Hooks.registered[fullHookName] = [rootProperty, hookPosition];
-						}
-					}
-				},
-				/*****************************
-				 Injection and Extraction
-				 *****************************/
-
-				/* Look up the root property associated with the hook (e.g. return "textShadow" for "textShadowBlur"). */
-				/* Since a hook cannot be set directly (the browser won't recognize it), style updating for hooks is routed through the hook's root property. */
-				getRoot: function(property) {
-					var hookData = CSS.Hooks.registered[property];
-
-					if (hookData) {
-						return hookData[0];
-					} else {
-						/* If there was no hook match, return the property name untouched. */
-						return property;
-					}
-				},
-				getUnit: function(str, start) {
-					var unit = (str.substr(start || 0, 5).match(/^[a-z%]+/) || [])[0] || "";
-
-					if (unit && _inArray(CSS.Lists.units, unit)) {
-						return unit;
-					}
-					return "";
-				},
-				fixColors: function(str) {
-					return str.replace(/(rgba?\(\s*)?(\b[a-z]+\b)/g, function($0, $1, $2) {
-						if (CSS.Lists.colorNames.hasOwnProperty($2)) {
-							return ($1 ? $1 : "rgba(") + CSS.Lists.colorNames[$2] + ($1 ? "" : ",1)");
-						}
-						return $1 + $2;
-					});
-				},
-				/* Convert any rootPropertyValue, null or otherwise, into a space-delimited list of hook values so that
-				 the targeted hook can be injected or extracted at its standard position. */
-				cleanRootPropertyValue: function(rootProperty, rootPropertyValue) {
-					/* If the rootPropertyValue is wrapped with "rgb()", "clip()", etc., remove the wrapping to normalize the value before manipulation. */
-					if (CSS.RegEx.valueUnwrap.test(rootPropertyValue)) {
-						rootPropertyValue = rootPropertyValue.match(CSS.RegEx.valueUnwrap)[1];
-					}
-
-					/* If rootPropertyValue is a CSS null-value (from which there's inherently no hook value to extract),
-					 default to the root's default value as defined in CSS.Hooks.templates. */
-					/* Note: CSS null-values include "none", "auto", and "transparent". They must be converted into their
-					 zero-values (e.g. textShadow: "none" ==> textShadow: "0px 0px 0px black") for hook manipulation to proceed. */
-					if (CSS.Values.isCSSNullValue(rootPropertyValue)) {
-						rootPropertyValue = CSS.Hooks.templates[rootProperty][1];
-					}
-
-					return rootPropertyValue;
-				},
-				/* Extracted the hook's value from its root property's value. This is used to get the starting value of an animating hook. */
-				extractValue: function(fullHookName, rootPropertyValue) {
-					var hookData = CSS.Hooks.registered[fullHookName];
-
-					if (hookData) {
-						var hookRoot = hookData[0],
-								hookPosition = hookData[1];
-
-						rootPropertyValue = CSS.Hooks.cleanRootPropertyValue(hookRoot, rootPropertyValue);
-
-						/* Split rootPropertyValue into its constituent hook values then grab the desired hook at its standard position. */
-						return rootPropertyValue.toString().match(CSS.RegEx.valueSplit)[hookPosition];
-					} else {
-						/* If the provided fullHookName isn't a registered hook, return the rootPropertyValue that was passed in. */
-						return rootPropertyValue;
-					}
-				},
-				/* Inject the hook's value into its root property's value. This is used to piece back together the root property
-				 once Velocity has updated one of its individually hooked values through tweening. */
-				injectValue: function(fullHookName, hookValue, rootPropertyValue) {
-					var hookData = CSS.Hooks.registered[fullHookName];
-
-					if (hookData) {
-						var hookRoot = hookData[0],
-								hookPosition = hookData[1],
-								rootPropertyValueParts,
-								rootPropertyValueUpdated;
-
-						rootPropertyValue = CSS.Hooks.cleanRootPropertyValue(hookRoot, rootPropertyValue);
-
-						/* Split rootPropertyValue into its individual hook values, replace the targeted value with hookValue,
-						 then reconstruct the rootPropertyValue string. */
-						rootPropertyValueParts = rootPropertyValue.toString().match(CSS.RegEx.valueSplit);
-						rootPropertyValueParts[hookPosition] = hookValue;
-						rootPropertyValueUpdated = rootPropertyValueParts.join(" ");
-
-						return rootPropertyValueUpdated;
-					} else {
-						/* If the provided fullHookName isn't a registered hook, return the rootPropertyValue that was passed in. */
-						return rootPropertyValue;
-					}
-				}
-			},
-			/*******************
-			 Normalizations
-			 *******************/
-
-			/* Normalizations standardize CSS property manipulation by pollyfilling browser-specific implementations (e.g. opacity)
-			 and reformatting special properties (e.g. clip, rgba) to look like standard ones. */
-			Normalizations: {
-				/* Normalizations are passed a normalization target (either the property's name, its extracted value, or its injected value),
-				 the targeted element (which may need to be queried), and the targeted property value. */
-				registered: {
-					clip: function(type, element, propertyValue) {
-						switch (type) {
-							case "name":
-								return "clip";
-								/* Clip needs to be unwrapped and stripped of its commas during extraction. */
-							case "extract":
-								var extracted;
-
-								/* If Velocity also extracted this value, skip extraction. */
-								if (CSS.RegEx.wrappedValueAlreadyExtracted.test(propertyValue)) {
-									extracted = propertyValue;
-								} else {
-									/* Remove the "rect()" wrapper. */
-									extracted = propertyValue.toString().match(CSS.RegEx.valueUnwrap);
-
-									/* Strip off commas. */
-									extracted = extracted ? extracted[1].replace(/,(\s+)?/g, " ") : propertyValue;
-								}
-
-								return extracted;
-								/* Clip needs to be re-wrapped during injection. */
-							case "inject":
-								return "rect(" + propertyValue + ")";
-						}
-					},
-					blur: function(type, element, propertyValue) {
-						switch (type) {
-							case "name":
-								return Velocity.State.isFirefox ? "filter" : "-webkit-filter";
-							case "extract":
-								var extracted = parseFloat(propertyValue);
-
-								/* If extracted is NaN, meaning the value isn't already extracted. */
-								if (!(extracted || extracted === 0)) {
-									var blurComponent = propertyValue.toString().match(/blur\(([0-9]+[A-z]+)\)/i);
-
-									/* If the filter string had a blur component, return just the blur value and unit type. */
-									if (blurComponent) {
-										extracted = blurComponent[1];
-										/* If the component doesn't exist, default blur to 0. */
-									} else {
-										extracted = 0;
-									}
-								}
-
-								return extracted;
-								/* Blur needs to be re-wrapped during injection. */
-							case "inject":
-								/* For the blur effect to be fully de-applied, it needs to be set to "none" instead of 0. */
-								if (!parseFloat(propertyValue)) {
-									return "none";
-								} else {
-									return "blur(" + propertyValue + ")";
-								}
-						}
-					},
-					/* <=IE8 do not support the standard opacity property. They use filter:alpha(opacity=INT) instead. */
-					opacity: function(type, element, propertyValue) {
-						if (IE <= 8) {
-							switch (type) {
-								case "name":
-									return "filter";
-								case "extract":
-									/* <=IE8 return a "filter" value of "alpha(opacity=\d{1,3})".
-									 Extract the value and convert it to a decimal value to match the standard CSS opacity property's formatting. */
-									var extracted = propertyValue.toString().match(/alpha\(opacity=(.*)\)/i);
-
-									if (extracted) {
-										/* Convert to decimal value. */
-										propertyValue = extracted[1] / 100;
-									} else {
-										/* When extracting opacity, default to 1 since a null value means opacity hasn't been set. */
-										propertyValue = 1;
-									}
-
-									return propertyValue;
-								case "inject":
-									/* Opacified elements are required to have their zoom property set to a non-zero value. */
-									element.style.zoom = 1;
-
-									/* Setting the filter property on elements with certain font property combinations can result in a
-									 highly unappealing ultra-bolding effect. There's no way to remedy this throughout a tween, but dropping the
-									 value altogether (when opacity hits 1) at leasts ensures that the glitch is gone post-tweening. */
-									if (parseFloat(propertyValue) >= 1) {
-										return "";
-									} else {
-										/* As per the filter property's spec, convert the decimal value to a whole number and wrap the value. */
-										return "alpha(opacity=" + parseInt(parseFloat(propertyValue) * 100, 10) + ")";
-									}
-							}
-							/* With all other browsers, normalization is not required; return the same values that were passed in. */
-						} else {
-							switch (type) {
-								case "name":
-									return "opacity";
-								case "extract":
-									return propertyValue;
-								case "inject":
-									return propertyValue;
-							}
-						}
-					}
-				},
-				/*****************************
-				 Batched Registrations
-				 *****************************/
-
-				/* Note: Batched normalizations extend the CSS.Normalizations.registered object. */
-				register: function() {
-
-					/*****************
-					 Transforms
-					 *****************/
-
-					/* Transforms are the subproperties contained by the CSS "transform" property. Transforms must undergo normalization
-					 so that they can be referenced in a properties map by their individual names. */
-					/* Note: When transforms are "set", they are actually assigned to a per-element transformCache. When all transform
-					 setting is complete complete, CSS.flushTransformCache() must be manually called to flush the values to the DOM.
-					 Transform setting is batched in this way to improve performance: the transform style only needs to be updated
-					 once when multiple transform subproperties are being animated simultaneously. */
-					/* Note: IE9 and Android Gingerbread have support for 2D -- but not 3D -- transforms. Since animating unsupported
-					 transform properties results in the browser ignoring the *entire* transform string, we prevent these 3D values
-					 from being normalized for these browsers so that tweening skips these properties altogether
-					 (since it will ignore them as being unsupported by the browser.) */
-					if ((!IE || IE > 9) && !Velocity.State.isGingerbread) {
-						/* Note: Since the standalone CSS "perspective" property and the CSS transform "perspective" subproperty
-						 share the same name, the latter is given a unique token within Velocity: "transformPerspective". */
-						CSS.Lists.transformsBase = CSS.Lists.transformsBase.concat(CSS.Lists.transforms3D);
-					}
-
-					for (var i = 0; i < CSS.Lists.transformsBase.length; i++) {
-						/* Wrap the dynamically generated normalization function in a new scope so that transformName's value is
-						 paired with its respective function. (Otherwise, all functions would take the final for loop's transformName.) */
-						(function() {
-							var transformName = CSS.Lists.transformsBase[i];
-
-							CSS.Normalizations.registered[transformName] = function(type, element, propertyValue) {
-								switch (type) {
-									/* The normalized property name is the parent "transform" property -- the property that is actually set in CSS. */
-									case "name":
-										return "transform";
-										/* Transform values are cached onto a per-element transformCache object. */
-									case "extract":
-										/* If this transform has yet to be assigned a value, return its null value. */
-										if (Data(element) === undefined || Data(element).transformCache[transformName] === undefined) {
-											/* Scale CSS.Lists.transformsBase default to 1 whereas all other transform properties default to 0. */
-											return /^scale/i.test(transformName) ? 1 : 0;
-											/* When transform values are set, they are wrapped in parentheses as per the CSS spec.
-											 Thus, when extracting their values (for tween calculations), we strip off the parentheses. */
-										}
-										return Data(element).transformCache[transformName].replace(/[()]/g, "");
-									case "inject":
-										var invalid = false;
-
-										/* If an individual transform property contains an unsupported unit type, the browser ignores the *entire* transform property.
-										 Thus, protect users from themselves by skipping setting for transform values supplied with invalid unit types. */
-										/* Switch on the base transform type; ignore the axis by removing the last letter from the transform's name. */
-										switch (transformName.substr(0, transformName.length - 1)) {
-											/* Whitelist unit types for each transform. */
-											case "translate":
-												invalid = !/(%|px|em|rem|vw|vh|\d)$/i.test(propertyValue);
-												break;
-												/* Since an axis-free "scale" property is supported as well, a little hack is used here to detect it by chopping off its last letter. */
-											case "scal":
-											case "scale":
-												/* Chrome on Android has a bug in which scaled elements blur if their initial scale
-												 value is below 1 (which can happen with forcefeeding). Thus, we detect a yet-unset scale property
-												 and ensure that its first value is always 1. More info: http://stackoverflow.com/questions/10417890/css3-animations-with-transform-causes-blurred-elements-on-webkit/10417962#10417962 */
-												if (Velocity.State.isAndroid && Data(element).transformCache[transformName] === undefined && propertyValue < 1) {
-													propertyValue = 1;
-												}
-
-												invalid = !/(\d)$/i.test(propertyValue);
-												break;
-											case "skew":
-												invalid = !/(deg|\d)$/i.test(propertyValue);
-												break;
-											case "rotate":
-												invalid = !/(deg|\d)$/i.test(propertyValue);
-												break;
-										}
-
-										if (!invalid) {
-											/* As per the CSS spec, wrap the value in parentheses. */
-											Data(element).transformCache[transformName] = "(" + propertyValue + ")";
-										}
-
-										/* Although the value is set on the transformCache object, return the newly-updated value for the calling code to process as normal. */
-										return Data(element).transformCache[transformName];
-								}
-							};
-						})();
-					}
-
-					/*************
-					 Colors
-					 *************/
-
-					/* Since Velocity only animates a single numeric value per property, color animation is achieved by hooking the individual RGBA components of CSS color properties.
-					 Accordingly, color values must be normalized (e.g. "#ff0000", "red", and "rgb(255, 0, 0)" ==> "255 0 0 1") so that their components can be injected/extracted by CSS.Hooks logic. */
-					for (var j = 0; j < CSS.Lists.colors.length; j++) {
-						/* Wrap the dynamically generated normalization function in a new scope so that colorName's value is paired with its respective function.
-						 (Otherwise, all functions would take the final for loop's colorName.) */
-						(function() {
-							var colorName = CSS.Lists.colors[j];
-
-							/* Note: In IE<=8, which support rgb but not rgba, color properties are reverted to rgb by stripping off the alpha component. */
-							CSS.Normalizations.registered[colorName] = function(type, element, propertyValue) {
-								switch (type) {
-									case "name":
-										return colorName;
-										/* Convert all color values into the rgb format. (Old IE can return hex values and color names instead of rgb/rgba.) */
-									case "extract":
-										var extracted;
-
-										/* If the color is already in its hookable form (e.g. "255 255 255 1") due to having been previously extracted, skip extraction. */
-										if (CSS.RegEx.wrappedValueAlreadyExtracted.test(propertyValue)) {
-											extracted = propertyValue;
-										} else {
-											var converted,
-													colorNames = {
-														black: "rgb(0, 0, 0)",
-														blue: "rgb(0, 0, 255)",
-														gray: "rgb(128, 128, 128)",
-														green: "rgb(0, 128, 0)",
-														red: "rgb(255, 0, 0)",
-														white: "rgb(255, 255, 255)"
-													};
-
-											/* Convert color names to rgb. */
-											if (/^[A-z]+$/i.test(propertyValue)) {
-												if (colorNames[propertyValue] !== undefined) {
-													converted = colorNames[propertyValue];
-												} else {
-													/* If an unmatched color name is provided, default to black. */
-													converted = colorNames.black;
-												}
-												/* Convert hex values to rgb. */
-											} else if (CSS.RegEx.isHex.test(propertyValue)) {
-												converted = "rgb(" + CSS.Values.hexToRgb(propertyValue).join(" ") + ")";
-												/* If the provided color doesn't match any of the accepted color formats, default to black. */
-											} else if (!(/^rgba?\(/i.test(propertyValue))) {
-												converted = colorNames.black;
-											}
-
-											/* Remove the surrounding "rgb/rgba()" string then replace commas with spaces and strip
-											 repeated spaces (in case the value included spaces to begin with). */
-											extracted = (converted || propertyValue).toString().match(CSS.RegEx.valueUnwrap)[1].replace(/,(\s+)?/g, " ");
-										}
-
-										/* So long as this isn't <=IE8, add a fourth (alpha) component if it's missing and default it to 1 (visible). */
-										if ((!IE || IE > 8) && extracted.split(" ").length === 3) {
-											extracted += " 1";
-										}
-
-										return extracted;
-									case "inject":
-										/* If we have a pattern then it might already have the right values */
-										if (/^rgb/.test(propertyValue)) {
-											return propertyValue;
-										}
-
-										/* If this is IE<=8 and an alpha component exists, strip it off. */
-										if (IE <= 8) {
-											if (propertyValue.split(" ").length === 4) {
-												propertyValue = propertyValue.split(/\s+/).slice(0, 3).join(" ");
-											}
-											/* Otherwise, add a fourth (alpha) component if it's missing and default it to 1 (visible). */
-										} else if (propertyValue.split(" ").length === 3) {
-											propertyValue += " 1";
-										}
-
-										/* Re-insert the browser-appropriate wrapper("rgb/rgba()"), insert commas, and strip off decimal units
-										 on all values but the fourth (R, G, and B only accept whole numbers). */
-										return (IE <= 8 ? "rgb" : "rgba") + "(" + propertyValue.replace(/\s+/g, ",").replace(/\.(\d)+(?=,)/g, "") + ")";
-								}
-							};
-						})();
-					}
-
-					/**************
-					 Dimensions
-					 **************/
-					function augmentDimension(name, element, wantInner) {
-						var isBorderBox = CSS.getPropertyValue(element, "boxSizing").toString().toLowerCase() === "border-box";
-
-						if (isBorderBox === (wantInner || false)) {
-							/* in box-sizing mode, the CSS width / height accessors already give the outerWidth / outerHeight. */
-							var i,
-									value,
-									augment = 0,
-									sides = name === "width" ? ["Left", "Right"] : ["Top", "Bottom"],
-									fields = ["padding" + sides[0], "padding" + sides[1], "border" + sides[0] + "Width", "border" + sides[1] + "Width"];
-
-							for (i = 0; i < fields.length; i++) {
-								value = parseFloat(CSS.getPropertyValue(element, fields[i]));
-								if (!isNaN(value)) {
-									augment += value;
-								}
-							}
-							return wantInner ? -augment : augment;
-						}
-						return 0;
-					}
-					function getDimension(name, wantInner) {
-						return function(type, element, propertyValue) {
-							switch (type) {
-								case "name":
-									return name;
-								case "extract":
-									return parseFloat(propertyValue) + augmentDimension(name, element, wantInner);
-								case "inject":
-									return (parseFloat(propertyValue) - augmentDimension(name, element, wantInner)) + "px";
-							}
-						};
-					}
-					CSS.Normalizations.registered.innerWidth = getDimension("width", true);
-					CSS.Normalizations.registered.innerHeight = getDimension("height", true);
-					CSS.Normalizations.registered.outerWidth = getDimension("width");
-					CSS.Normalizations.registered.outerHeight = getDimension("height");
-				}
-			},
-			/************************
-			 CSS Property Names
-			 ************************/
-
-			Names: {
-				/* Camelcase a property name into its JavaScript notation (e.g. "background-color" ==> "backgroundColor").
-				 Camelcasing is used to normalize property names between and across calls. */
-				camelCase: function(property) {
-					return property.replace(/-(\w)/g, function(match, subMatch) {
-						return subMatch.toUpperCase();
-					});
-				},
-				/* For SVG elements, some properties (namely, dimensional ones) are GET/SET via the element's HTML attributes (instead of via CSS styles). */
-				SVGAttribute: function(property) {
-					var SVGAttributes = "width|height|x|y|cx|cy|r|rx|ry|x1|x2|y1|y2";
-
-					/* Certain browsers require an SVG transform to be applied as an attribute. (Otherwise, application via CSS is preferable due to 3D support.) */
-					if (IE || (Velocity.State.isAndroid && !Velocity.State.isChrome)) {
-						SVGAttributes += "|transform";
-					}
-
-					return new RegExp("^(" + SVGAttributes + ")$", "i").test(property);
-				},
-				/* Determine whether a property should be set with a vendor prefix. */
-				/* If a prefixed version of the property exists, return it. Otherwise, return the original property name.
-				 If the property is not at all supported by the browser, return a false flag. */
-				prefixCheck: function(property) {
-					/* If this property has already been checked, return the cached value. */
-					if (Velocity.State.prefixMatches[property]) {
-						return [Velocity.State.prefixMatches[property], true];
-					} else {
-						var vendors = ["", "Webkit", "Moz", "ms", "O"];
-
-						for (var i = 0, vendorsLength = vendors.length; i < vendorsLength; i++) {
-							var propertyPrefixed;
-
-							if (i === 0) {
-								propertyPrefixed = property;
-							} else {
-								/* Capitalize the first letter of the property to conform to JavaScript vendor prefix notation (e.g. webkitFilter). */
-								propertyPrefixed = vendors[i] + property.replace(/^\w/, function(match) {
-									return match.toUpperCase();
-								});
-							}
-
-							/* Check if the browser supports this property as prefixed. */
-							if (Type.isString(Velocity.State.prefixElement.style[propertyPrefixed])) {
-								/* Cache the match. */
-								Velocity.State.prefixMatches[property] = propertyPrefixed;
-
-								return [propertyPrefixed, true];
-							}
-						}
-
-						/* If the browser doesn't support this property in any form, include a false flag so that the caller can decide how to proceed. */
-						return [property, false];
-					}
-				}
-			},
-			/************************
-			 CSS Property Values
-			 ************************/
-
-			Values: {
-				/* Hex to RGB conversion. Copyright Tim Down: http://stackoverflow.com/questions/5623838/rgb-to-hex-and-hex-to-rgb */
-				hexToRgb: function(hex) {
-					var shortformRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i,
-							longformRegex = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i,
-							rgbParts;
-
-					hex = hex.replace(shortformRegex, function(m, r, g, b) {
-						return r + r + g + g + b + b;
-					});
-
-					rgbParts = longformRegex.exec(hex);
-
-					return rgbParts ? [parseInt(rgbParts[1], 16), parseInt(rgbParts[2], 16), parseInt(rgbParts[3], 16)] : [0, 0, 0];
-				},
-				isCSSNullValue: function(value) {
-					/* The browser defaults CSS values that have not been set to either 0 or one of several possible null-value strings.
-					 Thus, we check for both falsiness and these special strings. */
-					/* Null-value checking is performed to default the special strings to 0 (for the sake of tweening) or their hook
-					 templates as defined as CSS.Hooks (for the sake of hook injection/extraction). */
-					/* Note: Chrome returns "rgba(0, 0, 0, 0)" for an undefined color whereas IE returns "transparent". */
-					return (!value || /^(none|auto|transparent|(rgba\(0, ?0, ?0, ?0\)))$/i.test(value));
-				},
-				/* Retrieve a property's default unit type. Used for assigning a unit type when one is not supplied by the user. */
-				getUnitType: function(property) {
-					if (/^(rotate|skew)/i.test(property)) {
-						return "deg";
-					} else if (/(^(scale|scaleX|scaleY|scaleZ|alpha|flexGrow|flexHeight|zIndex|fontWeight)$)|((opacity|red|green|blue|alpha)$)/i.test(property)) {
-						/* The above properties are unitless. */
-						return "";
-					} else {
-						/* Default to px for all other properties. */
-						return "px";
-					}
-				},
-				/* HTML elements default to an associated display type when they're not set to display:none. */
-				/* Note: This function is used for correctly setting the non-"none" display value in certain Velocity redirects, such as fadeIn/Out. */
-				getDisplayType: function(element) {
-					var tagName = element && element.tagName.toString().toLowerCase();
-
-					if (/^(b|big|i|small|tt|abbr|acronym|cite|code|dfn|em|kbd|strong|samp|var|a|bdo|br|img|map|object|q|script|span|sub|sup|button|input|label|select|textarea)$/i.test(tagName)) {
-						return "inline";
-					} else if (/^(li)$/i.test(tagName)) {
-						return "list-item";
-					} else if (/^(tr)$/i.test(tagName)) {
-						return "table-row";
-					} else if (/^(table)$/i.test(tagName)) {
-						return "table";
-					} else if (/^(tbody)$/i.test(tagName)) {
-						return "table-row-group";
-						/* Default to "block" when no match is found. */
-					} else {
-						return "block";
-					}
-				},
-				/* The class add/remove functions are used to temporarily apply a "velocity-animating" class to elements while they're animating. */
-				addClass: function(element, className) {
-					if (element) {
-						if (element.classList) {
-							element.classList.add(className);
-						} else if (Type.isString(element.className)) {
-							// Element.className is around 15% faster then set/getAttribute
-							element.className += (element.className.length ? " " : "") + className;
-						} else {
-							// Work around for IE strict mode animating SVG - and anything else that doesn't behave correctly - the same way jQuery does it
-							var currentClass = element.getAttribute(IE <= 7 ? "className" : "class") || "";
-
-							element.setAttribute("class", currentClass + (currentClass ? " " : "") + className);
-						}
-					}
-				},
-				removeClass: function(element, className) {
-					if (element) {
-						if (element.classList) {
-							element.classList.remove(className);
-						} else if (Type.isString(element.className)) {
-							// Element.className is around 15% faster then set/getAttribute
-							// TODO: Need some jsperf tests on performance - can we get rid of the regex and maybe use split / array manipulation?
-							element.className = element.className.toString().replace(new RegExp("(^|\\s)" + className.split(" ").join("|") + "(\\s|$)", "gi"), " ");
-						} else {
-							// Work around for IE strict mode animating SVG - and anything else that doesn't behave correctly - the same way jQuery does it
-							var currentClass = element.getAttribute(IE <= 7 ? "className" : "class") || "";
-
-							element.setAttribute("class", currentClass.replace(new RegExp("(^|\s)" + className.split(" ").join("|") + "(\s|$)", "gi"), " "));
-						}
-					}
-				}
-			},
-			/****************************
-			 Style Getting & Setting
-			 ****************************/
-
-			/* The singular getPropertyValue, which routes the logic for all normalizations, hooks, and standard CSS properties. */
-			getPropertyValue: function(element, property, rootPropertyValue, forceStyleLookup) {
-				/* Get an element's computed property value. */
-				/* Note: Retrieving the value of a CSS property cannot simply be performed by checking an element's
-				 style attribute (which only reflects user-defined values). Instead, the browser must be queried for a property's
-				 *computed* value. You can read more about getComputedStyle here: https://developer.mozilla.org/en/docs/Web/API/window.getComputedStyle */
-				function computePropertyValue(element, property) {
-					/* When box-sizing isn't set to border-box, height and width style values are incorrectly computed when an
-					 element's scrollbars are visible (which expands the element's dimensions). Thus, we defer to the more accurate
-					 offsetHeight/Width property, which includes the total dimensions for interior, border, padding, and scrollbar.
-					 We subtract border and padding to get the sum of interior + scrollbar. */
-					var computedValue = 0;
-
-					/* IE<=8 doesn't support window.getComputedStyle, thus we defer to jQuery, which has an extensive array
-					 of hacks to accurately retrieve IE8 property values. Re-implementing that logic here is not worth bloating the
-					 codebase for a dying browser. The performance repercussions of using jQuery here are minimal since
-					 Velocity is optimized to rarely (and sometimes never) query the DOM. Further, the $.css() codepath isn't that slow. */
-					if (IE <= 8) {
-						computedValue = $.css(element, property); /* GET */
-						/* All other browsers support getComputedStyle. The returned live object reference is cached onto its
-						 associated element so that it does not need to be refetched upon every GET. */
-					} else {
-						/* Browsers do not return height and width values for elements that are set to display:"none". Thus, we temporarily
-						 toggle display to the element type's default value. */
-						var toggleDisplay = false;
-
-						if (/^(width|height)$/.test(property) && CSS.getPropertyValue(element, "display") === 0) {
-							toggleDisplay = true;
-							CSS.setPropertyValue(element, "display", CSS.Values.getDisplayType(element));
-						}
-
-						var revertDisplay = function() {
-							if (toggleDisplay) {
-								CSS.setPropertyValue(element, "display", "none");
-							}
-						};
-
-						if (!forceStyleLookup) {
-							if (property === "height" && CSS.getPropertyValue(element, "boxSizing").toString().toLowerCase() !== "border-box") {
-								var contentBoxHeight = element.offsetHeight - (parseFloat(CSS.getPropertyValue(element, "borderTopWidth")) || 0) - (parseFloat(CSS.getPropertyValue(element, "borderBottomWidth")) || 0) - (parseFloat(CSS.getPropertyValue(element, "paddingTop")) || 0) - (parseFloat(CSS.getPropertyValue(element, "paddingBottom")) || 0);
-								revertDisplay();
-
-								return contentBoxHeight;
-							} else if (property === "width" && CSS.getPropertyValue(element, "boxSizing").toString().toLowerCase() !== "border-box") {
-								var contentBoxWidth = element.offsetWidth - (parseFloat(CSS.getPropertyValue(element, "borderLeftWidth")) || 0) - (parseFloat(CSS.getPropertyValue(element, "borderRightWidth")) || 0) - (parseFloat(CSS.getPropertyValue(element, "paddingLeft")) || 0) - (parseFloat(CSS.getPropertyValue(element, "paddingRight")) || 0);
-								revertDisplay();
-
-								return contentBoxWidth;
-							}
-						}
-
-						var computedStyle;
-
-						/* For elements that Velocity hasn't been called on directly (e.g. when Velocity queries the DOM on behalf
-						 of a parent of an element its animating), perform a direct getComputedStyle lookup since the object isn't cached. */
-						if (Data(element) === undefined) {
-							computedStyle = window.getComputedStyle(element, null); /* GET */
-							/* If the computedStyle object has yet to be cached, do so now. */
-						} else if (!Data(element).computedStyle) {
-							computedStyle = Data(element).computedStyle = window.getComputedStyle(element, null); /* GET */
-							/* If computedStyle is cached, use it. */
-						} else {
-							computedStyle = Data(element).computedStyle;
-						}
-
-						/* IE and Firefox do not return a value for the generic borderColor -- they only return individual values for each border side's color.
-						 Also, in all browsers, when border colors aren't all the same, a compound value is returned that Velocity isn't setup to parse.
-						 So, as a polyfill for querying individual border side colors, we just return the top border's color and animate all borders from that value. */
-						if (property === "borderColor") {
-							property = "borderTopColor";
-						}
-
-						/* IE9 has a bug in which the "filter" property must be accessed from computedStyle using the getPropertyValue method
-						 instead of a direct property lookup. The getPropertyValue method is slower than a direct lookup, which is why we avoid it by default. */
-						if (IE === 9 && property === "filter") {
-							computedValue = computedStyle.getPropertyValue(property); /* GET */
-						} else {
-							computedValue = computedStyle[property];
-						}
-
-						/* Fall back to the property's style value (if defined) when computedValue returns nothing,
-						 which can happen when the element hasn't been painted. */
-						if (computedValue === "" || computedValue === null) {
-							computedValue = element.style[property];
-						}
-
-						revertDisplay();
-					}
-
-					/* For top, right, bottom, and left (TRBL) values that are set to "auto" on elements of "fixed" or "absolute" position,
-					 defer to jQuery for converting "auto" to a numeric value. (For elements with a "static" or "relative" position, "auto" has the same
-					 effect as being set to 0, so no conversion is necessary.) */
-					/* An example of why numeric conversion is necessary: When an element with "position:absolute" has an untouched "left"
-					 property, which reverts to "auto", left's value is 0 relative to its parent element, but is often non-zero relative
-					 to its *containing* (not parent) element, which is the nearest "position:relative" ancestor or the viewport (and always the viewport in the case of "position:fixed"). */
-					if (computedValue === "auto" && /^(top|right|bottom|left)$/i.test(property)) {
-						var position = computePropertyValue(element, "position"); /* GET */
-
-						/* For absolute positioning, jQuery's $.position() only returns values for top and left;
-						 right and bottom will have their "auto" value reverted to 0. */
-						/* Note: A jQuery object must be created here since jQuery doesn't have a low-level alias for $.position().
-						 Not a big deal since we're currently in a GET batch anyway. */
-						if (position === "fixed" || (position === "absolute" && /top|left/i.test(property))) {
-							/* Note: jQuery strips the pixel unit from its returned values; we re-add it here to conform with computePropertyValue's behavior. */
-							computedValue = $(element).position()[property] + "px"; /* GET */
-						}
-					}
-
-					return computedValue;
-				}
-
-				var propertyValue;
-
-				/* If this is a hooked property (e.g. "clipLeft" instead of the root property of "clip"),
-				 extract the hook's value from a normalized rootPropertyValue using CSS.Hooks.extractValue(). */
-				if (CSS.Hooks.registered[property]) {
-					var hook = property,
-							hookRoot = CSS.Hooks.getRoot(hook);
-
-					/* If a cached rootPropertyValue wasn't passed in (which Velocity always attempts to do in order to avoid requerying the DOM),
-					 query the DOM for the root property's value. */
-					if (rootPropertyValue === undefined) {
-						/* Since the browser is now being directly queried, use the official post-prefixing property name for this lookup. */
-						rootPropertyValue = CSS.getPropertyValue(element, CSS.Names.prefixCheck(hookRoot)[0]); /* GET */
-					}
-
-					/* If this root has a normalization registered, peform the associated normalization extraction. */
-					if (CSS.Normalizations.registered[hookRoot]) {
-						rootPropertyValue = CSS.Normalizations.registered[hookRoot]("extract", element, rootPropertyValue);
-					}
-
-					/* Extract the hook's value. */
-					propertyValue = CSS.Hooks.extractValue(hook, rootPropertyValue);
-
-					/* If this is a normalized property (e.g. "opacity" becomes "filter" in <=IE8) or "translateX" becomes "transform"),
-					 normalize the property's name and value, and handle the special case of transforms. */
-					/* Note: Normalizing a property is mutually exclusive from hooking a property since hook-extracted values are strictly
-					 numerical and therefore do not require normalization extraction. */
-				} else if (CSS.Normalizations.registered[property]) {
-					var normalizedPropertyName,
-							normalizedPropertyValue;
-
-					normalizedPropertyName = CSS.Normalizations.registered[property]("name", element);
-
-					/* Transform values are calculated via normalization extraction (see below), which checks against the element's transformCache.
-					 At no point do transform GETs ever actually query the DOM; initial stylesheet values are never processed.
-					 This is because parsing 3D transform matrices is not always accurate and would bloat our codebase;
-					 thus, normalization extraction defaults initial transform values to their zero-values (e.g. 1 for scaleX and 0 for translateX). */
-					if (normalizedPropertyName !== "transform") {
-						normalizedPropertyValue = computePropertyValue(element, CSS.Names.prefixCheck(normalizedPropertyName)[0]); /* GET */
-
-						/* If the value is a CSS null-value and this property has a hook template, use that zero-value template so that hooks can be extracted from it. */
-						if (CSS.Values.isCSSNullValue(normalizedPropertyValue) && CSS.Hooks.templates[property]) {
-							normalizedPropertyValue = CSS.Hooks.templates[property][1];
-						}
-					}
-
-					propertyValue = CSS.Normalizations.registered[property]("extract", element, normalizedPropertyValue);
-				}
-
-				/* If a (numeric) value wasn't produced via hook extraction or normalization, query the DOM. */
-				if (!/^[\d-]/.test(propertyValue)) {
-					/* For SVG elements, dimensional properties (which SVGAttribute() detects) are tweened via
-					 their HTML attribute values instead of their CSS style values. */
-					var data = Data(element);
-
-					if (data && data.isSVG && CSS.Names.SVGAttribute(property)) {
-						/* Since the height/width attribute values must be set manually, they don't reflect computed values.
-						 Thus, we use use getBBox() to ensure we always get values for elements with undefined height/width attributes. */
-						if (/^(height|width)$/i.test(property)) {
-							/* Firefox throws an error if .getBBox() is called on an SVG that isn't attached to the DOM. */
-							try {
-								propertyValue = element.getBBox()[property];
-							} catch (error) {
-								propertyValue = 0;
-							}
-							/* Otherwise, access the attribute value directly. */
-						} else {
-							propertyValue = element.getAttribute(property);
-						}
-					} else {
-						propertyValue = computePropertyValue(element, CSS.Names.prefixCheck(property)[0]); /* GET */
-					}
-				}
-
-				/* Since property lookups are for animation purposes (which entails computing the numeric delta between start and end values),
-				 convert CSS null-values to an integer of value 0. */
-				if (CSS.Values.isCSSNullValue(propertyValue)) {
-					propertyValue = 0;
-				}
-
-				if (Velocity.debug >= 2) {
-					console.log("Get " + property + ": " + propertyValue);
-				}
-
-				return propertyValue;
-			},
-			/* The singular setPropertyValue, which routes the logic for all normalizations, hooks, and standard CSS properties. */
-			setPropertyValue: function(element, property, propertyValue, rootPropertyValue, scrollData) {
-				var propertyName = property;
-
-				/* In order to be subjected to call options and element queueing, scroll animation is routed through Velocity as if it were a standard CSS property. */
-				if (property === "scroll") {
-					/* If a container option is present, scroll the container instead of the browser window. */
-					if (scrollData.container) {
-						scrollData.container["scroll" + scrollData.direction] = propertyValue;
-						/* Otherwise, Velocity defaults to scrolling the browser window. */
-					} else {
-						if (scrollData.direction === "Left") {
-							window.scrollTo(propertyValue, scrollData.alternateValue);
-						} else {
-							window.scrollTo(scrollData.alternateValue, propertyValue);
-						}
-					}
-				} else {
-					/* Transforms (translateX, rotateZ, etc.) are applied to a per-element transformCache object, which is manually flushed via flushTransformCache().
-					 Thus, for now, we merely cache transforms being SET. */
-					if (CSS.Normalizations.registered[property] && CSS.Normalizations.registered[property]("name", element) === "transform") {
-						/* Perform a normalization injection. */
-						/* Note: The normalization logic handles the transformCache updating. */
-						CSS.Normalizations.registered[property]("inject", element, propertyValue);
-
-						propertyName = "transform";
-						propertyValue = Data(element).transformCache[property];
-					} else {
-						/* Inject hooks. */
-						if (CSS.Hooks.registered[property]) {
-							var hookName = property,
-									hookRoot = CSS.Hooks.getRoot(property);
-
-							/* If a cached rootPropertyValue was not provided, query the DOM for the hookRoot's current value. */
-							rootPropertyValue = rootPropertyValue || CSS.getPropertyValue(element, hookRoot); /* GET */
-
-							propertyValue = CSS.Hooks.injectValue(hookName, propertyValue, rootPropertyValue);
-							property = hookRoot;
-						}
-
-						/* Normalize names and values. */
-						if (CSS.Normalizations.registered[property]) {
-							propertyValue = CSS.Normalizations.registered[property]("inject", element, propertyValue);
-							property = CSS.Normalizations.registered[property]("name", element);
-						}
-
-						/* Assign the appropriate vendor prefix before performing an official style update. */
-						propertyName = CSS.Names.prefixCheck(property)[0];
-
-						/* A try/catch is used for IE<=8, which throws an error when "invalid" CSS values are set, e.g. a negative width.
-						 Try/catch is avoided for other browsers since it incurs a performance overhead. */
-						if (IE <= 8) {
-							try {
-								element.style[propertyName] = propertyValue;
-							} catch (error) {
-								if (Velocity.debug) {
-									console.log("Browser does not support [" + propertyValue + "] for [" + propertyName + "]");
-								}
-							}
-							/* SVG elements have their dimensional properties (width, height, x, y, cx, etc.) applied directly as attributes instead of as styles. */
-							/* Note: IE8 does not support SVG elements, so it's okay that we skip it for SVG animation. */
-						} else {
-							var data = Data(element);
-
-							if (data && data.isSVG && CSS.Names.SVGAttribute(property)) {
-								/* Note: For SVG attributes, vendor-prefixed property names are never used. */
-								/* Note: Not all CSS properties can be animated via attributes, but the browser won't throw an error for unsupported properties. */
-								element.setAttribute(property, propertyValue);
-							} else {
-								element.style[propertyName] = propertyValue;
-							}
-						}
-
-						if (Velocity.debug >= 2) {
-							console.log("Set " + property + " (" + propertyName + "): " + propertyValue);
-						}
-					}
-				}
-
-				/* Return the normalized property name and value in case the caller wants to know how these values were modified before being applied to the DOM. */
-				return [propertyName, propertyValue];
-			},
-			/* To increase performance by batching transform updates into a single SET, transforms are not directly applied to an element until flushTransformCache() is called. */
-			/* Note: Velocity applies transform properties in the same order that they are chronogically introduced to the element's CSS styles. */
-			flushTransformCache: function(element) {
-				var transformString = "",
-						data = Data(element);
-
-				/* Certain browsers require that SVG transforms be applied as an attribute. However, the SVG transform attribute takes a modified version of CSS's transform string
-				 (units are dropped and, except for skewX/Y, subproperties are merged into their master property -- e.g. scaleX and scaleY are merged into scale(X Y). */
-				if ((IE || (Velocity.State.isAndroid && !Velocity.State.isChrome)) && data && data.isSVG) {
-					/* Since transform values are stored in their parentheses-wrapped form, we use a helper function to strip out their numeric values.
-					 Further, SVG transform properties only take unitless (representing pixels) values, so it's okay that parseFloat() strips the unit suffixed to the float value. */
-					var getTransformFloat = function(transformProperty) {
-						return parseFloat(CSS.getPropertyValue(element, transformProperty));
-					};
-
-					/* Create an object to organize all the transforms that we'll apply to the SVG element. To keep the logic simple,
-					 we process *all* transform properties -- even those that may not be explicitly applied (since they default to their zero-values anyway). */
-					var SVGTransforms = {
-						translate: [getTransformFloat("translateX"), getTransformFloat("translateY")],
-						skewX: [getTransformFloat("skewX")], skewY: [getTransformFloat("skewY")],
-						/* If the scale property is set (non-1), use that value for the scaleX and scaleY values
-						 (this behavior mimics the result of animating all these properties at once on HTML elements). */
-						scale: getTransformFloat("scale") !== 1 ? [getTransformFloat("scale"), getTransformFloat("scale")] : [getTransformFloat("scaleX"), getTransformFloat("scaleY")],
-						/* Note: SVG's rotate transform takes three values: rotation degrees followed by the X and Y values
-						 defining the rotation's origin point. We ignore the origin values (default them to 0). */
-						rotate: [getTransformFloat("rotateZ"), 0, 0]
-					};
-
-					/* Iterate through the transform properties in the user-defined property map order.
-					 (This mimics the behavior of non-SVG transform animation.) */
-					$.each(Data(element).transformCache, function(transformName) {
-						/* Except for with skewX/Y, revert the axis-specific transform subproperties to their axis-free master
-						 properties so that they match up with SVG's accepted transform properties. */
-						if (/^translate/i.test(transformName)) {
-							transformName = "translate";
-						} else if (/^scale/i.test(transformName)) {
-							transformName = "scale";
-						} else if (/^rotate/i.test(transformName)) {
-							transformName = "rotate";
-						}
-
-						/* Check that we haven't yet deleted the property from the SVGTransforms container. */
-						if (SVGTransforms[transformName]) {
-							/* Append the transform property in the SVG-supported transform format. As per the spec, surround the space-delimited values in parentheses. */
-							transformString += transformName + "(" + SVGTransforms[transformName].join(" ") + ")" + " ";
-
-							/* After processing an SVG transform property, delete it from the SVGTransforms container so we don't
-							 re-insert the same master property if we encounter another one of its axis-specific properties. */
-							delete SVGTransforms[transformName];
-						}
-					});
-				} else {
-					var transformValue,
-							perspective;
-
-					/* Transform properties are stored as members of the transformCache object. Concatenate all the members into a string. */
-					$.each(Data(element).transformCache, function(transformName) {
-						transformValue = Data(element).transformCache[transformName];
-
-						/* Transform's perspective subproperty must be set first in order to take effect. Store it temporarily. */
-						if (transformName === "transformPerspective") {
-							perspective = transformValue;
-							return true;
-						}
-
-						/* IE9 only supports one rotation type, rotateZ, which it refers to as "rotate". */
-						if (IE === 9 && transformName === "rotateZ") {
-							transformName = "rotate";
-						}
-
-						transformString += transformName + transformValue + " ";
-					});
-
-					/* If present, set the perspective subproperty first. */
-					if (perspective) {
-						transformString = "perspective" + perspective + " " + transformString;
-					}
-				}
-
-				CSS.setPropertyValue(element, "transform", transformString);
-			}
-		};
-
-		/* Register hooks and normalizations. */
-		CSS.Hooks.register();
-		CSS.Normalizations.register();
-
-		/* Allow hook setting in the same fashion as jQuery's $.css(). */
-		Velocity.hook = function(elements, arg2, arg3) {
-			var value;
-
-			elements = sanitizeElements(elements);
-
-			$.each(elements, function(i, element) {
-				/* Initialize Velocity's per-element data cache if this element hasn't previously been animated. */
-				if (Data(element) === undefined) {
-					Velocity.init(element);
-				}
-
-				/* Get property value. If an element set was passed in, only return the value for the first element. */
-				if (arg3 === undefined) {
-					if (value === undefined) {
-						value = CSS.getPropertyValue(element, arg2);
-					}
-					/* Set property value. */
-				} else {
-					/* sPV returns an array of the normalized propertyName/propertyValue pair used to update the DOM. */
-					var adjustedSet = CSS.setPropertyValue(element, arg2, arg3);
-
-					/* Transform properties don't automatically set. They have to be flushed to the DOM. */
-					if (adjustedSet[0] === "transform") {
-						Velocity.CSS.flushTransformCache(element);
-					}
-
-					value = adjustedSet;
-				}
-			});
-
-			return value;
-		};
-
-		/*****************
-		 Animation
-		 *****************/
-
-		var animate = function() {
-			var opts;
-
-			/******************
-			 Call Chain
-			 ******************/
-
-			/* Logic for determining what to return to the call stack when exiting out of Velocity. */
-			function getChain() {
-				/* If we are using the utility function, attempt to return this call's promise. If no promise library was detected,
-				 default to null instead of returning the targeted elements so that utility function's return value is standardized. */
-				if (isUtility) {
-					return promiseData.promise || null;
-					/* Otherwise, if we're using $.fn, return the jQuery-/Zepto-wrapped element set. */
-				} else {
-					return elementsWrapped;
-				}
-			}
-
-			/*************************
-			 Arguments Assignment
-			 *************************/
-
-			/* To allow for expressive CoffeeScript code, Velocity supports an alternative syntax in which "elements" (or "e"), "properties" (or "p"), and "options" (or "o")
-			 objects are defined on a container object that's passed in as Velocity's sole argument. */
-			/* Note: Some browsers automatically populate arguments with a "properties" object. We detect it by checking for its default "names" property. */
-			var syntacticSugar = (arguments[0] && (arguments[0].p || (($.isPlainObject(arguments[0].properties) && !arguments[0].properties.names) || Type.isString(arguments[0].properties)))),
-					/* Whether Velocity was called via the utility function (as opposed to on a jQuery/Zepto object). */
-					isUtility,
-					/* When Velocity is called via the utility function ($.Velocity()/Velocity()), elements are explicitly
-					 passed in as the first parameter. Thus, argument positioning varies. We normalize them here. */
-					elementsWrapped,
-					argumentIndex;
-
-			var elements,
-					propertiesMap,
-					options;
-
-			/* Detect jQuery/Zepto elements being animated via the $.fn method. */
-			if (Type.isWrapped(this)) {
-				isUtility = false;
-
-				argumentIndex = 0;
-				elements = this;
-				elementsWrapped = this;
-				/* Otherwise, raw elements are being animated via the utility function. */
-			} else {
-				isUtility = true;
-
-				argumentIndex = 1;
-				elements = syntacticSugar ? (arguments[0].elements || arguments[0].e) : arguments[0];
-			}
-
-			/***************
-			 Promises
-			 ***************/
-
-			var promiseData = {
-				promise: null,
-				resolver: null,
-				rejecter: null
-			};
-
-			/* If this call was made via the utility function (which is the default method of invocation when jQuery/Zepto are not being used), and if
-			 promise support was detected, create a promise object for this call and store references to its resolver and rejecter methods. The resolve
-			 method is used when a call completes naturally or is prematurely stopped by the user. In both cases, completeCall() handles the associated
-			 call cleanup and promise resolving logic. The reject method is used when an invalid set of arguments is passed into a Velocity call. */
-			/* Note: Velocity employs a call-based queueing architecture, which means that stopping an animating element actually stops the full call that
-			 triggered it -- not that one element exclusively. Similarly, there is one promise per call, and all elements targeted by a Velocity call are
-			 grouped together for the purposes of resolving and rejecting a promise. */
-			if (isUtility && Velocity.Promise) {
-				promiseData.promise = new Velocity.Promise(function(resolve, reject) {
-					promiseData.resolver = resolve;
-					promiseData.rejecter = reject;
-				});
-			}
-
-			if (syntacticSugar) {
-				propertiesMap = arguments[0].properties || arguments[0].p;
-				options = arguments[0].options || arguments[0].o;
-			} else {
-				propertiesMap = arguments[argumentIndex];
-				options = arguments[argumentIndex + 1];
-			}
-
-			elements = sanitizeElements(elements);
-
-			if (!elements) {
-				if (promiseData.promise) {
-					if (!propertiesMap || !options || options.promiseRejectEmpty !== false) {
-						promiseData.rejecter();
-					} else {
-						promiseData.resolver();
-					}
-				}
-				return;
-			}
-
-			/* The length of the element set (in the form of a nodeList or an array of elements) is defaulted to 1 in case a
-			 single raw DOM element is passed in (which doesn't contain a length property). */
-			var elementsLength = elements.length,
-					elementsIndex = 0;
-
-			/***************************
-			 Argument Overloading
-			 ***************************/
-
-			/* Support is included for jQuery's argument overloading: $.animate(propertyMap [, duration] [, easing] [, complete]).
-			 Overloading is detected by checking for the absence of an object being passed into options. */
-			/* Note: The stop/finish/pause/resume actions do not accept animation options, and are therefore excluded from this check. */
-			if (!/^(stop|finish|finishAll|pause|resume)$/i.test(propertiesMap) && !$.isPlainObject(options)) {
-				/* The utility function shifts all arguments one position to the right, so we adjust for that offset. */
-				var startingArgumentPosition = argumentIndex + 1;
-
-				options = {};
-
-				/* Iterate through all options arguments */
-				for (var i = startingArgumentPosition; i < arguments.length; i++) {
-					/* Treat a number as a duration. Parse it out. */
-					/* Note: The following RegEx will return true if passed an array with a number as its first item.
-					 Thus, arrays are skipped from this check. */
-					if (!Type.isArray(arguments[i]) && (/^(fast|normal|slow)$/i.test(arguments[i]) || /^\d/.test(arguments[i]))) {
-						options.duration = arguments[i];
-						/* Treat strings and arrays as easings. */
-					} else if (Type.isString(arguments[i]) || Type.isArray(arguments[i])) {
-						options.easing = arguments[i];
-						/* Treat a function as a complete callback. */
-					} else if (Type.isFunction(arguments[i])) {
-						options.complete = arguments[i];
-					}
-				}
-			}
-
-			/*********************
-			 Action Detection
-			 *********************/
-
-			/* Velocity's behavior is categorized into "actions": Elements can either be specially scrolled into view,
-			 or they can be started, stopped, paused, resumed, or reversed . If a literal or referenced properties map is passed in as Velocity's
-			 first argument, the associated action is "start". Alternatively, "scroll", "reverse", "pause", "resume" or "stop" can be passed in 
-			 instead of a properties map. */
-			var action;
-
-			switch (propertiesMap) {
-				case "scroll":
-					action = "scroll";
-					break;
-
-				case "reverse":
-					action = "reverse";
-					break;
-
-				case "pause":
-
-					/*******************
-					 Action: Pause
-					 *******************/
-
-					var currentTime = (new Date()).getTime();
-
-					/* Handle delay timers */
-					$.each(elements, function(i, element) {
-						pauseDelayOnElement(element, currentTime);
-					});
-
-					/* Pause and Resume are call-wide (not on a per element basis). Thus, calling pause or resume on a 
-					 single element will cause any calls that containt tweens for that element to be paused/resumed
-					 as well. */
-
-					/* Iterate through all calls and pause any that contain any of our elements */
-					$.each(Velocity.State.calls, function(i, activeCall) {
-
-						var found = false;
-						/* Inactive calls are set to false by the logic inside completeCall(). Skip them. */
-						if (activeCall) {
-							/* Iterate through the active call's targeted elements. */
-							$.each(activeCall[1], function(k, activeElement) {
-								var queueName = (options === undefined) ? "" : options;
-
-								if (queueName !== true && (activeCall[2].queue !== queueName) && !(options === undefined && activeCall[2].queue === false)) {
-									return true;
-								}
-
-								/* Iterate through the calls targeted by the stop command. */
-								$.each(elements, function(l, element) {
-									/* Check that this call was applied to the target element. */
-									if (element === activeElement) {
-
-										/* Set call to paused */
-										activeCall[5] = {
-											resume: false
-										};
-
-										/* Once we match an element, we can bounce out to the next call entirely */
-										found = true;
-										return false;
-									}
-								});
-
-								/* Proceed to check next call if we have already matched */
-								if (found) {
-									return false;
-								}
-							});
-						}
-
-					});
-
-					/* Since pause creates no new tweens, exit out of Velocity. */
-					return getChain();
-
-				case "resume":
-
-					/*******************
-					 Action: Resume
-					 *******************/
-
-					/* Handle delay timers */
-					$.each(elements, function(i, element) {
-						resumeDelayOnElement(element, currentTime);
-					});
-
-					/* Pause and Resume are call-wide (not on a per elemnt basis). Thus, calling pause or resume on a 
-					 single element will cause any calls that containt tweens for that element to be paused/resumed
-					 as well. */
-
-					/* Iterate through all calls and pause any that contain any of our elements */
-					$.each(Velocity.State.calls, function(i, activeCall) {
-						var found = false;
-						/* Inactive calls are set to false by the logic inside completeCall(). Skip them. */
-						if (activeCall) {
-							/* Iterate through the active call's targeted elements. */
-							$.each(activeCall[1], function(k, activeElement) {
-								var queueName = (options === undefined) ? "" : options;
-
-								if (queueName !== true && (activeCall[2].queue !== queueName) && !(options === undefined && activeCall[2].queue === false)) {
-									return true;
-								}
-
-								/* Skip any calls that have never been paused */
-								if (!activeCall[5]) {
-									return true;
-								}
-
-								/* Iterate through the calls targeted by the stop command. */
-								$.each(elements, function(l, element) {
-									/* Check that this call was applied to the target element. */
-									if (element === activeElement) {
-
-										/* Flag a pause object to be resumed, which will occur during the next tick. In
-										 addition, the pause object will at that time be deleted */
-										activeCall[5].resume = true;
-
-										/* Once we match an element, we can bounce out to the next call entirely */
-										found = true;
-										return false;
-									}
-								});
-
-								/* Proceed to check next call if we have already matched */
-								if (found) {
-									return false;
-								}
-							});
-						}
-
-					});
-
-					/* Since resume creates no new tweens, exit out of Velocity. */
-					return getChain();
-
-				case "finish":
-				case "finishAll":
-				case "stop":
-					/*******************
-					 Action: Stop
-					 *******************/
-
-					/* Clear the currently-active delay on each targeted element. */
-					$.each(elements, function(i, element) {
-						if (Data(element) && Data(element).delayTimer) {
-							/* Stop the timer from triggering its cached next() function. */
-							clearTimeout(Data(element).delayTimer.setTimeout);
-
-							/* Manually call the next() function so that the subsequent queue items can progress. */
-							if (Data(element).delayTimer.next) {
-								Data(element).delayTimer.next();
-							}
-
-							delete Data(element).delayTimer;
-						}
-
-						/* If we want to finish everything in the queue, we have to iterate through it
-						 and call each function. This will make them active calls below, which will
-						 cause them to be applied via the duration setting. */
-						if (propertiesMap === "finishAll" && (options === true || Type.isString(options))) {
-							/* Iterate through the items in the element's queue. */
-							$.each($.queue(element, Type.isString(options) ? options : ""), function(_, item) {
-								/* The queue array can contain an "inprogress" string, which we skip. */
-								if (Type.isFunction(item)) {
-									item();
-								}
-							});
-
-							/* Clearing the $.queue() array is achieved by resetting it to []. */
-							$.queue(element, Type.isString(options) ? options : "", []);
-						}
-					});
-
-					var callsToStop = [];
-
-					/* When the stop action is triggered, the elements' currently active call is immediately stopped. The active call might have
-					 been applied to multiple elements, in which case all of the call's elements will be stopped. When an element
-					 is stopped, the next item in its animation queue is immediately triggered. */
-					/* An additional argument may be passed in to clear an element's remaining queued calls. Either true (which defaults to the "fx" queue)
-					 or a custom queue string can be passed in. */
-					/* Note: The stop command runs prior to Velocity's Queueing phase since its behavior is intended to take effect *immediately*,
-					 regardless of the element's current queue state. */
-
-					/* Iterate through every active call. */
-					$.each(Velocity.State.calls, function(i, activeCall) {
-						/* Inactive calls are set to false by the logic inside completeCall(). Skip them. */
-						if (activeCall) {
-							/* Iterate through the active call's targeted elements. */
-							$.each(activeCall[1], function(k, activeElement) {
-								/* If true was passed in as a secondary argument, clear absolutely all calls on this element. Otherwise, only
-								 clear calls associated with the relevant queue. */
-								/* Call stopping logic works as follows:
-								 - options === true --> stop current default queue calls (and queue:false calls), including remaining queued ones.
-								 - options === undefined --> stop current queue:"" call and all queue:false calls.
-								 - options === false --> stop only queue:false calls.
-								 - options === "custom" --> stop current queue:"custom" call, including remaining queued ones (there is no functionality to only clear the currently-running queue:"custom" call). */
-								var queueName = (options === undefined) ? "" : options;
-
-								if (queueName !== true && (activeCall[2].queue !== queueName) && !(options === undefined && activeCall[2].queue === false)) {
-									return true;
-								}
-
-								/* Iterate through the calls targeted by the stop command. */
-								$.each(elements, function(l, element) {
-									/* Check that this call was applied to the target element. */
-									if (element === activeElement) {
-										/* Optionally clear the remaining queued calls. If we're doing "finishAll" this won't find anything,
-										 due to the queue-clearing above. */
-										if (options === true || Type.isString(options)) {
-											/* Iterate through the items in the element's queue. */
-											$.each($.queue(element, Type.isString(options) ? options : ""), function(_, item) {
-												/* The queue array can contain an "inprogress" string, which we skip. */
-												if (Type.isFunction(item)) {
-													/* Pass the item's callback a flag indicating that we want to abort from the queue call.
-													 (Specifically, the queue will resolve the call's associated promise then abort.)  */
-													item(null, true);
-												}
-											});
-
-											/* Clearing the $.queue() array is achieved by resetting it to []. */
-											$.queue(element, Type.isString(options) ? options : "", []);
-										}
-
-										if (propertiesMap === "stop") {
-											/* Since "reverse" uses cached start values (the previous call's endValues), these values must be
-											 changed to reflect the final value that the elements were actually tweened to. */
-											/* Note: If only queue:false animations are currently running on an element, it won't have a tweensContainer
-											 object. Also, queue:false animations can't be reversed. */
-											var data = Data(element);
-											if (data && data.tweensContainer && queueName !== false) {
-												$.each(data.tweensContainer, function(m, activeTween) {
-													activeTween.endValue = activeTween.currentValue;
-												});
-											}
-
-											callsToStop.push(i);
-										} else if (propertiesMap === "finish" || propertiesMap === "finishAll") {
-											/* To get active tweens to finish immediately, we forcefully shorten their durations to 1ms so that
-											 they finish upon the next rAf tick then proceed with normal call completion logic. */
-											activeCall[2].duration = 1;
-										}
-									}
-								});
-							});
-						}
-					});
-
-					/* Prematurely call completeCall() on each matched active call. Pass an additional flag for "stop" to indicate
-					 that the complete callback and display:none setting should be skipped since we're completing prematurely. */
-					if (propertiesMap === "stop") {
-						$.each(callsToStop, function(i, j) {
-							completeCall(j, true);
-						});
-
-						if (promiseData.promise) {
-							/* Immediately resolve the promise associated with this stop call since stop runs synchronously. */
-							promiseData.resolver(elements);
-						}
-					}
-
-					/* Since we're stopping, and not proceeding with queueing, exit out of Velocity. */
-					return getChain();
-
-				default:
-					/* Treat a non-empty plain object as a literal properties map. */
-					if ($.isPlainObject(propertiesMap) && !Type.isEmptyObject(propertiesMap)) {
-						action = "start";
-
-						/****************
-						 Redirects
-						 ****************/
-
-						/* Check if a string matches a registered redirect (see Redirects above). */
-					} else if (Type.isString(propertiesMap) && Velocity.Redirects[propertiesMap]) {
-						opts = $.extend({}, options);
-
-						var durationOriginal = opts.duration,
-								delayOriginal = opts.delay || 0;
-
-						/* If the backwards option was passed in, reverse the element set so that elements animate from the last to the first. */
-						if (opts.backwards === true) {
-							elements = $.extend(true, [], elements).reverse();
-						}
-
-						/* Individually trigger the redirect for each element in the set to prevent users from having to handle iteration logic in their redirect. */
-						$.each(elements, function(elementIndex, element) {
-							/* If the stagger option was passed in, successively delay each element by the stagger value (in ms). Retain the original delay value. */
-							if (parseFloat(opts.stagger)) {
-								opts.delay = delayOriginal + (parseFloat(opts.stagger) * elementIndex);
-							} else if (Type.isFunction(opts.stagger)) {
-								opts.delay = delayOriginal + opts.stagger.call(element, elementIndex, elementsLength);
-							}
-
-							/* If the drag option was passed in, successively increase/decrease (depending on the presense of opts.backwards)
-							 the duration of each element's animation, using floors to prevent producing very short durations. */
-							if (opts.drag) {
-								/* Default the duration of UI pack effects (callouts and transitions) to 1000ms instead of the usual default duration of 400ms. */
-								opts.duration = parseFloat(durationOriginal) || (/^(callout|transition)/.test(propertiesMap) ? 1000 : DURATION_DEFAULT);
-
-								/* For each element, take the greater duration of: A) animation completion percentage relative to the original duration,
-								 B) 75% of the original duration, or C) a 200ms fallback (in case duration is already set to a low value).
-								 The end result is a baseline of 75% of the redirect's duration that increases/decreases as the end of the element set is approached. */
-								opts.duration = Math.max(opts.duration * (opts.backwards ? 1 - elementIndex / elementsLength : (elementIndex + 1) / elementsLength), opts.duration * 0.75, 200);
-							}
-
-							/* Pass in the call's opts object so that the redirect can optionally extend it. It defaults to an empty object instead of null to
-							 reduce the opts checking logic required inside the redirect. */
-							Velocity.Redirects[propertiesMap].call(element, element, opts || {}, elementIndex, elementsLength, elements, promiseData.promise ? promiseData : undefined);
-						});
-
-						/* Since the animation logic resides within the redirect's own code, abort the remainder of this call.
-						 (The performance overhead up to this point is virtually non-existant.) */
-						/* Note: The jQuery call chain is kept intact by returning the complete element set. */
-						return getChain();
-					} else {
-						var abortError = "Velocity: First argument (" + propertiesMap + ") was not a property map, a known action, or a registered redirect. Aborting.";
-
-						if (promiseData.promise) {
-							promiseData.rejecter(new Error(abortError));
-						} else if (window.console) {
-							console.log(abortError);
-						}
-
-						return getChain();
-					}
-			}
-
-			/**************************
-			 Call-Wide Variables
-			 **************************/
-
-			/* A container for CSS unit conversion ratios (e.g. %, rem, and em ==> px) that is used to cache ratios across all elements
-			 being animated in a single Velocity call. Calculating unit ratios necessitates DOM querying and updating, and is therefore
-			 avoided (via caching) wherever possible. This container is call-wide instead of page-wide to avoid the risk of using stale
-			 conversion metrics across Velocity animations that are not immediately consecutively chained. */
-			var callUnitConversionData = {
-				lastParent: null,
-				lastPosition: null,
-				lastFontSize: null,
-				lastPercentToPxWidth: null,
-				lastPercentToPxHeight: null,
-				lastEmToPx: null,
-				remToPx: null,
-				vwToPx: null,
-				vhToPx: null
-			};
-
-			/* A container for all the ensuing tween data and metadata associated with this call. This container gets pushed to the page-wide
-			 Velocity.State.calls array that is processed during animation ticking. */
-			var call = [];
-
-			/************************
-			 Element Processing
-			 ************************/
-
-			/* Element processing consists of three parts -- data processing that cannot go stale and data processing that *can* go stale (i.e. third-party style modifications):
-			 1) Pre-Queueing: Element-wide variables, including the element's data storage, are instantiated. Call options are prepared. If triggered, the Stop action is executed.
-			 2) Queueing: The logic that runs once this call has reached its point of execution in the element's $.queue() stack. Most logic is placed here to avoid risking it becoming stale.
-			 3) Pushing: Consolidation of the tween data followed by its push onto the global in-progress calls container.
-			 `elementArrayIndex` allows passing index of the element in the original array to value functions.
-			 If `elementsIndex` were used instead the index would be determined by the elements' per-element queue.
-			 */
-			function processElement(element, elementArrayIndex) {
-
-				/*************************
-				 Part I: Pre-Queueing
-				 *************************/
-
-				/***************************
-				 Element-Wide Variables
-				 ***************************/
-
-				var /* The runtime opts object is the extension of the current call's options and Velocity's page-wide option defaults. */
-						opts = $.extend({}, Velocity.defaults, options),
-						/* A container for the processed data associated with each property in the propertyMap.
-						 (Each property in the map produces its own "tween".) */
-						tweensContainer = {},
-						elementUnitConversionData;
-
-				/******************
-				 Element Init
-				 ******************/
-
-				if (Data(element) === undefined) {
-					Velocity.init(element);
-				}
-
-				/******************
-				 Option: Delay
-				 ******************/
-
-				/* Since queue:false doesn't respect the item's existing queue, we avoid injecting its delay here (it's set later on). */
-				/* Note: Velocity rolls its own delay function since jQuery doesn't have a utility alias for $.fn.delay()
-				 (and thus requires jQuery element creation, which we avoid since its overhead includes DOM querying). */
-				if (parseFloat(opts.delay) && opts.queue !== false) {
-					$.queue(element, opts.queue, function(next, clearQueue) {
-						if (clearQueue === true) {
-							/* Do not continue with animation queueing. */
-							return true;
-						}
-
-						/* This is a flag used to indicate to the upcoming completeCall() function that this queue entry was initiated by Velocity. See completeCall() for further details. */
-						Velocity.velocityQueueEntryFlag = true;
-
-						/* The ensuing queue item (which is assigned to the "next" argument that $.queue() automatically passes in) will be triggered after a setTimeout delay.
-						 The setTimeout is stored so that it can be subjected to clearTimeout() if this animation is prematurely stopped via Velocity's "stop" command, and
-						 delayBegin/delayTime is used to ensure we can "pause" and "resume" a tween that is still mid-delay. */
-
-						/* Temporarily store delayed elements to facilite access for global pause/resume */
-						var callIndex = Velocity.State.delayedElements.count++;
-						Velocity.State.delayedElements[callIndex] = element;
-
-						var delayComplete = (function(index) {
-							return function() {
-								/* Clear the temporary element */
-								Velocity.State.delayedElements[index] = false;
-
-								/* Finally, issue the call */
-								next();
-							};
-						})(callIndex);
-
-
-						Data(element).delayBegin = (new Date()).getTime();
-						Data(element).delay = parseFloat(opts.delay);
-						Data(element).delayTimer = {
-							setTimeout: setTimeout(next, parseFloat(opts.delay)),
-							next: delayComplete
-						};
-					});
-				}
-
-				/*********************
-				 Option: Duration
-				 *********************/
-
-				/* Support for jQuery's named durations. */
-				switch (opts.duration.toString().toLowerCase()) {
-					case "fast":
-						opts.duration = 200;
-						break;
-
-					case "normal":
-						opts.duration = DURATION_DEFAULT;
-						break;
-
-					case "slow":
-						opts.duration = 600;
-						break;
-
-					default:
-						/* Remove the potential "ms" suffix and default to 1 if the user is attempting to set a duration of 0 (in order to produce an immediate style change). */
-						opts.duration = parseFloat(opts.duration) || 1;
-				}
-
-				/************************
-				 Global Option: Mock
-				 ************************/
-
-				if (Velocity.mock !== false) {
-					/* In mock mode, all animations are forced to 1ms so that they occur immediately upon the next rAF tick.
-					 Alternatively, a multiplier can be passed in to time remap all delays and durations. */
-					if (Velocity.mock === true) {
-						opts.duration = opts.delay = 1;
-					} else {
-						opts.duration *= parseFloat(Velocity.mock) || 1;
-						opts.delay *= parseFloat(Velocity.mock) || 1;
-					}
-				}
-
-				/*******************
-				 Option: Easing
-				 *******************/
-
-				opts.easing = getEasing(opts.easing, opts.duration);
-
-				/**********************
-				 Option: Callbacks
-				 **********************/
-
-				/* Callbacks must functions. Otherwise, default to null. */
-				if (opts.begin && !Type.isFunction(opts.begin)) {
-					opts.begin = null;
-				}
-
-				if (opts.progress && !Type.isFunction(opts.progress)) {
-					opts.progress = null;
-				}
-
-				if (opts.complete && !Type.isFunction(opts.complete)) {
-					opts.complete = null;
-				}
-
-				/*********************************
-				 Option: Display & Visibility
-				 *********************************/
-
-				/* Refer to Velocity's documentation (VelocityJS.org/#displayAndVisibility) for a description of the display and visibility options' behavior. */
-				/* Note: We strictly check for undefined instead of falsiness because display accepts an empty string value. */
-				if (opts.display !== undefined && opts.display !== null) {
-					opts.display = opts.display.toString().toLowerCase();
-
-					/* Users can pass in a special "auto" value to instruct Velocity to set the element to its default display value. */
-					if (opts.display === "auto") {
-						opts.display = Velocity.CSS.Values.getDisplayType(element);
-					}
-				}
-
-				if (opts.visibility !== undefined && opts.visibility !== null) {
-					opts.visibility = opts.visibility.toString().toLowerCase();
-				}
-
-				/**********************
-				 Option: mobileHA
-				 **********************/
-
-				/* When set to true, and if this is a mobile device, mobileHA automatically enables hardware acceleration (via a null transform hack)
-				 on animating elements. HA is removed from the element at the completion of its animation. */
-				/* Note: Android Gingerbread doesn't support HA. If a null transform hack (mobileHA) is in fact set, it will prevent other tranform subproperties from taking effect. */
-				/* Note: You can read more about the use of mobileHA in Velocity's documentation: VelocityJS.org/#mobileHA. */
-				opts.mobileHA = (opts.mobileHA && Velocity.State.isMobile && !Velocity.State.isGingerbread);
-
-				/***********************
-				 Part II: Queueing
-				 ***********************/
-
-				/* When a set of elements is targeted by a Velocity call, the set is broken up and each element has the current Velocity call individually queued onto it.
-				 In this way, each element's existing queue is respected; some elements may already be animating and accordingly should not have this current Velocity call triggered immediately. */
-				/* In each queue, tween data is processed for each animating property then pushed onto the call-wide calls array. When the last element in the set has had its tweens processed,
-				 the call array is pushed to Velocity.State.calls for live processing by the requestAnimationFrame tick. */
-				function buildQueue(next) {
-					var data, lastTweensContainer;
-
-					/*******************
-					 Option: Begin
-					 *******************/
-
-					/* The begin callback is fired once per call -- not once per elemenet -- and is passed the full raw DOM element set as both its context and its first argument. */
-					if (opts.begin && elementsIndex === 0) {
-						/* We throw callbacks in a setTimeout so that thrown errors don't halt the execution of Velocity itself. */
-						try {
-							opts.begin.call(elements, elements);
-						} catch (error) {
-							setTimeout(function() {
-								throw error;
-							}, 1);
-						}
-					}
-
-					/*****************************************
-					 Tween Data Construction (for Scroll)
-					 *****************************************/
-
-					/* Note: In order to be subjected to chaining and animation options, scroll's tweening is routed through Velocity as if it were a standard CSS property animation. */
-					if (action === "scroll") {
-						/* The scroll action uniquely takes an optional "offset" option -- specified in pixels -- that offsets the targeted scroll position. */
-						var scrollDirection = (/^x$/i.test(opts.axis) ? "Left" : "Top"),
-								scrollOffset = parseFloat(opts.offset) || 0,
-								scrollPositionCurrent,
-								scrollPositionCurrentAlternate,
-								scrollPositionEnd;
-
-						/* Scroll also uniquely takes an optional "container" option, which indicates the parent element that should be scrolled --
-						 as opposed to the browser window itself. This is useful for scrolling toward an element that's inside an overflowing parent element. */
-						if (opts.container) {
-							/* Ensure that either a jQuery object or a raw DOM element was passed in. */
-							if (Type.isWrapped(opts.container) || Type.isNode(opts.container)) {
-								/* Extract the raw DOM element from the jQuery wrapper. */
-								opts.container = opts.container[0] || opts.container;
-								/* Note: Unlike other properties in Velocity, the browser's scroll position is never cached since it so frequently changes
-								 (due to the user's natural interaction with the page). */
-								scrollPositionCurrent = opts.container["scroll" + scrollDirection]; /* GET */
-
-								/* $.position() values are relative to the container's currently viewable area (without taking into account the container's true dimensions
-								 -- say, for example, if the container was not overflowing). Thus, the scroll end value is the sum of the child element's position *and*
-								 the scroll container's current scroll position. */
-								scrollPositionEnd = (scrollPositionCurrent + $(element).position()[scrollDirection.toLowerCase()]) + scrollOffset; /* GET */
-								/* If a value other than a jQuery object or a raw DOM element was passed in, default to null so that this option is ignored. */
-							} else {
-								opts.container = null;
-							}
-						} else {
-							/* If the window itself is being scrolled -- not a containing element -- perform a live scroll position lookup using
-							 the appropriate cached property names (which differ based on browser type). */
-							scrollPositionCurrent = Velocity.State.scrollAnchor[Velocity.State["scrollProperty" + scrollDirection]]; /* GET */
-							/* When scrolling the browser window, cache the alternate axis's current value since window.scrollTo() doesn't let us change only one value at a time. */
-							scrollPositionCurrentAlternate = Velocity.State.scrollAnchor[Velocity.State["scrollProperty" + (scrollDirection === "Left" ? "Top" : "Left")]]; /* GET */
-
-							/* Unlike $.position(), $.offset() values are relative to the browser window's true dimensions -- not merely its currently viewable area --
-							 and therefore end values do not need to be compounded onto current values. */
-							scrollPositionEnd = $(element).offset()[scrollDirection.toLowerCase()] + scrollOffset; /* GET */
-						}
-
-						/* Since there's only one format that scroll's associated tweensContainer can take, we create it manually. */
-						tweensContainer = {
-							scroll: {
-								rootPropertyValue: false,
-								startValue: scrollPositionCurrent,
-								currentValue: scrollPositionCurrent,
-								endValue: scrollPositionEnd,
-								unitType: "",
-								easing: opts.easing,
-								scrollData: {
-									container: opts.container,
-									direction: scrollDirection,
-									alternateValue: scrollPositionCurrentAlternate
-								}
-							},
-							element: element
-						};
-
-						if (Velocity.debug) {
-							console.log("tweensContainer (scroll): ", tweensContainer.scroll, element);
-						}
-
-						/******************************************
-						 Tween Data Construction (for Reverse)
-						 ******************************************/
-
-						/* Reverse acts like a "start" action in that a property map is animated toward. The only difference is
-						 that the property map used for reverse is the inverse of the map used in the previous call. Thus, we manipulate
-						 the previous call to construct our new map: use the previous map's end values as our new map's start values. Copy over all other data. */
-						/* Note: Reverse can be directly called via the "reverse" parameter, or it can be indirectly triggered via the loop option. (Loops are composed of multiple reverses.) */
-						/* Note: Reverse calls do not need to be consecutively chained onto a currently-animating element in order to operate on cached values;
-						 there is no harm to reverse being called on a potentially stale data cache since reverse's behavior is simply defined
-						 as reverting to the element's values as they were prior to the previous *Velocity* call. */
-					} else if (action === "reverse") {
-						data = Data(element);
-
-						/* Abort if there is no prior animation data to reverse to. */
-						if (!data) {
-							return;
-						}
-
-						if (!data.tweensContainer) {
-							/* Dequeue the element so that this queue entry releases itself immediately, allowing subsequent queue entries to run. */
-							$.dequeue(element, opts.queue);
-
-							return;
-						} else {
-							/*********************
-							 Options Parsing
-							 *********************/
-
-							/* If the element was hidden via the display option in the previous call,
-							 revert display to "auto" prior to reversal so that the element is visible again. */
-							if (data.opts.display === "none") {
-								data.opts.display = "auto";
-							}
-
-							if (data.opts.visibility === "hidden") {
-								data.opts.visibility = "visible";
-							}
-
-							/* If the loop option was set in the previous call, disable it so that "reverse" calls aren't recursively generated.
-							 Further, remove the previous call's callback options; typically, users do not want these to be refired. */
-							data.opts.loop = false;
-							data.opts.begin = null;
-							data.opts.complete = null;
-
-							/* Since we're extending an opts object that has already been extended with the defaults options object,
-							 we remove non-explicitly-defined properties that are auto-assigned values. */
-							if (!options.easing) {
-								delete opts.easing;
-							}
-
-							if (!options.duration) {
-								delete opts.duration;
-							}
-
-							/* The opts object used for reversal is an extension of the options object optionally passed into this
-							 reverse call plus the options used in the previous Velocity call. */
-							opts = $.extend({}, data.opts, opts);
-
-							/*************************************
-							 Tweens Container Reconstruction
-							 *************************************/
-
-							/* Create a deepy copy (indicated via the true flag) of the previous call's tweensContainer. */
-							lastTweensContainer = $.extend(true, {}, data ? data.tweensContainer : null);
-
-							/* Manipulate the previous tweensContainer by replacing its end values and currentValues with its start values. */
-							for (var lastTween in lastTweensContainer) {
-								/* In addition to tween data, tweensContainers contain an element property that we ignore here. */
-								if (lastTweensContainer.hasOwnProperty(lastTween) && lastTween !== "element") {
-									var lastStartValue = lastTweensContainer[lastTween].startValue;
-
-									lastTweensContainer[lastTween].startValue = lastTweensContainer[lastTween].currentValue = lastTweensContainer[lastTween].endValue;
-									lastTweensContainer[lastTween].endValue = lastStartValue;
-
-									/* Easing is the only option that embeds into the individual tween data (since it can be defined on a per-property basis).
-									 Accordingly, every property's easing value must be updated when an options object is passed in with a reverse call.
-									 The side effect of this extensibility is that all per-property easing values are forcefully reset to the new value. */
-									if (!Type.isEmptyObject(options)) {
-										lastTweensContainer[lastTween].easing = opts.easing;
-									}
-
-									if (Velocity.debug) {
-										console.log("reverse tweensContainer (" + lastTween + "): " + JSON.stringify(lastTweensContainer[lastTween]), element);
-									}
-								}
-							}
-
-							tweensContainer = lastTweensContainer;
-						}
-
-						/*****************************************
-						 Tween Data Construction (for Start)
-						 *****************************************/
-
-					} else if (action === "start") {
-
-						/*************************
-						 Value Transferring
-						 *************************/
-
-						/* If this queue entry follows a previous Velocity-initiated queue entry *and* if this entry was created
-						 while the element was in the process of being animated by Velocity, then this current call is safe to use
-						 the end values from the prior call as its start values. Velocity attempts to perform this value transfer
-						 process whenever possible in order to avoid requerying the DOM. */
-						/* If values aren't transferred from a prior call and start values were not forcefed by the user (more on this below),
-						 then the DOM is queried for the element's current values as a last resort. */
-						/* Note: Conversely, animation reversal (and looping) *always* perform inter-call value transfers; they never requery the DOM. */
-
-						data = Data(element);
-
-						/* The per-element isAnimating flag is used to indicate whether it's safe (i.e. the data isn't stale)
-						 to transfer over end values to use as start values. If it's set to true and there is a previous
-						 Velocity call to pull values from, do so. */
-						if (data && data.tweensContainer && data.isAnimating === true) {
-							lastTweensContainer = data.tweensContainer;
-						}
-
-						/***************************
-						 Tween Data Calculation
-						 ***************************/
-
-						/* This function parses property data and defaults endValue, easing, and startValue as appropriate. */
-						/* Property map values can either take the form of 1) a single value representing the end value,
-						 or 2) an array in the form of [ endValue, [, easing] [, startValue] ].
-						 The optional third parameter is a forcefed startValue to be used instead of querying the DOM for
-						 the element's current value. Read Velocity's docmentation to learn more about forcefeeding: VelocityJS.org/#forcefeeding */
-						var parsePropertyValue = function(valueData, skipResolvingEasing) {
-							var endValue, easing, startValue;
-
-							/* If we have a function as the main argument then resolve it first, in case it returns an array that needs to be split */
-							if (Type.isFunction(valueData)) {
-								valueData = valueData.call(element, elementArrayIndex, elementsLength);
-							}
-
-							/* Handle the array format, which can be structured as one of three potential overloads:
-							 A) [ endValue, easing, startValue ], B) [ endValue, easing ], or C) [ endValue, startValue ] */
-							if (Type.isArray(valueData)) {
-								/* endValue is always the first item in the array. Don't bother validating endValue's value now
-								 since the ensuing property cycling logic does that. */
-								endValue = valueData[0];
-
-								/* Two-item array format: If the second item is a number, function, or hex string, treat it as a
-								 start value since easings can only be non-hex strings or arrays. */
-								if ((!Type.isArray(valueData[1]) && /^[\d-]/.test(valueData[1])) || Type.isFunction(valueData[1]) || CSS.RegEx.isHex.test(valueData[1])) {
-									startValue = valueData[1];
-									/* Two or three-item array: If the second item is a non-hex string easing name or an array, treat it as an easing. */
-								} else if ((Type.isString(valueData[1]) && !CSS.RegEx.isHex.test(valueData[1]) && Velocity.Easings[valueData[1]]) || Type.isArray(valueData[1])) {
-									easing = skipResolvingEasing ? valueData[1] : getEasing(valueData[1], opts.duration);
-
-									/* Don't bother validating startValue's value now since the ensuing property cycling logic inherently does that. */
-									startValue = valueData[2];
-								} else {
-									startValue = valueData[1] || valueData[2];
-								}
-								/* Handle the single-value format. */
-							} else {
-								endValue = valueData;
-							}
-
-							/* Default to the call's easing if a per-property easing type was not defined. */
-							if (!skipResolvingEasing) {
-								easing = easing || opts.easing;
-							}
-
-							/* If functions were passed in as values, pass the function the current element as its context,
-							 plus the element's index and the element set's size as arguments. Then, assign the returned value. */
-							if (Type.isFunction(endValue)) {
-								endValue = endValue.call(element, elementArrayIndex, elementsLength);
-							}
-
-							if (Type.isFunction(startValue)) {
-								startValue = startValue.call(element, elementArrayIndex, elementsLength);
-							}
-
-							/* Allow startValue to be left as undefined to indicate to the ensuing code that its value was not forcefed. */
-							return [endValue || 0, easing, startValue];
-						};
-
-						var fixPropertyValue = function(property, valueData) {
-							/* In case this property is a hook, there are circumstances where we will intend to work on the hook's root property and not the hooked subproperty. */
-							var rootProperty = CSS.Hooks.getRoot(property),
-									rootPropertyValue = false,
-									/* Parse out endValue, easing, and startValue from the property's data. */
-									endValue = valueData[0],
-									easing = valueData[1],
-									startValue = valueData[2],
-									pattern;
-
-							/**************************
-							 Start Value Sourcing
-							 **************************/
-
-							/* Other than for the dummy tween property, properties that are not supported by the browser (and do not have an associated normalization) will
-							 inherently produce no style changes when set, so they are skipped in order to decrease animation tick overhead.
-							 Property support is determined via prefixCheck(), which returns a false flag when no supported is detected. */
-							/* Note: Since SVG elements have some of their properties directly applied as HTML attributes,
-							 there is no way to check for their explicit browser support, and so we skip skip this check for them. */
-							if ((!data || !data.isSVG) && rootProperty !== "tween" && CSS.Names.prefixCheck(rootProperty)[1] === false && CSS.Normalizations.registered[rootProperty] === undefined) {
-								if (Velocity.debug) {
-									console.log("Skipping [" + rootProperty + "] due to a lack of browser support.");
-								}
-								return;
-							}
-
-							/* If the display option is being set to a non-"none" (e.g. "block") and opacity (filter on IE<=8) is being
-							 animated to an endValue of non-zero, the user's intention is to fade in from invisible, thus we forcefeed opacity
-							 a startValue of 0 if its startValue hasn't already been sourced by value transferring or prior forcefeeding. */
-							if (((opts.display !== undefined && opts.display !== null && opts.display !== "none") || (opts.visibility !== undefined && opts.visibility !== "hidden")) && /opacity|filter/.test(property) && !startValue && endValue !== 0) {
-								startValue = 0;
-							}
-
-							/* If values have been transferred from the previous Velocity call, extract the endValue and rootPropertyValue
-							 for all of the current call's properties that were *also* animated in the previous call. */
-							/* Note: Value transferring can optionally be disabled by the user via the _cacheValues option. */
-							if (opts._cacheValues && lastTweensContainer && lastTweensContainer[property]) {
-								if (startValue === undefined) {
-									startValue = lastTweensContainer[property].endValue + lastTweensContainer[property].unitType;
-								}
-
-								/* The previous call's rootPropertyValue is extracted from the element's data cache since that's the
-								 instance of rootPropertyValue that gets freshly updated by the tweening process, whereas the rootPropertyValue
-								 attached to the incoming lastTweensContainer is equal to the root property's value prior to any tweening. */
-								rootPropertyValue = data.rootPropertyValueCache[rootProperty];
-								/* If values were not transferred from a previous Velocity call, query the DOM as needed. */
-							} else {
-								/* Handle hooked properties. */
-								if (CSS.Hooks.registered[property]) {
-									if (startValue === undefined) {
-										rootPropertyValue = CSS.getPropertyValue(element, rootProperty); /* GET */
-										/* Note: The following getPropertyValue() call does not actually trigger a DOM query;
-										 getPropertyValue() will extract the hook from rootPropertyValue. */
-										startValue = CSS.getPropertyValue(element, property, rootPropertyValue);
-										/* If startValue is already defined via forcefeeding, do not query the DOM for the root property's value;
-										 just grab rootProperty's zero-value template from CSS.Hooks. This overwrites the element's actual
-										 root property value (if one is set), but this is acceptable since the primary reason users forcefeed is
-										 to avoid DOM queries, and thus we likewise avoid querying the DOM for the root property's value. */
-									} else {
-										/* Grab this hook's zero-value template, e.g. "0px 0px 0px black". */
-										rootPropertyValue = CSS.Hooks.templates[rootProperty][1];
-									}
-									/* Handle non-hooked properties that haven't already been defined via forcefeeding. */
-								} else if (startValue === undefined) {
-									startValue = CSS.getPropertyValue(element, property); /* GET */
-								}
-							}
-
-							/**************************
-							 Value Data Extraction
-							 **************************/
-
-							var separatedValue,
-									endValueUnitType,
-									startValueUnitType,
-									operator = false;
-
-							/* Separates a property value into its numeric value and its unit type. */
-							var separateValue = function(property, value) {
-								var unitType,
-										numericValue;
-
-								numericValue = (value || "0")
-										.toString()
-										.toLowerCase()
-										/* Match the unit type at the end of the value. */
-										.replace(/[%A-z]+$/, function(match) {
-											/* Grab the unit type. */
-											unitType = match;
-
-											/* Strip the unit type off of value. */
-											return "";
-										});
-
-								/* If no unit type was supplied, assign one that is appropriate for this property (e.g. "deg" for rotateZ or "px" for width). */
-								if (!unitType) {
-									unitType = CSS.Values.getUnitType(property);
-								}
-
-								return [numericValue, unitType];
-							};
-
-							if (startValue !== endValue && Type.isString(startValue) && Type.isString(endValue)) {
-								pattern = "";
-								var iStart = 0, // index in startValue
-										iEnd = 0, // index in endValue
-										aStart = [], // array of startValue numbers
-										aEnd = [], // array of endValue numbers
-										inCalc = 0, // Keep track of being inside a "calc()" so we don't duplicate it
-										inRGB = 0, // Keep track of being inside an RGB as we can't use fractional values
-										inRGBA = 0; // Keep track of being inside an RGBA as we must pass fractional for the alpha channel
-
-								startValue = CSS.Hooks.fixColors(startValue);
-								endValue = CSS.Hooks.fixColors(endValue);
-								while (iStart < startValue.length && iEnd < endValue.length) {
-									var cStart = startValue[iStart],
-											cEnd = endValue[iEnd];
-
-									if (/[\d\.-]/.test(cStart) && /[\d\.-]/.test(cEnd)) {
-										var tStart = cStart, // temporary character buffer
-												tEnd = cEnd, // temporary character buffer
-												dotStart = ".", // Make sure we can only ever match a single dot in a decimal
-												dotEnd = "."; // Make sure we can only ever match a single dot in a decimal
-
-										while (++iStart < startValue.length) {
-											cStart = startValue[iStart];
-											if (cStart === dotStart) {
-												dotStart = ".."; // Can never match two characters
-											} else if (!/\d/.test(cStart)) {
-												break;
-											}
-											tStart += cStart;
-										}
-										while (++iEnd < endValue.length) {
-											cEnd = endValue[iEnd];
-											if (cEnd === dotEnd) {
-												dotEnd = ".."; // Can never match two characters
-											} else if (!/\d/.test(cEnd)) {
-												break;
-											}
-											tEnd += cEnd;
-										}
-										var uStart = CSS.Hooks.getUnit(startValue, iStart), // temporary unit type
-												uEnd = CSS.Hooks.getUnit(endValue, iEnd); // temporary unit type
-
-										iStart += uStart.length;
-										iEnd += uEnd.length;
-										if (uStart === uEnd) {
-											// Same units
-											if (tStart === tEnd) {
-												// Same numbers, so just copy over
-												pattern += tStart + uStart;
-											} else {
-												// Different numbers, so store them
-												pattern += "{" + aStart.length + (inRGB ? "!" : "") + "}" + uStart;
-												aStart.push(parseFloat(tStart));
-												aEnd.push(parseFloat(tEnd));
-											}
-										} else {
-											// Different units, so put into a "calc(from + to)" and animate each side to/from zero
-											var nStart = parseFloat(tStart),
-													nEnd = parseFloat(tEnd);
-
-											pattern += (inCalc < 5 ? "calc" : "") + "("
-													+ (nStart ? "{" + aStart.length + (inRGB ? "!" : "") + "}" : "0") + uStart
-													+ " + "
-													+ (nEnd ? "{" + (aStart.length + (nStart ? 1 : 0)) + (inRGB ? "!" : "") + "}" : "0") + uEnd
-													+ ")";
-											if (nStart) {
-												aStart.push(nStart);
-												aEnd.push(0);
-											}
-											if (nEnd) {
-												aStart.push(0);
-												aEnd.push(nEnd);
-											}
-										}
-									} else if (cStart === cEnd) {
-										pattern += cStart;
-										iStart++;
-										iEnd++;
-										// Keep track of being inside a calc()
-										if (inCalc === 0 && cStart === "c"
-												|| inCalc === 1 && cStart === "a"
-												|| inCalc === 2 && cStart === "l"
-												|| inCalc === 3 && cStart === "c"
-												|| inCalc >= 4 && cStart === "("
-												) {
-											inCalc++;
-										} else if ((inCalc && inCalc < 5)
-												|| inCalc >= 4 && cStart === ")" && --inCalc < 5) {
-											inCalc = 0;
-										}
-										// Keep track of being inside an rgb() / rgba()
-										if (inRGB === 0 && cStart === "r"
-												|| inRGB === 1 && cStart === "g"
-												|| inRGB === 2 && cStart === "b"
-												|| inRGB === 3 && cStart === "a"
-												|| inRGB >= 3 && cStart === "("
-												) {
-											if (inRGB === 3 && cStart === "a") {
-												inRGBA = 1;
-											}
-											inRGB++;
-										} else if (inRGBA && cStart === ",") {
-											if (++inRGBA > 3) {
-												inRGB = inRGBA = 0;
-											}
-										} else if ((inRGBA && inRGB < (inRGBA ? 5 : 4))
-												|| inRGB >= (inRGBA ? 4 : 3) && cStart === ")" && --inRGB < (inRGBA ? 5 : 4)) {
-											inRGB = inRGBA = 0;
-										}
-									} else {
-										inCalc = 0;
-										// TODO: changing units, fixing colours
-										break;
-									}
-								}
-								if (iStart !== startValue.length || iEnd !== endValue.length) {
-									if (Velocity.debug) {
-										console.error("Trying to pattern match mis-matched strings [\"" + endValue + "\", \"" + startValue + "\"]");
-									}
-									pattern = undefined;
-								}
-								if (pattern) {
-									if (aStart.length) {
-										if (Velocity.debug) {
-											console.log("Pattern found \"" + pattern + "\" -> ", aStart, aEnd, "[" + startValue + "," + endValue + "]");
-										}
-										startValue = aStart;
-										endValue = aEnd;
-										endValueUnitType = startValueUnitType = "";
-									} else {
-										pattern = undefined;
-									}
-								}
-							}
-
-							if (!pattern) {
-								/* Separate startValue. */
-								separatedValue = separateValue(property, startValue);
-								startValue = separatedValue[0];
-								startValueUnitType = separatedValue[1];
-
-								/* Separate endValue, and extract a value operator (e.g. "+=", "-=") if one exists. */
-								separatedValue = separateValue(property, endValue);
-								endValue = separatedValue[0].replace(/^([+-\/*])=/, function(match, subMatch) {
-									operator = subMatch;
-
-									/* Strip the operator off of the value. */
-									return "";
-								});
-								endValueUnitType = separatedValue[1];
-
-								/* Parse float values from endValue and startValue. Default to 0 if NaN is returned. */
-								startValue = parseFloat(startValue) || 0;
-								endValue = parseFloat(endValue) || 0;
-
-								/***************************************
-								 Property-Specific Value Conversion
-								 ***************************************/
-
-								/* Custom support for properties that don't actually accept the % unit type, but where pollyfilling is trivial and relatively foolproof. */
-								if (endValueUnitType === "%") {
-									/* A %-value fontSize/lineHeight is relative to the parent's fontSize (as opposed to the parent's dimensions),
-									 which is identical to the em unit's behavior, so we piggyback off of that. */
-									if (/^(fontSize|lineHeight)$/.test(property)) {
-										/* Convert % into an em decimal value. */
-										endValue = endValue / 100;
-										endValueUnitType = "em";
-										/* For scaleX and scaleY, convert the value into its decimal format and strip off the unit type. */
-									} else if (/^scale/.test(property)) {
-										endValue = endValue / 100;
-										endValueUnitType = "";
-										/* For RGB components, take the defined percentage of 255 and strip off the unit type. */
-									} else if (/(Red|Green|Blue)$/i.test(property)) {
-										endValue = (endValue / 100) * 255;
-										endValueUnitType = "";
-									}
-								}
-							}
-
-							/***************************
-							 Unit Ratio Calculation
-							 ***************************/
-
-							/* When queried, the browser returns (most) CSS property values in pixels. Therefore, if an endValue with a unit type of
-							 %, em, or rem is animated toward, startValue must be converted from pixels into the same unit type as endValue in order
-							 for value manipulation logic (increment/decrement) to proceed. Further, if the startValue was forcefed or transferred
-							 from a previous call, startValue may also not be in pixels. Unit conversion logic therefore consists of two steps:
-							 1) Calculating the ratio of %/em/rem/vh/vw relative to pixels
-							 2) Converting startValue into the same unit of measurement as endValue based on these ratios. */
-							/* Unit conversion ratios are calculated by inserting a sibling node next to the target node, copying over its position property,
-							 setting values with the target unit type then comparing the returned pixel value. */
-							/* Note: Even if only one of these unit types is being animated, all unit ratios are calculated at once since the overhead
-							 of batching the SETs and GETs together upfront outweights the potential overhead
-							 of layout thrashing caused by re-querying for uncalculated ratios for subsequently-processed properties. */
-							/* Todo: Shift this logic into the calls' first tick instance so that it's synced with RAF. */
-							var calculateUnitRatios = function() {
-
-								/************************
-								 Same Ratio Checks
-								 ************************/
-
-								/* The properties below are used to determine whether the element differs sufficiently from this call's
-								 previously iterated element to also differ in its unit conversion ratios. If the properties match up with those
-								 of the prior element, the prior element's conversion ratios are used. Like most optimizations in Velocity,
-								 this is done to minimize DOM querying. */
-								var sameRatioIndicators = {
-									myParent: element.parentNode || document.body, /* GET */
-									position: CSS.getPropertyValue(element, "position"), /* GET */
-									fontSize: CSS.getPropertyValue(element, "fontSize") /* GET */
-								},
-										/* Determine if the same % ratio can be used. % is based on the element's position value and its parent's width and height dimensions. */
-										samePercentRatio = ((sameRatioIndicators.position === callUnitConversionData.lastPosition) && (sameRatioIndicators.myParent === callUnitConversionData.lastParent)),
-										/* Determine if the same em ratio can be used. em is relative to the element's fontSize. */
-										sameEmRatio = (sameRatioIndicators.fontSize === callUnitConversionData.lastFontSize);
-
-								/* Store these ratio indicators call-wide for the next element to compare against. */
-								callUnitConversionData.lastParent = sameRatioIndicators.myParent;
-								callUnitConversionData.lastPosition = sameRatioIndicators.position;
-								callUnitConversionData.lastFontSize = sameRatioIndicators.fontSize;
-
-								/***************************
-								 Element-Specific Units
-								 ***************************/
-
-								/* Note: IE8 rounds to the nearest pixel when returning CSS values, thus we perform conversions using a measurement
-								 of 100 (instead of 1) to give our ratios a precision of at least 2 decimal values. */
-								var measurement = 100,
-										unitRatios = {};
-
-								if (!sameEmRatio || !samePercentRatio) {
-									var dummy = data && data.isSVG ? document.createElementNS("http://www.w3.org/2000/svg", "rect") : document.createElement("div");
-
-									Velocity.init(dummy);
-									sameRatioIndicators.myParent.appendChild(dummy);
-
-									/* To accurately and consistently calculate conversion ratios, the element's cascaded overflow and box-sizing are stripped.
-									 Similarly, since width/height can be artificially constrained by their min-/max- equivalents, these are controlled for as well. */
-									/* Note: Overflow must be also be controlled for per-axis since the overflow property overwrites its per-axis values. */
-									$.each(["overflow", "overflowX", "overflowY"], function(i, property) {
-										Velocity.CSS.setPropertyValue(dummy, property, "hidden");
-									});
-									Velocity.CSS.setPropertyValue(dummy, "position", sameRatioIndicators.position);
-									Velocity.CSS.setPropertyValue(dummy, "fontSize", sameRatioIndicators.fontSize);
-									Velocity.CSS.setPropertyValue(dummy, "boxSizing", "content-box");
-
-									/* width and height act as our proxy properties for measuring the horizontal and vertical % ratios. */
-									$.each(["minWidth", "maxWidth", "width", "minHeight", "maxHeight", "height"], function(i, property) {
-										Velocity.CSS.setPropertyValue(dummy, property, measurement + "%");
-									});
-									/* paddingLeft arbitrarily acts as our proxy property for the em ratio. */
-									Velocity.CSS.setPropertyValue(dummy, "paddingLeft", measurement + "em");
-
-									/* Divide the returned value by the measurement to get the ratio between 1% and 1px. Default to 1 since working with 0 can produce Infinite. */
-									unitRatios.percentToPxWidth = callUnitConversionData.lastPercentToPxWidth = (parseFloat(CSS.getPropertyValue(dummy, "width", null, true)) || 1) / measurement; /* GET */
-									unitRatios.percentToPxHeight = callUnitConversionData.lastPercentToPxHeight = (parseFloat(CSS.getPropertyValue(dummy, "height", null, true)) || 1) / measurement; /* GET */
-									unitRatios.emToPx = callUnitConversionData.lastEmToPx = (parseFloat(CSS.getPropertyValue(dummy, "paddingLeft")) || 1) / measurement; /* GET */
-
-									sameRatioIndicators.myParent.removeChild(dummy);
-								} else {
-									unitRatios.emToPx = callUnitConversionData.lastEmToPx;
-									unitRatios.percentToPxWidth = callUnitConversionData.lastPercentToPxWidth;
-									unitRatios.percentToPxHeight = callUnitConversionData.lastPercentToPxHeight;
-								}
-
-								/***************************
-								 Element-Agnostic Units
-								 ***************************/
-
-								/* Whereas % and em ratios are determined on a per-element basis, the rem unit only needs to be checked
-								 once per call since it's exclusively dependant upon document.body's fontSize. If this is the first time
-								 that calculateUnitRatios() is being run during this call, remToPx will still be set to its default value of null,
-								 so we calculate it now. */
-								if (callUnitConversionData.remToPx === null) {
-									/* Default to browsers' default fontSize of 16px in the case of 0. */
-									callUnitConversionData.remToPx = parseFloat(CSS.getPropertyValue(document.body, "fontSize")) || 16; /* GET */
-								}
-
-								/* Similarly, viewport units are %-relative to the window's inner dimensions. */
-								if (callUnitConversionData.vwToPx === null) {
-									callUnitConversionData.vwToPx = parseFloat(window.innerWidth) / 100; /* GET */
-									callUnitConversionData.vhToPx = parseFloat(window.innerHeight) / 100; /* GET */
-								}
-
-								unitRatios.remToPx = callUnitConversionData.remToPx;
-								unitRatios.vwToPx = callUnitConversionData.vwToPx;
-								unitRatios.vhToPx = callUnitConversionData.vhToPx;
-
-								if (Velocity.debug >= 1) {
-									console.log("Unit ratios: " + JSON.stringify(unitRatios), element);
-								}
-								return unitRatios;
-							};
-
-							/********************
-							 Unit Conversion
-							 ********************/
-
-							/* The * and / operators, which are not passed in with an associated unit, inherently use startValue's unit. Skip value and unit conversion. */
-							if (/[\/*]/.test(operator)) {
-								endValueUnitType = startValueUnitType;
-								/* If startValue and endValue differ in unit type, convert startValue into the same unit type as endValue so that if endValueUnitType
-								 is a relative unit (%, em, rem), the values set during tweening will continue to be accurately relative even if the metrics they depend
-								 on are dynamically changing during the course of the animation. Conversely, if we always normalized into px and used px for setting values, the px ratio
-								 would become stale if the original unit being animated toward was relative and the underlying metrics change during the animation. */
-								/* Since 0 is 0 in any unit type, no conversion is necessary when startValue is 0 -- we just start at 0 with endValueUnitType. */
-							} else if ((startValueUnitType !== endValueUnitType) && startValue !== 0) {
-								/* Unit conversion is also skipped when endValue is 0, but *startValueUnitType* must be used for tween values to remain accurate. */
-								/* Note: Skipping unit conversion here means that if endValueUnitType was originally a relative unit, the animation won't relatively
-								 match the underlying metrics if they change, but this is acceptable since we're animating toward invisibility instead of toward visibility,
-								 which remains past the point of the animation's completion. */
-								if (endValue === 0) {
-									endValueUnitType = startValueUnitType;
-								} else {
-									/* By this point, we cannot avoid unit conversion (it's undesirable since it causes layout thrashing).
-									 If we haven't already, we trigger calculateUnitRatios(), which runs once per element per call. */
-									elementUnitConversionData = elementUnitConversionData || calculateUnitRatios();
-
-									/* The following RegEx matches CSS properties that have their % values measured relative to the x-axis. */
-									/* Note: W3C spec mandates that all of margin and padding's properties (even top and bottom) are %-relative to the *width* of the parent element. */
-									var axis = (/margin|padding|left|right|width|text|word|letter/i.test(property) || /X$/.test(property) || property === "x") ? "x" : "y";
-
-									/* In order to avoid generating n^2 bespoke conversion functions, unit conversion is a two-step process:
-									 1) Convert startValue into pixels. 2) Convert this new pixel value into endValue's unit type. */
-									switch (startValueUnitType) {
-										case "%":
-											/* Note: translateX and translateY are the only properties that are %-relative to an element's own dimensions -- not its parent's dimensions.
-											 Velocity does not include a special conversion process to account for this behavior. Therefore, animating translateX/Y from a % value
-											 to a non-% value will produce an incorrect start value. Fortunately, this sort of cross-unit conversion is rarely done by users in practice. */
-											startValue *= (axis === "x" ? elementUnitConversionData.percentToPxWidth : elementUnitConversionData.percentToPxHeight);
-											break;
-
-										case "px":
-											/* px acts as our midpoint in the unit conversion process; do nothing. */
-											break;
-
-										default:
-											startValue *= elementUnitConversionData[startValueUnitType + "ToPx"];
-									}
-
-									/* Invert the px ratios to convert into to the target unit. */
-									switch (endValueUnitType) {
-										case "%":
-											startValue *= 1 / (axis === "x" ? elementUnitConversionData.percentToPxWidth : elementUnitConversionData.percentToPxHeight);
-											break;
-
-										case "px":
-											/* startValue is already in px, do nothing; we're done. */
-											break;
-
-										default:
-											startValue *= 1 / elementUnitConversionData[endValueUnitType + "ToPx"];
-									}
-								}
-							}
-
-							/*********************
-							 Relative Values
-							 *********************/
-
-							/* Operator logic must be performed last since it requires unit-normalized start and end values. */
-							/* Note: Relative *percent values* do not behave how most people think; while one would expect "+=50%"
-							 to increase the property 1.5x its current value, it in fact increases the percent units in absolute terms:
-							 50 points is added on top of the current % value. */
-							switch (operator) {
-								case "+":
-									endValue = startValue + endValue;
-									break;
-
-								case "-":
-									endValue = startValue - endValue;
-									break;
-
-								case "*":
-									endValue = startValue * endValue;
-									break;
-
-								case "/":
-									endValue = startValue / endValue;
-									break;
-							}
-
-							/**************************
-							 tweensContainer Push
-							 **************************/
-
-							/* Construct the per-property tween object, and push it to the element's tweensContainer. */
-							tweensContainer[property] = {
-								rootPropertyValue: rootPropertyValue,
-								startValue: startValue,
-								currentValue: startValue,
-								endValue: endValue,
-								unitType: endValueUnitType,
-								easing: easing
-							};
-							if (pattern) {
-								tweensContainer[property].pattern = pattern;
-							}
-
-							if (Velocity.debug) {
-								console.log("tweensContainer (" + property + "): " + JSON.stringify(tweensContainer[property]), element);
-							}
-						};
-
-						/* Create a tween out of each property, and append its associated data to tweensContainer. */
-						for (var property in propertiesMap) {
-
-							if (!propertiesMap.hasOwnProperty(property)) {
-								continue;
-							}
-							/* The original property name's format must be used for the parsePropertyValue() lookup,
-							 but we then use its camelCase styling to normalize it for manipulation. */
-							var propertyName = CSS.Names.camelCase(property),
-									valueData = parsePropertyValue(propertiesMap[property]);
-
-							/* Find shorthand color properties that have been passed a hex string. */
-							/* Would be quicker to use CSS.Lists.colors.includes() if possible */
-							if (_inArray(CSS.Lists.colors, propertyName)) {
-								/* Parse the value data for each shorthand. */
-								var endValue = valueData[0],
-										easing = valueData[1],
-										startValue = valueData[2];
-
-								if (CSS.RegEx.isHex.test(endValue)) {
-									/* Convert the hex strings into their RGB component arrays. */
-									var colorComponents = ["Red", "Green", "Blue"],
-											endValueRGB = CSS.Values.hexToRgb(endValue),
-											startValueRGB = startValue ? CSS.Values.hexToRgb(startValue) : undefined;
-
-									/* Inject the RGB component tweens into propertiesMap. */
-									for (var i = 0; i < colorComponents.length; i++) {
-										var dataArray = [endValueRGB[i]];
-
-										if (easing) {
-											dataArray.push(easing);
-										}
-
-										if (startValueRGB !== undefined) {
-											dataArray.push(startValueRGB[i]);
-										}
-
-										fixPropertyValue(propertyName + colorComponents[i], dataArray);
-									}
-									/* If we have replaced a shortcut color value then don't update the standard property name */
-									continue;
-								}
-							}
-							fixPropertyValue(propertyName, valueData);
-						}
-
-						/* Along with its property data, store a reference to the element itself onto tweensContainer. */
-						tweensContainer.element = element;
-					}
-
-					/*****************
-					 Call Push
-					 *****************/
-
-					/* Note: tweensContainer can be empty if all of the properties in this call's property map were skipped due to not
-					 being supported by the browser. The element property is used for checking that the tweensContainer has been appended to. */
-					if (tweensContainer.element) {
-						/* Apply the "velocity-animating" indicator class. */
-						CSS.Values.addClass(element, "velocity-animating");
-
-						/* The call array houses the tweensContainers for each element being animated in the current call. */
-						call.push(tweensContainer);
-
-						data = Data(element);
-
-						if (data) {
-							/* Store the tweensContainer and options if we're working on the default effects queue, so that they can be used by the reverse command. */
-							if (opts.queue === "") {
-
-								data.tweensContainer = tweensContainer;
-								data.opts = opts;
-							}
-
-							/* Switch on the element's animating flag. */
-							data.isAnimating = true;
-						}
-
-						/* Once the final element in this call's element set has been processed, push the call array onto
-						 Velocity.State.calls for the animation tick to immediately begin processing. */
-						if (elementsIndex === elementsLength - 1) {
-							/* Add the current call plus its associated metadata (the element set and the call's options) onto the global call container.
-							 Anything on this call container is subjected to tick() processing. */
-							Velocity.State.calls.push([call, elements, opts, null, promiseData.resolver, null, 0]);
-
-							/* If the animation tick isn't running, start it. (Velocity shuts it off when there are no active calls to process.) */
-							if (Velocity.State.isTicking === false) {
-								Velocity.State.isTicking = true;
-
-								/* Start the tick loop. */
-								tick();
-							}
-						} else {
-							elementsIndex++;
-						}
-					}
-				}
-
-				/* When the queue option is set to false, the call skips the element's queue and fires immediately. */
-				if (opts.queue === false) {
-					/* Since this buildQueue call doesn't respect the element's existing queue (which is where a delay option would have been appended),
-					 we manually inject the delay property here with an explicit setTimeout. */
-					if (opts.delay) {
-
-						/* Temporarily store delayed elements to facilitate access for global pause/resume */
-						var callIndex = Velocity.State.delayedElements.count++;
-						Velocity.State.delayedElements[callIndex] = element;
-
-						var delayComplete = (function(index) {
-							return function() {
-								/* Clear the temporary element */
-								Velocity.State.delayedElements[index] = false;
-
-								/* Finally, issue the call */
-								buildQueue();
-							};
-						})(callIndex);
-
-						Data(element).delayBegin = (new Date()).getTime();
-						Data(element).delay = parseFloat(opts.delay);
-						Data(element).delayTimer = {
-							setTimeout: setTimeout(buildQueue, parseFloat(opts.delay)),
-							next: delayComplete
-						};
-					} else {
-						buildQueue();
-					}
-					/* Otherwise, the call undergoes element queueing as normal. */
-					/* Note: To interoperate with jQuery, Velocity uses jQuery's own $.queue() stack for queuing logic. */
-				} else {
-					$.queue(element, opts.queue, function(next, clearQueue) {
-						/* If the clearQueue flag was passed in by the stop command, resolve this call's promise. (Promises can only be resolved once,
-						 so it's fine if this is repeatedly triggered for each element in the associated call.) */
-						if (clearQueue === true) {
-							if (promiseData.promise) {
-								promiseData.resolver(elements);
-							}
-
-							/* Do not continue with animation queueing. */
-							return true;
-						}
-
-						/* This flag indicates to the upcoming completeCall() function that this queue entry was initiated by Velocity.
-						 See completeCall() for further details. */
-						Velocity.velocityQueueEntryFlag = true;
-
-						buildQueue(next);
-					});
-				}
-
-				/*********************
-				 Auto-Dequeuing
-				 *********************/
-
-				/* As per jQuery's $.queue() behavior, to fire the first non-custom-queue entry on an element, the element
-				 must be dequeued if its queue stack consists *solely* of the current call. (This can be determined by checking
-				 for the "inprogress" item that jQuery prepends to active queue stack arrays.) Regardless, whenever the element's
-				 queue is further appended with additional items -- including $.delay()'s or even $.animate() calls, the queue's
-				 first entry is automatically fired. This behavior contrasts that of custom queues, which never auto-fire. */
-				/* Note: When an element set is being subjected to a non-parallel Velocity call, the animation will not begin until
-				 each one of the elements in the set has reached the end of its individually pre-existing queue chain. */
-				/* Note: Unfortunately, most people don't fully grasp jQuery's powerful, yet quirky, $.queue() function.
-				 Lean more here: http://stackoverflow.com/questions/1058158/can-somebody-explain-jquery-queue-to-me */
-				if ((opts.queue === "" || opts.queue === "fx") && $.queue(element)[0] !== "inprogress") {
-					$.dequeue(element);
-				}
-			}
-
-			/**************************
-			 Element Set Iteration
-			 **************************/
-
-			/* If the "nodeType" property exists on the elements variable, we're animating a single element.
-			 Place it in an array so that $.each() can iterate over it. */
-			$.each(elements, function(i, element) {
-				/* Ensure each element in a set has a nodeType (is a real element) to avoid throwing errors. */
-				if (Type.isNode(element)) {
-					processElement(element, i);
-				}
-			});
-
-			/******************
-			 Option: Loop
-			 ******************/
-
-			/* The loop option accepts an integer indicating how many times the element should loop between the values in the
-			 current call's properties map and the element's property values prior to this call. */
-			/* Note: The loop option's logic is performed here -- after element processing -- because the current call needs
-			 to undergo its queue insertion prior to the loop option generating its series of constituent "reverse" calls,
-			 which chain after the current call. Two reverse calls (two "alternations") constitute one loop. */
-			opts = $.extend({}, Velocity.defaults, options);
-			opts.loop = parseInt(opts.loop, 10);
-			var reverseCallsCount = (opts.loop * 2) - 1;
-
-			if (opts.loop) {
-				/* Double the loop count to convert it into its appropriate number of "reverse" calls.
-				 Subtract 1 from the resulting value since the current call is included in the total alternation count. */
-				for (var x = 0; x < reverseCallsCount; x++) {
-					/* Since the logic for the reverse action occurs inside Queueing and therefore this call's options object
-					 isn't parsed until then as well, the current call's delay option must be explicitly passed into the reverse
-					 call so that the delay logic that occurs inside *Pre-Queueing* can process it. */
-					var reverseOptions = {
-						delay: opts.delay,
-						progress: opts.progress
-					};
-
-					/* If a complete callback was passed into this call, transfer it to the loop redirect's final "reverse" call
-					 so that it's triggered when the entire redirect is complete (and not when the very first animation is complete). */
-					if (x === reverseCallsCount - 1) {
-						reverseOptions.display = opts.display;
-						reverseOptions.visibility = opts.visibility;
-						reverseOptions.complete = opts.complete;
-					}
-
-					animate(elements, "reverse", reverseOptions);
-				}
-			}
-
-			/***************
-			 Chaining
-			 ***************/
-
-			/* Return the elements back to the call chain, with wrapped elements taking precedence in case Velocity was called via the $.fn. extension. */
-			return getChain();
-		};
-
-		/* Turn Velocity into the animation function, extended with the pre-existing Velocity object. */
-		Velocity = $.extend(animate, Velocity);
-		/* For legacy support, also expose the literal animate method. */
-		Velocity.animate = animate;
-
-		/**************
-		 Timing
-		 **************/
-
-		/* Ticker function. */
-		var ticker = window.requestAnimationFrame || rAFShim;
-
-		/* Inactive browser tabs pause rAF, which results in all active animations immediately sprinting to their completion states when the tab refocuses.
-		 To get around this, we dynamically switch rAF to setTimeout (which the browser *doesn't* pause) when the tab loses focus. We skip this for mobile
-		 devices to avoid wasting battery power on inactive tabs. */
-		/* Note: Tab focus detection doesn't work on older versions of IE, but that's okay since they don't support rAF to begin with. */
-		if (!Velocity.State.isMobile && document.hidden !== undefined) {
-			var updateTicker = function() {
-				/* Reassign the rAF function (which the global tick() function uses) based on the tab's focus state. */
-				if (document.hidden) {
-					ticker = function(callback) {
-						/* The tick function needs a truthy first argument in order to pass its internal timestamp check. */
-						return setTimeout(function() {
-							callback(true);
-						}, 16);
-					};
-
-					/* The rAF loop has been paused by the browser, so we manually restart the tick. */
-					tick();
-				} else {
-					ticker = window.requestAnimationFrame || rAFShim;
-				}
-			};
-
-			/* Page could be sitting in the background at this time (i.e. opened as new tab) so making sure we use correct ticker from the start */
-			updateTicker();
-
-			/* And then run check again every time visibility changes */
-			document.addEventListener("visibilitychange", updateTicker);
-		}
-
-		/************
-		 Tick
-		 ************/
-
-		/* Note: All calls to Velocity are pushed to the Velocity.State.calls array, which is fully iterated through upon each tick. */
-		function tick(timestamp) {
-			/* An empty timestamp argument indicates that this is the first tick occurence since ticking was turned on.
-			 We leverage this metadata to fully ignore the first tick pass since RAF's initial pass is fired whenever
-			 the browser's next tick sync time occurs, which results in the first elements subjected to Velocity
-			 calls being animated out of sync with any elements animated immediately thereafter. In short, we ignore
-			 the first RAF tick pass so that elements being immediately consecutively animated -- instead of simultaneously animated
-			 by the same Velocity call -- are properly batched into the same initial RAF tick and consequently remain in sync thereafter. */
-			if (timestamp) {
-				/* We normally use RAF's high resolution timestamp but as it can be significantly offset when the browser is
-				 under high stress we give the option for choppiness over allowing the browser to drop huge chunks of frames.
-				 We use performance.now() and shim it if it doesn't exist for when the tab is hidden. */
-				var timeCurrent = Velocity.timestamp && timestamp !== true ? timestamp : performance.now();
-
-				/********************
-				 Call Iteration
-				 ********************/
-
-				var callsLength = Velocity.State.calls.length;
-
-				/* To speed up iterating over this array, it is compacted (falsey items -- calls that have completed -- are removed)
-				 when its length has ballooned to a point that can impact tick performance. This only becomes necessary when animation
-				 has been continuous with many elements over a long period of time; whenever all active calls are completed, completeCall() clears Velocity.State.calls. */
-				if (callsLength > 10000) {
-					Velocity.State.calls = compactSparseArray(Velocity.State.calls);
-					callsLength = Velocity.State.calls.length;
-				}
-
-				/* Iterate through each active call. */
-				for (var i = 0; i < callsLength; i++) {
-					/* When a Velocity call is completed, its Velocity.State.calls entry is set to false. Continue on to the next call. */
-					if (!Velocity.State.calls[i]) {
-						continue;
-					}
-
-					/************************
-					 Call-Wide Variables
-					 ************************/
-
-					var callContainer = Velocity.State.calls[i],
-							call = callContainer[0],
-							opts = callContainer[2],
-							timeStart = callContainer[3],
-							firstTick = !timeStart,
-							tweenDummyValue = null,
-							pauseObject = callContainer[5],
-							millisecondsEllapsed = callContainer[6];
-
-
-
-					/* If timeStart is undefined, then this is the first time that this call has been processed by tick().
-					 We assign timeStart now so that its value is as close to the real animation start time as possible.
-					 (Conversely, had timeStart been defined when this call was added to Velocity.State.calls, the delay
-					 between that time and now would cause the first few frames of the tween to be skipped since
-					 percentComplete is calculated relative to timeStart.) */
-					/* Further, subtract 16ms (the approximate resolution of RAF) from the current time value so that the
-					 first tick iteration isn't wasted by animating at 0% tween completion, which would produce the
-					 same style value as the element's current value. */
-					if (!timeStart) {
-						timeStart = Velocity.State.calls[i][3] = timeCurrent - 16;
-					}
-
-					/* If a pause object is present, skip processing unless it has been set to resume */
-					if (pauseObject) {
-						if (pauseObject.resume === true) {
-							/* Update the time start to accomodate the paused completion amount */
-							timeStart = callContainer[3] = Math.round(timeCurrent - millisecondsEllapsed - 16);
-
-							/* Remove pause object after processing */
-							callContainer[5] = null;
-						} else {
-							continue;
-						}
-					}
-
-					millisecondsEllapsed = callContainer[6] = timeCurrent - timeStart;
-
-					/* The tween's completion percentage is relative to the tween's start time, not the tween's start value
-					 (which would result in unpredictable tween durations since JavaScript's timers are not particularly accurate).
-					 Accordingly, we ensure that percentComplete does not exceed 1. */
-					var percentComplete = Math.min((millisecondsEllapsed) / opts.duration, 1);
-
-					/**********************
-					 Element Iteration
-					 **********************/
-
-					/* For every call, iterate through each of the elements in its set. */
-					for (var j = 0, callLength = call.length; j < callLength; j++) {
-						var tweensContainer = call[j],
-								element = tweensContainer.element;
-
-						/* Check to see if this element has been deleted midway through the animation by checking for the
-						 continued existence of its data cache. If it's gone, or the element is currently paused, skip animating this element. */
-						if (!Data(element)) {
-							continue;
-						}
-
-						var transformPropertyExists = false;
-
-						/**********************************
-						 Display & Visibility Toggling
-						 **********************************/
-
-						/* If the display option is set to non-"none", set it upfront so that the element can become visible before tweening begins.
-						 (Otherwise, display's "none" value is set in completeCall() once the animation has completed.) */
-						if (opts.display !== undefined && opts.display !== null && opts.display !== "none") {
-							if (opts.display === "flex") {
-								var flexValues = ["-webkit-box", "-moz-box", "-ms-flexbox", "-webkit-flex"];
-
-								$.each(flexValues, function(i, flexValue) {
-									CSS.setPropertyValue(element, "display", flexValue);
-								});
-							}
-
-							CSS.setPropertyValue(element, "display", opts.display);
-						}
-
-						/* Same goes with the visibility option, but its "none" equivalent is "hidden". */
-						if (opts.visibility !== undefined && opts.visibility !== "hidden") {
-							CSS.setPropertyValue(element, "visibility", opts.visibility);
-						}
-
-						/************************
-						 Property Iteration
-						 ************************/
-
-						/* For every element, iterate through each property. */
-						for (var property in tweensContainer) {
-							/* Note: In addition to property tween data, tweensContainer contains a reference to its associated element. */
-							if (tweensContainer.hasOwnProperty(property) && property !== "element") {
-								var tween = tweensContainer[property],
-										currentValue,
-										/* Easing can either be a pre-genereated function or a string that references a pre-registered easing
-										 on the Velocity.Easings object. In either case, return the appropriate easing *function*. */
-										easing = Type.isString(tween.easing) ? Velocity.Easings[tween.easing] : tween.easing;
-
-								/******************************
-								 Current Value Calculation
-								 ******************************/
-
-								if (Type.isString(tween.pattern)) {
-									var patternReplace = percentComplete === 1 ?
-											function($0, index, round) {
-												var result = tween.endValue[index];
-
-												return round ? Math.round(result) : result;
-											} :
-											function($0, index, round) {
-												var startValue = tween.startValue[index],
-														tweenDelta = tween.endValue[index] - startValue,
-														result = startValue + (tweenDelta * easing(percentComplete, opts, tweenDelta));
-
-												return round ? Math.round(result) : result;
-											};
-
-									currentValue = tween.pattern.replace(/{(\d+)(!)?}/g, patternReplace);
-								} else if (percentComplete === 1) {
-									/* If this is the last tick pass (if we've reached 100% completion for this tween),
-									 ensure that currentValue is explicitly set to its target endValue so that it's not subjected to any rounding. */
-									currentValue = tween.endValue;
-								} else {
-									/* Otherwise, calculate currentValue based on the current delta from startValue. */
-									var tweenDelta = tween.endValue - tween.startValue;
-
-									currentValue = tween.startValue + (tweenDelta * easing(percentComplete, opts, tweenDelta));
-									/* If no value change is occurring, don't proceed with DOM updating. */
-								}
-								if (!firstTick && (currentValue === tween.currentValue)) {
-									continue;
-								}
-
-								tween.currentValue = currentValue;
-
-								/* If we're tweening a fake 'tween' property in order to log transition values, update the one-per-call variable so that
-								 it can be passed into the progress callback. */
-								if (property === "tween") {
-									tweenDummyValue = currentValue;
-								} else {
-									/******************
-									 Hooks: Part I
-									 ******************/
-									var hookRoot;
-
-									/* For hooked properties, the newly-updated rootPropertyValueCache is cached onto the element so that it can be used
-									 for subsequent hooks in this call that are associated with the same root property. If we didn't cache the updated
-									 rootPropertyValue, each subsequent update to the root property in this tick pass would reset the previous hook's
-									 updates to rootPropertyValue prior to injection. A nice performance byproduct of rootPropertyValue caching is that
-									 subsequently chained animations using the same hookRoot but a different hook can use this cached rootPropertyValue. */
-									if (CSS.Hooks.registered[property]) {
-										hookRoot = CSS.Hooks.getRoot(property);
-
-										var rootPropertyValueCache = Data(element).rootPropertyValueCache[hookRoot];
-
-										if (rootPropertyValueCache) {
-											tween.rootPropertyValue = rootPropertyValueCache;
-										}
-									}
-
-									/*****************
-									 DOM Update
-									 *****************/
-
-									/* setPropertyValue() returns an array of the property name and property value post any normalization that may have been performed. */
-									/* Note: To solve an IE<=8 positioning bug, the unit type is dropped when setting a property value of 0. */
-									var adjustedSetData = CSS.setPropertyValue(element, /* SET */
-											property,
-											tween.currentValue + (IE < 9 && parseFloat(currentValue) === 0 ? "" : tween.unitType),
-											tween.rootPropertyValue,
-											tween.scrollData);
-
-									/*******************
-									 Hooks: Part II
-									 *******************/
-
-									/* Now that we have the hook's updated rootPropertyValue (the post-processed value provided by adjustedSetData), cache it onto the element. */
-									if (CSS.Hooks.registered[property]) {
-										/* Since adjustedSetData contains normalized data ready for DOM updating, the rootPropertyValue needs to be re-extracted from its normalized form. ?? */
-										if (CSS.Normalizations.registered[hookRoot]) {
-											Data(element).rootPropertyValueCache[hookRoot] = CSS.Normalizations.registered[hookRoot]("extract", null, adjustedSetData[1]);
-										} else {
-											Data(element).rootPropertyValueCache[hookRoot] = adjustedSetData[1];
-										}
-									}
-
-									/***************
-									 Transforms
-									 ***************/
-
-									/* Flag whether a transform property is being animated so that flushTransformCache() can be triggered once this tick pass is complete. */
-									if (adjustedSetData[0] === "transform") {
-										transformPropertyExists = true;
-									}
-
-								}
-							}
-						}
-
-						/****************
-						 mobileHA
-						 ****************/
-
-						/* If mobileHA is enabled, set the translate3d transform to null to force hardware acceleration.
-						 It's safe to override this property since Velocity doesn't actually support its animation (hooks are used in its place). */
-						if (opts.mobileHA) {
-							/* Don't set the null transform hack if we've already done so. */
-							if (Data(element).transformCache.translate3d === undefined) {
-								/* All entries on the transformCache object are later concatenated into a single transform string via flushTransformCache(). */
-								Data(element).transformCache.translate3d = "(0px, 0px, 0px)";
-
-								transformPropertyExists = true;
-							}
-						}
-
-						if (transformPropertyExists) {
-							CSS.flushTransformCache(element);
-						}
-					}
-
-					/* The non-"none" display value is only applied to an element once -- when its associated call is first ticked through.
-					 Accordingly, it's set to false so that it isn't re-processed by this call in the next tick. */
-					if (opts.display !== undefined && opts.display !== "none") {
-						Velocity.State.calls[i][2].display = false;
-					}
-					if (opts.visibility !== undefined && opts.visibility !== "hidden") {
-						Velocity.State.calls[i][2].visibility = false;
-					}
-
-					/* Pass the elements and the timing data (percentComplete, msRemaining, timeStart, tweenDummyValue) into the progress callback. */
-					if (opts.progress) {
-						opts.progress.call(callContainer[1],
-								callContainer[1],
-								percentComplete,
-								Math.max(0, (timeStart + opts.duration) - timeCurrent),
-								timeStart,
-								tweenDummyValue);
-					}
-
-					/* If this call has finished tweening, pass its index to completeCall() to handle call cleanup. */
-					if (percentComplete === 1) {
-						completeCall(i);
-					}
-				}
-			}
-
-			/* Note: completeCall() sets the isTicking flag to false when the last call on Velocity.State.calls has completed. */
-			if (Velocity.State.isTicking) {
-				ticker(tick);
-			}
-		}
-
-		/**********************
-		 Call Completion
-		 **********************/
-
-		/* Note: Unlike tick(), which processes all active calls at once, call completion is handled on a per-call basis. */
-		function completeCall(callIndex, isStopped) {
-			/* Ensure the call exists. */
-			if (!Velocity.State.calls[callIndex]) {
-				return false;
-			}
-
-			/* Pull the metadata from the call. */
-			var call = Velocity.State.calls[callIndex][0],
-					elements = Velocity.State.calls[callIndex][1],
-					opts = Velocity.State.calls[callIndex][2],
-					resolver = Velocity.State.calls[callIndex][4];
-
-			var remainingCallsExist = false;
-
-			/*************************
-			 Element Finalization
-			 *************************/
-
-			for (var i = 0, callLength = call.length; i < callLength; i++) {
-				var element = call[i].element;
-
-				/* If the user set display to "none" (intending to hide the element), set it now that the animation has completed. */
-				/* Note: display:none isn't set when calls are manually stopped (via Velocity("stop"). */
-				/* Note: Display gets ignored with "reverse" calls and infinite loops, since this behavior would be undesirable. */
-				if (!isStopped && !opts.loop) {
-					if (opts.display === "none") {
-						CSS.setPropertyValue(element, "display", opts.display);
-					}
-
-					if (opts.visibility === "hidden") {
-						CSS.setPropertyValue(element, "visibility", opts.visibility);
-					}
-				}
-
-				/* If the element's queue is empty (if only the "inprogress" item is left at position 0) or if its queue is about to run
-				 a non-Velocity-initiated entry, turn off the isAnimating flag. A non-Velocity-initiatied queue entry's logic might alter
-				 an element's CSS values and thereby cause Velocity's cached value data to go stale. To detect if a queue entry was initiated by Velocity,
-				 we check for the existence of our special Velocity.queueEntryFlag declaration, which minifiers won't rename since the flag
-				 is assigned to jQuery's global $ object and thus exists out of Velocity's own scope. */
-				var data = Data(element);
-
-				if (opts.loop !== true && ($.queue(element)[1] === undefined || !/\.velocityQueueEntryFlag/i.test($.queue(element)[1]))) {
-					/* The element may have been deleted. Ensure that its data cache still exists before acting on it. */
-					if (data) {
-						data.isAnimating = false;
-						/* Clear the element's rootPropertyValueCache, which will become stale. */
-						data.rootPropertyValueCache = {};
-
-						var transformHAPropertyExists = false;
-						/* If any 3D transform subproperty is at its default value (regardless of unit type), remove it. */
-						$.each(CSS.Lists.transforms3D, function(i, transformName) {
-							var defaultValue = /^scale/.test(transformName) ? 1 : 0,
-									currentValue = data.transformCache[transformName];
-
-							if (data.transformCache[transformName] !== undefined && new RegExp("^\\(" + defaultValue + "[^.]").test(currentValue)) {
-								transformHAPropertyExists = true;
-
-								delete data.transformCache[transformName];
-							}
-						});
-
-						/* Mobile devices have hardware acceleration removed at the end of the animation in order to avoid hogging the GPU's memory. */
-						if (opts.mobileHA) {
-							transformHAPropertyExists = true;
-							delete data.transformCache.translate3d;
-						}
-
-						/* Flush the subproperty removals to the DOM. */
-						if (transformHAPropertyExists) {
-							CSS.flushTransformCache(element);
-						}
-
-						/* Remove the "velocity-animating" indicator class. */
-						CSS.Values.removeClass(element, "velocity-animating");
-					}
-				}
-
-				/*********************
-				 Option: Complete
-				 *********************/
-
-				/* Complete is fired once per call (not once per element) and is passed the full raw DOM element set as both its context and its first argument. */
-				/* Note: Callbacks aren't fired when calls are manually stopped (via Velocity("stop"). */
-				if (!isStopped && opts.complete && !opts.loop && (i === callLength - 1)) {
-					/* We throw callbacks in a setTimeout so that thrown errors don't halt the execution of Velocity itself. */
-					try {
-						opts.complete.call(elements, elements);
-					} catch (error) {
-						setTimeout(function() {
-							throw error;
-						}, 1);
-					}
-				}
-
-				/**********************
-				 Promise Resolving
-				 **********************/
-
-				/* Note: Infinite loops don't return promises. */
-				if (resolver && opts.loop !== true) {
-					resolver(elements);
-				}
-
-				/****************************
-				 Option: Loop (Infinite)
-				 ****************************/
-
-				if (data && opts.loop === true && !isStopped) {
-					/* If a rotateX/Y/Z property is being animated by 360 deg with loop:true, swap tween start/end values to enable
-					 continuous iterative rotation looping. (Otherise, the element would just rotate back and forth.) */
-					$.each(data.tweensContainer, function(propertyName, tweenContainer) {
-						if (/^rotate/.test(propertyName) && ((parseFloat(tweenContainer.startValue) - parseFloat(tweenContainer.endValue)) % 360 === 0)) {
-							var oldStartValue = tweenContainer.startValue;
-
-							tweenContainer.startValue = tweenContainer.endValue;
-							tweenContainer.endValue = oldStartValue;
-						}
-
-						if (/^backgroundPosition/.test(propertyName) && parseFloat(tweenContainer.endValue) === 100 && tweenContainer.unitType === "%") {
-							tweenContainer.endValue = 0;
-							tweenContainer.startValue = 100;
-						}
-					});
-
-					Velocity(element, "reverse", {loop: true, delay: opts.delay});
-				}
-
-				/***************
-				 Dequeueing
-				 ***************/
-
-				/* Fire the next call in the queue so long as this call's queue wasn't set to false (to trigger a parallel animation),
-				 which would have already caused the next call to fire. Note: Even if the end of the animation queue has been reached,
-				 $.dequeue() must still be called in order to completely clear jQuery's animation queue. */
-				if (opts.queue !== false) {
-					$.dequeue(element, opts.queue);
-				}
-			}
-
-			/************************
-			 Calls Array Cleanup
-			 ************************/
-
-			/* Since this call is complete, set it to false so that the rAF tick skips it. This array is later compacted via compactSparseArray().
-			 (For performance reasons, the call is set to false instead of being deleted from the array: http://www.html5rocks.com/en/tutorials/speed/v8/) */
-			Velocity.State.calls[callIndex] = false;
-
-			/* Iterate through the calls array to determine if this was the final in-progress animation.
-			 If so, set a flag to end ticking and clear the calls array. */
-			for (var j = 0, callsLength = Velocity.State.calls.length; j < callsLength; j++) {
-				if (Velocity.State.calls[j] !== false) {
-					remainingCallsExist = true;
-
-					break;
-				}
-			}
-
-			if (remainingCallsExist === false) {
-				/* tick() will detect this flag upon its next iteration and subsequently turn itself off. */
-				Velocity.State.isTicking = false;
-
-				/* Clear the calls array so that its length is reset. */
-				delete Velocity.State.calls;
-				Velocity.State.calls = [];
-			}
-		}
-
-		/******************
-		 Frameworks
-		 ******************/
-
-		/* Both jQuery and Zepto allow their $.fn object to be extended to allow wrapped elements to be subjected to plugin calls.
-		 If either framework is loaded, register a "velocity" extension pointing to Velocity's core animate() method.  Velocity
-		 also registers itself onto a global container (window.jQuery || window.Zepto || window) so that certain features are
-		 accessible beyond just a per-element scope. This master object contains an .animate() method, which is later assigned to $.fn
-		 (if jQuery or Zepto are present). Accordingly, Velocity can both act on wrapped DOM elements and stand alone for targeting raw DOM elements. */
-		global.Velocity = Velocity;
-
-		if (global !== window) {
-			/* Assign the element function to Velocity's core animate() method. */
-			global.fn.velocity = animate;
-			/* Assign the object function's defaults to Velocity's global defaults object. */
-			global.fn.velocity.defaults = Velocity.defaults;
-		}
-
-		/***********************
-		 Packaged Redirects
-		 ***********************/
-
-		/* slideUp, slideDown */
-		$.each(["Down", "Up"], function(i, direction) {
-			Velocity.Redirects["slide" + direction] = function(element, options, elementsIndex, elementsSize, elements, promiseData) {
-				var opts = $.extend({}, options),
-						begin = opts.begin,
-						complete = opts.complete,
-						inlineValues = {},
-						computedValues = {height: "", marginTop: "", marginBottom: "", paddingTop: "", paddingBottom: ""};
-
-				if (opts.display === undefined) {
-					/* Show the element before slideDown begins and hide the element after slideUp completes. */
-					/* Note: Inline elements cannot have dimensions animated, so they're reverted to inline-block. */
-					opts.display = (direction === "Down" ? (Velocity.CSS.Values.getDisplayType(element) === "inline" ? "inline-block" : "block") : "none");
-				}
-
-				opts.begin = function() {
-					/* If the user passed in a begin callback, fire it now. */
-					if (elementsIndex === 0 && begin) {
-						begin.call(elements, elements);
-					}
-
-					/* Cache the elements' original vertical dimensional property values so that we can animate back to them. */
-					for (var property in computedValues) {
-						if (!computedValues.hasOwnProperty(property)) {
-							continue;
-						}
-						inlineValues[property] = element.style[property];
-
-						/* For slideDown, use forcefeeding to animate all vertical properties from 0. For slideUp,
-						 use forcefeeding to start from computed values and animate down to 0. */
-						var propertyValue = CSS.getPropertyValue(element, property);
-						computedValues[property] = (direction === "Down") ? [propertyValue, 0] : [0, propertyValue];
-					}
-
-					/* Force vertical overflow content to clip so that sliding works as expected. */
-					inlineValues.overflow = element.style.overflow;
-					element.style.overflow = "hidden";
-				};
-
-				opts.complete = function() {
-					/* Reset element to its pre-slide inline values once its slide animation is complete. */
-					for (var property in inlineValues) {
-						if (inlineValues.hasOwnProperty(property)) {
-							element.style[property] = inlineValues[property];
-						}
-					}
-
-					/* If the user passed in a complete callback, fire it now. */
-					if (elementsIndex === elementsSize - 1) {
-						if (complete) {
-							complete.call(elements, elements);
-						}
-						if (promiseData) {
-							promiseData.resolver(elements);
-						}
-					}
-				};
-
-				Velocity(element, computedValues, opts);
-			};
-		});
-
-		/* fadeIn, fadeOut */
-		$.each(["In", "Out"], function(i, direction) {
-			Velocity.Redirects["fade" + direction] = function(element, options, elementsIndex, elementsSize, elements, promiseData) {
-				var opts = $.extend({}, options),
-						complete = opts.complete,
-						propertiesMap = {opacity: (direction === "In") ? 1 : 0};
-
-				/* Since redirects are triggered individually for each element in the animated set, avoid repeatedly triggering
-				 callbacks by firing them only when the final element has been reached. */
-				if (elementsIndex !== 0) {
-					opts.begin = null;
-				}
-				if (elementsIndex !== elementsSize - 1) {
-					opts.complete = null;
-				} else {
-					opts.complete = function() {
-						if (complete) {
-							complete.call(elements, elements);
-						}
-						if (promiseData) {
-							promiseData.resolver(elements);
-						}
-					};
-				}
-
-				/* If a display was passed in, use it. Otherwise, default to "none" for fadeOut or the element-specific default for fadeIn. */
-				/* Note: We allow users to pass in "null" to skip display setting altogether. */
-				if (opts.display === undefined) {
-					opts.display = (direction === "In" ? "auto" : "none");
-				}
-
-				Velocity(this, propertiesMap, opts);
-			};
-		});
-
-		return Velocity;
-	}((window.jQuery || window.Zepto || window), window, (window ? window.document : undefined));
-}));
-
-/******************
- Known Issues
- ******************/
-
-/* The CSS spec mandates that the translateX/Y/Z transforms are %-relative to the element itself -- not its parent.
- Velocity, however, doesn't make this distinction. Thus, converting to or from the % unit with these subproperties
- will produce an inaccurate conversion value. The same issue exists with the cx/cy attributes of SVG circles and ellipses. */
-
-
-/***/ }),
-/* 71 */
+/* 45 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var disposed = false
-var normalizeComponent = __webpack_require__(41)
+var normalizeComponent = __webpack_require__(9)
 /* script */
-var __vue_script__ = __webpack_require__(73)
+var __vue_script__ = __webpack_require__(46)
 /* template */
-var __vue_template__ = __webpack_require__(72)
+var __vue_template__ = __webpack_require__(47)
 /* template functional */
 var __vue_template_functional__ = false
 /* styles */
@@ -56018,27 +55993,7 @@ module.exports = Component.exports
 
 
 /***/ }),
-/* 72 */
-/***/ (function(module, exports, __webpack_require__) {
-
-var render = function() {
-  var _vm = this
-  var _h = _vm.$createElement
-  var _c = _vm._self._c || _h
-  return _c("div", [_vm._v("\n\t12\n")])
-}
-var staticRenderFns = []
-render._withStripped = true
-module.exports = { render: render, staticRenderFns: staticRenderFns }
-if (false) {
-  module.hot.accept()
-  if (module.hot.data) {
-    require("vue-hot-reload-api")      .rerender("data-v-2b340146", module.exports)
-  }
-}
-
-/***/ }),
-/* 73 */
+/* 46 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -56049,8 +56004,3907 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //
 //
 //
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
 
-/* harmony default export */ __webpack_exports__["default"] = ({});
+/* harmony default export */ __webpack_exports__["default"] = ({
+	data: function data() {
+		return {
+			query: '',
+			list: [],
+			selectTopic: [], //这里是选中了哪个话题
+			question: {
+				title: '',
+				html: '',
+				topicid: []
+				// userid:'',
+			},
+			editor: ''
+		};
+	},
+	mounted: function mounted() {
+		this.init();
+	},
+
+	computed: {
+		computedList: function computedList() {
+			var vm = this;
+			return this.list.filter(function (item) {
+				return item.topic.toLowerCase().indexOf(vm.query.toLowerCase()) !== -1;
+			});
+		}
+	},
+	methods: {
+		submit: function submit() {
+
+			this.question.html = this.editor.txt.html();
+			//判断是否文本输入			
+			if (this.editor.txt.text() == '') {
+				new Swal({
+					title: "请输入问题描述！",
+					timer: 1500,
+					showConfirmButton: false
+				});
+				return false;
+			}
+			//判断是标签是否选择
+			if (this.question.topicid.length == 0) {
+				new Swal({
+					title: "请选择标签",
+					timer: 1500,
+					showConfirmButton: false
+				});
+				return false;
+			}
+			var self = this;
+			axios.post('/question/createQuestion', {
+				question: self.question
+			}).then(function (response) {
+				console.log(response);
+				//成功清楚表单内的数据
+				if (response['data'] == '1') {
+
+					self.question.html = '';
+					self.question.topicid = [];
+					self.question.title = '';
+					self.selectTopic = [];
+					self.list = [];
+					self.editor.txt.html('');
+					self.query = '';
+					new Swal({
+						title: "发布成功",
+						timer: 1500,
+						showConfirmButton: false
+					});
+					$('#rel').trigger('click');
+				} else {
+					alert('2');
+				}
+			}).catch(function (error) {
+				console.log(error);
+			});
+		},
+		init: function init() {
+			//引入富文本编辑器
+			var self = this;
+			// console.log(document.getElementById('headImage'));
+			this.editor = new E('#editorOne', '#editorTwo');
+
+			//配置菜单
+			this.editor.customConfig.menus = ['head', // 标题
+			'bold', // 粗体
+			'fontSize', // 字号
+			'fontName', // 字体
+			'italic', // 斜体
+			'underline', // 下划线
+			'strikeThrough', // 删除线
+			'link', // 插入链接
+			'image', // 插入图片
+
+			'quote', // 引用
+			'justify', // 对齐方式
+			'list', // 列表
+			'foreColor', // 文字颜色
+			'code', // 插入代码
+			'undo', // 撤销
+			'redo' // 重复
+			];
+			this.editor.customConfig.showLinkImg = false;
+			this.editor.customConfig.uploadImgShowBase64 = true;
+			this.editor.create();
+			this.editor.txt.html('<p>在此处输入问题描述</p>');
+		},
+		selectIs: function selectIs(e, topicid, topic) {
+
+			//禁止重复选择
+			for (var i = 0; i < this.selectTopic.length; i++) {
+				if (this.selectTopic[i]['id'] == topicid) {
+					return false;
+				}
+			}
+			//最多选择三个
+			if (this.selectTopic.length < 3) {
+				//向topic更新数据 前台
+				this.selectTopic.push({ id: topicid, topic: topic });
+				//给提交给后台的数据更新
+				this.question.topicid.push(topicid);
+			} else {
+				return false;
+			}
+		},
+		//删除已经选中的标签
+		deleteTopic: function deleteTopic(index) {
+			this.selectTopic.splice(index, 1);
+			this.question.topicid.splice(index, 1);
+			// alert(index);
+		},
+
+		getTopic: function getTopic() {},
+		beforeEnter: function beforeEnter(el) {
+			el.style.opacity = 0;
+			el.style.height = 0;
+		},
+		enter: function enter(el, done) {
+			var delay = el.dataset.index * 150;
+			setTimeout(function () {
+				Velocity(el, { opacity: 1, height: '1.6em' }, { complete: done });
+			}, delay);
+		},
+		leave: function leave(el, done) {
+			var delay = el.dataset.index * 150;
+			setTimeout(function () {
+				Velocity(el, { opacity: 0, height: 0 }, { complete: done });
+			}, delay);
+		},
+		inputFunc: function inputFunc(e) {
+			var self = this;
+			var time = 2;
+
+			var timer = setInterval(function () {
+				for (var i = 0; i < time; i++) {
+					if (i == 1) {
+						var TOPIC = document.getElementById('searchTopic').value;
+						axios.post('/getTopic', {
+							topic: TOPIC
+						}).then(function (response) {
+							if (response.data != []) {
+								self.list = response.data;
+							} else {
+								self.list = [];
+							}
+						}).catch(function (response) {
+							console.log(response);
+						});
+						clearInterval(timer);
+					}
+				}
+			}, 500);
+		}
+
+	}
+});
+
+/***/ }),
+/* 47 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var render = function() {
+  var _vm = this
+  var _h = _vm.$createElement
+  var _c = _vm._self._c || _h
+  return _c("div", [
+    _c(
+      "form",
+      {
+        staticClass: "form-inline",
+        on: {
+          submit: function($event) {
+            $event.preventDefault()
+            return _vm.submit($event)
+          }
+        }
+      },
+      [
+        _c("div", { staticClass: "form-group", attrs: { id: "titleDiv" } }, [
+          _c("input", {
+            directives: [
+              {
+                name: "model",
+                rawName: "v-model",
+                value: _vm.question.title,
+                expression: "question.title"
+              }
+            ],
+            attrs: {
+              id: "title",
+              type: "text",
+              autofocus: "autofocus",
+              placeholder: "输入问题",
+              maxlength: "20",
+              autocomplete: "off",
+              required: ""
+            },
+            domProps: { value: _vm.question.title },
+            on: {
+              input: function($event) {
+                if ($event.target.composing) {
+                  return
+                }
+                _vm.$set(_vm.question, "title", $event.target.value)
+              }
+            }
+          })
+        ]),
+        _vm._v(" "),
+        _c(
+          "div",
+          { attrs: { id: "staggered-list-demo" } },
+          [
+            _c(
+              "transition-group",
+              {
+                staticClass: "list-group",
+                attrs: {
+                  name: "staggered-fade",
+                  tag: "ul",
+                  css: false,
+                  id: "list-ul"
+                },
+                on: {
+                  "before-enter": _vm.beforeEnter,
+                  enter: _vm.enter,
+                  leave: _vm.leave
+                }
+              },
+              _vm._l(_vm.computedList, function(item, index) {
+                return _c(
+                  "li",
+                  {
+                    key: item.topic,
+                    staticClass: "topic-li ",
+                    attrs: { "data-index": index, topicid: item.id },
+                    on: {
+                      click: function($event) {
+                        _vm.selectIs($event, item.id, item.topic)
+                      }
+                    }
+                  },
+                  [_vm._v(_vm._s(item.topic))]
+                )
+              })
+            )
+          ],
+          1
+        ),
+        _vm._v(" "),
+        _c("div", { staticClass: "form-group", attrs: { id: "topic" } }, [
+          _c("i", {
+            staticClass: "fa fa-search",
+            attrs: { "aria-hidden": "true" }
+          }),
+          _c("input", {
+            directives: [
+              {
+                name: "model",
+                rawName: "v-model",
+                value: _vm.query,
+                expression: "query"
+              }
+            ],
+            attrs: {
+              type: "text",
+              name: "topic",
+              id: "searchTopic",
+              placeholder: "选择问题标签,最多三个",
+              autocomplete: "off"
+            },
+            domProps: { value: _vm.query },
+            on: {
+              input: [
+                function($event) {
+                  if ($event.target.composing) {
+                    return
+                  }
+                  _vm.query = $event.target.value
+                },
+                _vm.inputFunc
+              ]
+            }
+          }),
+          _vm._v(" "),
+          _c(
+            "ul",
+            { attrs: { id: "selectul" } },
+            _vm._l(_vm.selectTopic, function(item, index) {
+              return _c(
+                "li",
+                { staticClass: "selectTopic", staticStyle: { float: "left" } },
+                [
+                  _vm._v(
+                    "\n\t\t\t\t\t\t" + _vm._s(item.topic) + "\n\t\t\t\t\t\t"
+                  ),
+                  _c("input", {
+                    directives: [
+                      {
+                        name: "model",
+                        rawName: "v-model",
+                        value: _vm.question.topicid,
+                        expression: "question.topicid"
+                      }
+                    ],
+                    attrs: { type: "hidden", name: "topicid" },
+                    domProps: { value: _vm.question.topicid },
+                    on: {
+                      input: function($event) {
+                        if ($event.target.composing) {
+                          return
+                        }
+                        _vm.$set(_vm.question, "topicid", $event.target.value)
+                      }
+                    }
+                  }),
+                  _vm._v(" "),
+                  _c("i", {
+                    staticClass: "fa fa-times deleteTopic",
+                    attrs: { "aria-hidden": "true" },
+                    on: {
+                      click: function($event) {
+                        _vm.deleteTopic(index)
+                      }
+                    }
+                  })
+                ]
+              )
+            })
+          )
+        ]),
+        _vm._v(" "),
+        _vm._m(0),
+        _vm._v(" "),
+        _vm._m(1)
+      ]
+    )
+  ])
+}
+var staticRenderFns = [
+  function() {
+    var _vm = this
+    var _h = _vm.$createElement
+    var _c = _vm._self._c || _h
+    return _c("div", { staticClass: "form-group" }, [
+      _c("div", { attrs: { id: "editorOneDiv" } }, [
+        _c("div", { attrs: { id: "editorOne" } })
+      ]),
+      _vm._v(" "),
+      _c("div", {
+        staticClass: "col-md-12",
+        attrs: { id: "editorTwo", require: "" }
+      })
+    ])
+  },
+  function() {
+    var _vm = this
+    var _h = _vm.$createElement
+    var _c = _vm._self._c || _h
+    return _c("div", { staticClass: "form-group" }, [
+      _c(
+        "button",
+        { staticClass: "btn btn-success", attrs: { type: "submit" } },
+        [_vm._v("发布问题")]
+      )
+    ])
+  }
+]
+render._withStripped = true
+module.exports = { render: render, staticRenderFns: staticRenderFns }
+if (false) {
+  module.hot.accept()
+  if (module.hot.data) {
+    require("vue-hot-reload-api")      .rerender("data-v-2b340146", module.exports)
+  }
+}
+
+/***/ }),
+/* 48 */
+/***/ (function(module, exports) {
+
+// removed by extract-text-webpack-plugin
+
+/***/ }),
+/* 49 */,
+/* 50 */,
+/* 51 */,
+/* 52 */,
+/* 53 */,
+/* 54 */,
+/* 55 */,
+/* 56 */,
+/* 57 */,
+/* 58 */,
+/* 59 */
+/***/ (function(module, exports, __webpack_require__) {
+
+/*!
+* sweetalert2 v7.21.1
+* Released under the MIT License.
+*/
+(function (global, factory) {
+	 true ? module.exports = factory() :
+	typeof define === 'function' && define.amd ? define(factory) :
+	(global.Sweetalert2 = factory());
+}(this, (function () { 'use strict';
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) {
+  return typeof obj;
+} : function (obj) {
+  return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj;
+};
+
+
+
+
+
+
+
+
+
+
+
+var classCallCheck = function (instance, Constructor) {
+  if (!(instance instanceof Constructor)) {
+    throw new TypeError("Cannot call a class as a function");
+  }
+};
+
+var createClass = function () {
+  function defineProperties(target, props) {
+    for (var i = 0; i < props.length; i++) {
+      var descriptor = props[i];
+      descriptor.enumerable = descriptor.enumerable || false;
+      descriptor.configurable = true;
+      if ("value" in descriptor) descriptor.writable = true;
+      Object.defineProperty(target, descriptor.key, descriptor);
+    }
+  }
+
+  return function (Constructor, protoProps, staticProps) {
+    if (protoProps) defineProperties(Constructor.prototype, protoProps);
+    if (staticProps) defineProperties(Constructor, staticProps);
+    return Constructor;
+  };
+}();
+
+
+
+
+
+
+
+var _extends = Object.assign || function (target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = arguments[i];
+
+    for (var key in source) {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        target[key] = source[key];
+      }
+    }
+  }
+
+  return target;
+};
+
+var get = function get(object, property, receiver) {
+  if (object === null) object = Function.prototype;
+  var desc = Object.getOwnPropertyDescriptor(object, property);
+
+  if (desc === undefined) {
+    var parent = Object.getPrototypeOf(object);
+
+    if (parent === null) {
+      return undefined;
+    } else {
+      return get(parent, property, receiver);
+    }
+  } else if ("value" in desc) {
+    return desc.value;
+  } else {
+    var getter = desc.get;
+
+    if (getter === undefined) {
+      return undefined;
+    }
+
+    return getter.call(receiver);
+  }
+};
+
+var inherits = function (subClass, superClass) {
+  if (typeof superClass !== "function" && superClass !== null) {
+    throw new TypeError("Super expression must either be null or a function, not " + typeof superClass);
+  }
+
+  subClass.prototype = Object.create(superClass && superClass.prototype, {
+    constructor: {
+      value: subClass,
+      enumerable: false,
+      writable: true,
+      configurable: true
+    }
+  });
+  if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass;
+};
+
+
+
+
+
+
+
+
+
+
+
+var possibleConstructorReturn = function (self, call) {
+  if (!self) {
+    throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+  }
+
+  return call && (typeof call === "object" || typeof call === "function") ? call : self;
+};
+
+
+
+
+
+var slicedToArray = function () {
+  function sliceIterator(arr, i) {
+    var _arr = [];
+    var _n = true;
+    var _d = false;
+    var _e = undefined;
+
+    try {
+      for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) {
+        _arr.push(_s.value);
+
+        if (i && _arr.length === i) break;
+      }
+    } catch (err) {
+      _d = true;
+      _e = err;
+    } finally {
+      try {
+        if (!_n && _i["return"]) _i["return"]();
+      } finally {
+        if (_d) throw _e;
+      }
+    }
+
+    return _arr;
+  }
+
+  return function (arr, i) {
+    if (Array.isArray(arr)) {
+      return arr;
+    } else if (Symbol.iterator in Object(arr)) {
+      return sliceIterator(arr, i);
+    } else {
+      throw new TypeError("Invalid attempt to destructure non-iterable instance");
+    }
+  };
+}();
+
+var consolePrefix = 'SweetAlert2:';
+
+/**
+ * Filter the unique values into a new array
+ * @param arr
+ */
+var uniqueArray = function uniqueArray(arr) {
+  var result = [];
+  for (var i = 0; i < arr.length; i++) {
+    if (result.indexOf(arr[i]) === -1) {
+      result.push(arr[i]);
+    }
+  }
+  return result;
+};
+
+/**
+ * Converts `inputOptions` into an array of `[value, label]`s
+ * @param inputOptions
+ */
+var formatInputOptions = function formatInputOptions(inputOptions) {
+  var result = [];
+  if (typeof Map !== 'undefined' && inputOptions instanceof Map) {
+    inputOptions.forEach(function (value, key) {
+      result.push([key, value]);
+    });
+  } else {
+    Object.keys(inputOptions).forEach(function (key) {
+      result.push([key, inputOptions[key]]);
+    });
+  }
+  return result;
+};
+
+/**
+ * Standardise console warnings
+ * @param message
+ */
+var warn = function warn(message) {
+  console.warn(consolePrefix + ' ' + message);
+};
+
+/**
+ * Standardise console errors
+ * @param message
+ */
+var error = function error(message) {
+  console.error(consolePrefix + ' ' + message);
+};
+
+/**
+ * Private global state for `warnOnce`
+ * @type {Array}
+ * @private
+ */
+var previousWarnOnceMessages = [];
+
+/**
+ * Show a console warning, but only if it hasn't already been shown
+ * @param message
+ */
+var warnOnce = function warnOnce(message) {
+  if (!(previousWarnOnceMessages.indexOf(message) !== -1)) {
+    previousWarnOnceMessages.push(message);
+    warn(message);
+  }
+};
+
+/**
+ * If `arg` is a function, call it (with no arguments or context) and return the result.
+ * Otherwise, just pass the value through
+ * @param arg
+ */
+var callIfFunction = function callIfFunction(arg) {
+  return typeof arg === 'function' ? arg() : arg;
+};
+
+var isThenable = function isThenable(arg) {
+  return (typeof arg === 'undefined' ? 'undefined' : _typeof(arg)) === 'object' && typeof arg.then === 'function';
+};
+
+var DismissReason = Object.freeze({
+  cancel: 'cancel',
+  backdrop: 'overlay',
+  close: 'close',
+  esc: 'esc',
+  timer: 'timer'
+});
+
+var version = "7.21.1";
+
+var argsToParams = function argsToParams(args) {
+  var params = {};
+  switch (_typeof(args[0])) {
+    case 'string':
+      ['title', 'html', 'type'].forEach(function (name, index) {
+        switch (_typeof(args[index])) {
+          case 'string':
+            params[name] = args[index];
+            break;
+          case 'undefined':
+            break;
+          default:
+            error('Unexpected type of ' + name + '! Expected "string", got ' + _typeof(args[index]));
+        }
+      });
+      break;
+
+    case 'object':
+      _extends(params, args[0]);
+      break;
+
+    default:
+      error('Unexpected type of argument! Expected "string" or "object", got ' + _typeof(args[0]));
+      return false;
+  }
+  return params;
+};
+
+/**
+ * Adapt a legacy inputValidator for use with expectRejections=false
+ */
+var adaptInputValidator = function adaptInputValidator(legacyValidator) {
+  return function adaptedInputValidator(inputValue, extraParams) {
+    return legacyValidator.call(this, inputValue, extraParams).then(function () {
+      return undefined;
+    }, function (validationError) {
+      return validationError;
+    });
+  };
+};
+
+var swalPrefix = 'swal2-';
+
+var prefix = function prefix(items) {
+  var result = {};
+  for (var i in items) {
+    result[items[i]] = swalPrefix + items[i];
+  }
+  return result;
+};
+
+var swalClasses = prefix(['container', 'shown', 'height-auto', 'iosfix', 'popup', 'modal', 'no-backdrop', 'toast', 'toast-shown', 'fade', 'show', 'hide', 'noanimation', 'close', 'title', 'header', 'content', 'actions', 'confirm', 'cancel', 'footer', 'icon', 'icon-text', 'image', 'input', 'has-input', 'file', 'range', 'select', 'radio', 'checkbox', 'textarea', 'inputerror', 'validationerror', 'progresssteps', 'activeprogressstep', 'progresscircle', 'progressline', 'loading', 'styled', 'top', 'top-start', 'top-end', 'top-left', 'top-right', 'center', 'center-start', 'center-end', 'center-left', 'center-right', 'bottom', 'bottom-start', 'bottom-end', 'bottom-left', 'bottom-right', 'grow-row', 'grow-column', 'grow-fullscreen']);
+
+var iconTypes = prefix(['success', 'warning', 'info', 'question', 'error']);
+
+// Remember state in cases where opening and handling a modal will fiddle with it.
+var states = {
+  previousBodyPadding: null
+};
+
+var hasClass = function hasClass(elem, className) {
+  if (elem.classList) {
+    return elem.classList.contains(className);
+  }
+  return false;
+};
+
+var focusInput = function focusInput(input) {
+  input.focus();
+
+  // place cursor at end of text in text input
+  if (input.type !== 'file') {
+    // http://stackoverflow.com/a/2345915/1331425
+    var val = input.value;
+    input.value = '';
+    input.value = val;
+  }
+};
+
+var addOrRemoveClass = function addOrRemoveClass(target, classList, add) {
+  if (!target || !classList) {
+    return;
+  }
+  if (typeof classList === 'string') {
+    classList = classList.split(/\s+/).filter(Boolean);
+  }
+  classList.forEach(function (className) {
+    if (target.forEach) {
+      target.forEach(function (elem) {
+        add ? elem.classList.add(className) : elem.classList.remove(className);
+      });
+    } else {
+      add ? target.classList.add(className) : target.classList.remove(className);
+    }
+  });
+};
+
+var addClass = function addClass(target, classList) {
+  addOrRemoveClass(target, classList, true);
+};
+
+var removeClass = function removeClass(target, classList) {
+  addOrRemoveClass(target, classList, false);
+};
+
+var getChildByClass = function getChildByClass(elem, className) {
+  for (var i = 0; i < elem.childNodes.length; i++) {
+    if (hasClass(elem.childNodes[i], className)) {
+      return elem.childNodes[i];
+    }
+  }
+};
+
+var show = function show(elem) {
+  elem.style.opacity = '';
+  elem.style.display = elem.id === swalClasses.content ? 'block' : 'flex';
+};
+
+var hide = function hide(elem) {
+  elem.style.opacity = '';
+  elem.style.display = 'none';
+};
+
+var empty = function empty(elem) {
+  while (elem.firstChild) {
+    elem.removeChild(elem.firstChild);
+  }
+};
+
+// borrowed from jquery $(elem).is(':visible') implementation
+var isVisible = function isVisible(elem) {
+  return elem && (elem.offsetWidth || elem.offsetHeight || elem.getClientRects().length);
+};
+
+var removeStyleProperty = function removeStyleProperty(elem, property) {
+  if (elem.style.removeProperty) {
+    elem.style.removeProperty(property);
+  } else {
+    elem.style.removeAttribute(property);
+  }
+};
+
+var getContainer = function getContainer() {
+  return document.body.querySelector('.' + swalClasses.container);
+};
+
+var elementByClass = function elementByClass(className) {
+  var container = getContainer();
+  return container ? container.querySelector('.' + className) : null;
+};
+
+var getPopup = function getPopup() {
+  return elementByClass(swalClasses.popup);
+};
+
+var getIcons = function getIcons() {
+  var popup = getPopup();
+  return popup.querySelectorAll('.' + swalClasses.icon);
+};
+
+var getTitle = function getTitle() {
+  return elementByClass(swalClasses.title);
+};
+
+var getContent = function getContent() {
+  return elementByClass(swalClasses.content);
+};
+
+var getImage = function getImage() {
+  return elementByClass(swalClasses.image);
+};
+
+var getProgressSteps = function getProgressSteps() {
+  return elementByClass(swalClasses.progresssteps);
+};
+
+var getValidationError = function getValidationError() {
+  return elementByClass(swalClasses.validationerror);
+};
+
+var getConfirmButton = function getConfirmButton() {
+  return elementByClass(swalClasses.confirm);
+};
+
+var getCancelButton = function getCancelButton() {
+  return elementByClass(swalClasses.cancel);
+};
+
+var getButtonsWrapper = function getButtonsWrapper() {
+  warnOnce('swal.getButtonsWrapper() is deprecated and will be removed in the next major release, use swal.getActions() instead');
+  return elementByClass(swalClasses.actions);
+};
+
+var getActions = function getActions() {
+  return elementByClass(swalClasses.actions);
+};
+
+var getFooter = function getFooter() {
+  return elementByClass(swalClasses.footer);
+};
+
+var getCloseButton = function getCloseButton() {
+  return elementByClass(swalClasses.close);
+};
+
+var getFocusableElements = function getFocusableElements() {
+  var focusableElementsWithTabindex = Array.prototype.slice.call(getPopup().querySelectorAll('[tabindex]:not([tabindex="-1"]):not([tabindex="0"])'))
+  // sort according to tabindex
+  .sort(function (a, b) {
+    a = parseInt(a.getAttribute('tabindex'));
+    b = parseInt(b.getAttribute('tabindex'));
+    if (a > b) {
+      return 1;
+    } else if (a < b) {
+      return -1;
+    }
+    return 0;
+  });
+
+  // https://github.com/jkup/focusable/blob/master/index.js
+  var otherFocusableElements = Array.prototype.slice.call(getPopup().querySelectorAll('a[href], area[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), iframe, object, embed, [tabindex="0"], [contenteditable], audio[controls], video[controls]'));
+
+  return uniqueArray(focusableElementsWithTabindex.concat(otherFocusableElements));
+};
+
+var isModal = function isModal() {
+  return !document.body.classList.contains(swalClasses['toast-shown']);
+};
+
+var isToast = function isToast() {
+  return document.body.classList.contains(swalClasses['toast-shown']);
+};
+
+var isLoading = function isLoading() {
+  return getPopup().hasAttribute('data-loading');
+};
+
+// Detect Node env
+var isNodeEnv = function isNodeEnv() {
+  return typeof window === 'undefined' || typeof document === 'undefined';
+};
+
+var sweetHTML = ('\n <div aria-labelledby="' + swalClasses.title + '" aria-describedby="' + swalClasses.content + '" class="' + swalClasses.popup + '" tabindex="-1">\n   <div class="' + swalClasses.header + '">\n     <ul class="' + swalClasses.progresssteps + '"></ul>\n     <div class="' + swalClasses.icon + ' ' + iconTypes.error + '">\n       <span class="swal2-x-mark"><span class="swal2-x-mark-line-left"></span><span class="swal2-x-mark-line-right"></span></span>\n     </div>\n     <div class="' + swalClasses.icon + ' ' + iconTypes.question + '">\n       <span class="' + swalClasses['icon-text'] + '">?</span>\n      </div>\n     <div class="' + swalClasses.icon + ' ' + iconTypes.warning + '">\n       <span class="' + swalClasses['icon-text'] + '">!</span>\n      </div>\n     <div class="' + swalClasses.icon + ' ' + iconTypes.info + '">\n       <span class="' + swalClasses['icon-text'] + '">i</span>\n      </div>\n     <div class="' + swalClasses.icon + ' ' + iconTypes.success + '">\n       <div class="swal2-success-circular-line-left"></div>\n       <span class="swal2-success-line-tip"></span> <span class="swal2-success-line-long"></span>\n       <div class="swal2-success-ring"></div> <div class="swal2-success-fix"></div>\n       <div class="swal2-success-circular-line-right"></div>\n     </div>\n     <img class="' + swalClasses.image + '" />\n     <h2 class="' + swalClasses.title + '" id="' + swalClasses.title + '"></h2>\n     <button type="button" class="' + swalClasses.close + '">\xD7</button>\n   </div>\n   <div class="' + swalClasses.content + '">\n     <div id="' + swalClasses.content + '"></div>\n     <input class="' + swalClasses.input + '" />\n     <input type="file" class="' + swalClasses.file + '" />\n     <div class="' + swalClasses.range + '">\n       <input type="range" />\n       <output></output>\n     </div>\n     <select class="' + swalClasses.select + '"></select>\n     <div class="' + swalClasses.radio + '"></div>\n     <label for="' + swalClasses.checkbox + '" class="' + swalClasses.checkbox + '">\n       <input type="checkbox" />\n     </label>\n     <textarea class="' + swalClasses.textarea + '"></textarea>\n     <div class="' + swalClasses.validationerror + '" id="' + swalClasses.validationerror + '"></div>\n   </div>\n   <div class="' + swalClasses.actions + '">\n     <button type="button" class="' + swalClasses.confirm + '">OK</button>\n     <button type="button" class="' + swalClasses.cancel + '">Cancel</button>\n   </div>\n   <div class="' + swalClasses.footer + '">\n   </div>\n </div>\n').replace(/(^|\n)\s*/g, '');
+
+/*
+ * Add modal + backdrop to DOM
+ */
+var init = function init(params) {
+  // Clean up the old popup if it exists
+  var c = getContainer();
+  if (c) {
+    c.parentNode.removeChild(c);
+    removeClass([document.documentElement, document.body], [swalClasses['no-backdrop'], swalClasses['has-input'], swalClasses['toast-shown']]);
+  }
+
+  if (isNodeEnv()) {
+    error('SweetAlert2 requires document to initialize');
+    return;
+  }
+
+  var container = document.createElement('div');
+  container.className = swalClasses.container;
+  container.innerHTML = sweetHTML;
+
+  var targetElement = typeof params.target === 'string' ? document.querySelector(params.target) : params.target;
+  targetElement.appendChild(container);
+
+  var popup = getPopup();
+  var content = getContent();
+  var input = getChildByClass(content, swalClasses.input);
+  var file = getChildByClass(content, swalClasses.file);
+  var range = content.querySelector('.' + swalClasses.range + ' input');
+  var rangeOutput = content.querySelector('.' + swalClasses.range + ' output');
+  var select = getChildByClass(content, swalClasses.select);
+  var checkbox = content.querySelector('.' + swalClasses.checkbox + ' input');
+  var textarea = getChildByClass(content, swalClasses.textarea);
+
+  // a11y
+  popup.setAttribute('role', params.toast ? 'alert' : 'dialog');
+  popup.setAttribute('aria-live', params.toast ? 'polite' : 'assertive');
+  if (!params.toast) {
+    popup.setAttribute('aria-modal', 'true');
+  }
+
+  var oldInputVal = void 0; // IE11 workaround, see #1109 for details
+  var resetValidationError = function resetValidationError(e) {
+    if (Swal.isVisible() && oldInputVal !== e.target.value) {
+      Swal.resetValidationError();
+    }
+    oldInputVal = e.target.value;
+  };
+
+  input.oninput = resetValidationError;
+  file.onchange = resetValidationError;
+  select.onchange = resetValidationError;
+  checkbox.onchange = resetValidationError;
+  textarea.oninput = resetValidationError;
+
+  range.oninput = function () {
+    resetValidationError();
+    rangeOutput.value = range.value;
+  };
+
+  range.onchange = function () {
+    resetValidationError();
+    range.nextSibling.value = range.value;
+  };
+
+  return popup;
+};
+
+var parseHtmlToContainer = function parseHtmlToContainer(param, target) {
+  if (!param) {
+    return hide(target);
+  }
+
+  if ((typeof param === 'undefined' ? 'undefined' : _typeof(param)) === 'object') {
+    target.innerHTML = '';
+    if (0 in param) {
+      for (var i = 0; i in param; i++) {
+        target.appendChild(param[i].cloneNode(true));
+      }
+    } else {
+      target.appendChild(param.cloneNode(true));
+    }
+  } else if (param) {
+    target.innerHTML = param;
+  } else {}
+  show(target);
+};
+
+var animationEndEvent = function () {
+  // Prevent run in Node env
+  if (isNodeEnv()) {
+    return false;
+  }
+
+  var testEl = document.createElement('div');
+  var transEndEventNames = {
+    'WebkitAnimation': 'webkitAnimationEnd',
+    'OAnimation': 'oAnimationEnd oanimationend',
+    'animation': 'animationend'
+  };
+  for (var i in transEndEventNames) {
+    if (transEndEventNames.hasOwnProperty(i) && typeof testEl.style[i] !== 'undefined') {
+      return transEndEventNames[i];
+    }
+  }
+
+  return false;
+}();
+
+// Measure width of scrollbar
+// https://github.com/twbs/bootstrap/blob/master/js/modal.js#L279-L286
+var measureScrollbar = function measureScrollbar() {
+  var supportsTouch = 'ontouchstart' in window || navigator.msMaxTouchPoints;
+  if (supportsTouch) {
+    return 0;
+  }
+  var scrollDiv = document.createElement('div');
+  scrollDiv.style.width = '50px';
+  scrollDiv.style.height = '50px';
+  scrollDiv.style.overflow = 'scroll';
+  document.body.appendChild(scrollDiv);
+  var scrollbarWidth = scrollDiv.offsetWidth - scrollDiv.clientWidth;
+  document.body.removeChild(scrollDiv);
+  return scrollbarWidth;
+};
+
+var fixScrollbar = function fixScrollbar() {
+  // for queues, do not do this more than once
+  if (states.previousBodyPadding !== null) {
+    return;
+  }
+  // if the body has overflow
+  if (document.body.scrollHeight > window.innerHeight) {
+    // add padding so the content doesn't shift after removal of scrollbar
+    states.previousBodyPadding = parseInt(window.getComputedStyle(document.body).getPropertyValue('padding-right'));
+    document.body.style.paddingRight = states.previousBodyPadding + measureScrollbar() + 'px';
+  }
+};
+
+var undoScrollbar = function undoScrollbar() {
+  if (states.previousBodyPadding !== null) {
+    document.body.style.paddingRight = states.previousBodyPadding;
+    states.previousBodyPadding = null;
+  }
+};
+
+// Fix iOS scrolling http://stackoverflow.com/q/39626302/1331425
+var iOSfix = function iOSfix() {
+  var iOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (iOS && !hasClass(document.body, swalClasses.iosfix)) {
+    var offset = document.body.scrollTop;
+    document.body.style.top = offset * -1 + 'px';
+    addClass(document.body, swalClasses.iosfix);
+  }
+};
+
+var undoIOSfix = function undoIOSfix() {
+  if (hasClass(document.body, swalClasses.iosfix)) {
+    var offset = parseInt(document.body.style.top, 10);
+    removeClass(document.body, swalClasses.iosfix);
+    document.body.style.top = '';
+    document.body.scrollTop = offset * -1;
+  }
+};
+
+var globalState = {};
+
+// Restore previous active (focused) element
+var restoreActiveElement = function restoreActiveElement() {
+  if (globalState.previousActiveElement && globalState.previousActiveElement.focus) {
+    var previousActiveElement = globalState.previousActiveElement;
+    globalState.previousActiveElement = null;
+    var x = window.scrollX;
+    var y = window.scrollY;
+    setTimeout(function () {
+      previousActiveElement.focus && previousActiveElement.focus();
+    }, 100); // issues/900
+    if (typeof x !== 'undefined' && typeof y !== 'undefined') {
+      // IE doesn't have scrollX/scrollY support
+      window.scrollTo(x, y);
+    }
+  }
+};
+
+/*
+ * Global function to close sweetAlert
+ */
+var close = function close(onClose, onAfterClose) {
+  var container = getContainer();
+  var popup = getPopup();
+  if (!popup) {
+    return;
+  }
+
+  if (onClose !== null && typeof onClose === 'function') {
+    onClose(popup);
+  }
+
+  removeClass(popup, swalClasses.show);
+  addClass(popup, swalClasses.hide);
+
+  var removePopupAndResetState = function removePopupAndResetState() {
+    if (!isToast()) {
+      restoreActiveElement();
+      window.removeEventListener('keydown', globalState.keydownHandler, { capture: true });
+      globalState.keydownHandlerAdded = false;
+    }
+
+    if (container.parentNode) {
+      container.parentNode.removeChild(container);
+    }
+    removeClass([document.documentElement, document.body], [swalClasses.shown, swalClasses['height-auto'], swalClasses['no-backdrop'], swalClasses['has-input'], swalClasses['toast-shown']]);
+
+    if (isModal()) {
+      undoScrollbar();
+      undoIOSfix();
+    }
+
+    if (onAfterClose !== null && typeof onAfterClose === 'function') {
+      setTimeout(function () {
+        onAfterClose();
+      });
+    }
+  };
+
+  // If animation is supported, animate
+  if (animationEndEvent && !hasClass(popup, swalClasses.noanimation)) {
+    popup.addEventListener(animationEndEvent, function swalCloseEventFinished() {
+      popup.removeEventListener(animationEndEvent, swalCloseEventFinished);
+      if (hasClass(popup, swalClasses.hide)) {
+        removePopupAndResetState();
+      }
+    });
+  } else {
+    // Otherwise, remove immediately
+    removePopupAndResetState();
+  }
+};
+
+/*
+ * Global function to determine if swal2 popup is shown
+ */
+var isVisible$1 = function isVisible() {
+  return !!getPopup();
+};
+
+/*
+ * Global function to click 'Confirm' button
+ */
+var clickConfirm = function clickConfirm() {
+  return getConfirmButton().click();
+};
+
+/*
+ * Global function to click 'Cancel' button
+ */
+var clickCancel = function clickCancel() {
+  return getCancelButton().click();
+};
+
+/**
+ * Extends a Swal class making it able to be instantiated without the `new` keyword (and thus without `Swal.fire`)
+ * @param ParentSwal
+ * @returns {NoNewKeywordSwal}
+ */
+function withNoNewKeyword(ParentSwal) {
+  var NoNewKeywordSwal = function NoNewKeywordSwal() {
+    for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+      args[_key] = arguments[_key];
+    }
+
+    if (!(this instanceof NoNewKeywordSwal)) {
+      return new (Function.prototype.bind.apply(NoNewKeywordSwal, [null].concat(args)))();
+    }
+    Object.getPrototypeOf(NoNewKeywordSwal).apply(this, args);
+  };
+  NoNewKeywordSwal.prototype = _extends(Object.create(ParentSwal.prototype), { constructor: NoNewKeywordSwal });
+
+  if (typeof Object.setPrototypeOf === 'function') {
+    Object.setPrototypeOf(NoNewKeywordSwal, ParentSwal);
+  } else {
+    // Android 4.4
+    // eslint-disable-next-line
+    NoNewKeywordSwal.__proto__ = ParentSwal;
+  }
+  return NoNewKeywordSwal;
+}
+
+var defaultParams = {
+  title: '',
+  titleText: '',
+  text: '',
+  html: '',
+  footer: '',
+  type: null,
+  toast: false,
+  customClass: '',
+  target: 'body',
+  backdrop: true,
+  animation: true,
+  heightAuto: true,
+  allowOutsideClick: true,
+  allowEscapeKey: true,
+  allowEnterKey: true,
+  showConfirmButton: true,
+  showCancelButton: false,
+  preConfirm: null,
+  confirmButtonText: 'OK',
+  confirmButtonAriaLabel: '',
+  confirmButtonColor: null,
+  confirmButtonClass: null,
+  cancelButtonText: 'Cancel',
+  cancelButtonAriaLabel: '',
+  cancelButtonColor: null,
+  cancelButtonClass: null,
+  buttonsStyling: true,
+  reverseButtons: false,
+  focusConfirm: true,
+  focusCancel: false,
+  showCloseButton: false,
+  closeButtonAriaLabel: 'Close this dialog',
+  showLoaderOnConfirm: false,
+  imageUrl: null,
+  imageWidth: null,
+  imageHeight: null,
+  imageAlt: '',
+  imageClass: null,
+  timer: null,
+  width: null,
+  padding: null,
+  background: null,
+  input: null,
+  inputPlaceholder: '',
+  inputValue: '',
+  inputOptions: {},
+  inputAutoTrim: true,
+  inputClass: null,
+  inputAttributes: {},
+  inputValidator: null,
+  grow: false,
+  position: 'center',
+  progressSteps: [],
+  currentProgressStep: null,
+  progressStepsDistance: null,
+  onBeforeOpen: null,
+  onAfterClose: null,
+  onOpen: null,
+  onClose: null,
+  useRejections: false,
+  expectRejections: false
+};
+
+var deprecatedParams = ['useRejections', 'expectRejections'];
+
+/**
+ * Is valid parameter
+ * @param {String} paramName
+ */
+var isValidParameter = function isValidParameter(paramName) {
+  return defaultParams.hasOwnProperty(paramName) || paramName === 'extraParams';
+};
+
+/**
+ * Is deprecated parameter
+ * @param {String} paramName
+ */
+var isDeprecatedParameter = function isDeprecatedParameter(paramName) {
+  return deprecatedParams.indexOf(paramName) !== -1;
+};
+
+/**
+ * Show relevant warnings for given params
+ *
+ * @param params
+ */
+var showWarningsForParams = function showWarningsForParams(params) {
+  for (var param in params) {
+    if (!isValidParameter(param)) {
+      warn('Unknown parameter "' + param + '"');
+    }
+    if (isDeprecatedParameter(param)) {
+      warnOnce('The parameter "' + param + '" is deprecated and will be removed in the next major release.');
+    }
+  }
+};
+
+var deprecationWarning = '"setDefaults" & "resetDefaults" methods are deprecated in favor of "mixin" method and will be removed in the next major release. For new projects, use "mixin". For past projects already using "setDefaults", support will be provided through an additional package.';
+var defaults$1 = {};
+
+function withGlobalDefaults(ParentSwal) {
+  var SwalWithGlobalDefaults = function (_ParentSwal) {
+    inherits(SwalWithGlobalDefaults, _ParentSwal);
+
+    function SwalWithGlobalDefaults() {
+      classCallCheck(this, SwalWithGlobalDefaults);
+      return possibleConstructorReturn(this, (SwalWithGlobalDefaults.__proto__ || Object.getPrototypeOf(SwalWithGlobalDefaults)).apply(this, arguments));
+    }
+
+    createClass(SwalWithGlobalDefaults, [{
+      key: '_main',
+      value: function _main(params) {
+        return get(SwalWithGlobalDefaults.prototype.__proto__ || Object.getPrototypeOf(SwalWithGlobalDefaults.prototype), '_main', this).call(this, _extends({}, defaults$1, params));
+      }
+    }], [{
+      key: 'setDefaults',
+      value: function setDefaults(params) {
+        warnOnce(deprecationWarning);
+        if (!params || (typeof params === 'undefined' ? 'undefined' : _typeof(params)) !== 'object') {
+          throw new TypeError('SweetAlert2: The argument for setDefaults() is required and has to be a object');
+        }
+        showWarningsForParams(params);
+        // assign valid params from `params` to `defaults`
+        Object.keys(params).forEach(function (param) {
+          if (ParentSwal.isValidParameter(param)) {
+            defaults$1[param] = params[param];
+          }
+        });
+      }
+    }, {
+      key: 'resetDefaults',
+      value: function resetDefaults() {
+        warnOnce(deprecationWarning);
+        defaults$1 = {};
+      }
+    }]);
+    return SwalWithGlobalDefaults;
+  }(ParentSwal);
+
+  // Set default params if `window._swalDefaults` is an object
+
+
+  if (typeof window !== 'undefined' && _typeof(window._swalDefaults) === 'object') {
+    SwalWithGlobalDefaults.setDefaults(window._swalDefaults);
+  }
+
+  return SwalWithGlobalDefaults;
+}
+
+/**
+ * Returns an extended version of `Swal` containing `params` as defaults.
+ * Useful for reusing Swal configuration.
+ *
+ * For example:
+ *
+ * Before:
+ * const textPromptOptions = { input: 'text', showCancelButton: true }
+ * const {value: firstName} = await Swal({ ...textPromptOptions, title: 'What is your first name?' })
+ * const {value: lastName} = await Swal({ ...textPromptOptions, title: 'What is your last name?' })
+ *
+ * After:
+ * const TextPrompt = Swal.mixin({ input: 'text', showCancelButton: true })
+ * const {value: firstName} = await TextPrompt('What is your first name?')
+ * const {value: lastName} = await TextPrompt('What is your last name?')
+ *
+ * @param mixinParams
+ */
+function mixin(mixinParams) {
+  var Swal = this;
+  return withNoNewKeyword(function (_Swal) {
+    inherits(MixinSwal, _Swal);
+
+    function MixinSwal() {
+      classCallCheck(this, MixinSwal);
+      return possibleConstructorReturn(this, (MixinSwal.__proto__ || Object.getPrototypeOf(MixinSwal)).apply(this, arguments));
+    }
+
+    createClass(MixinSwal, [{
+      key: '_main',
+      value: function _main(params) {
+        return get(MixinSwal.prototype.__proto__ || Object.getPrototypeOf(MixinSwal.prototype), '_main', this).call(this, _extends({}, mixinParams, params));
+      }
+    }]);
+    return MixinSwal;
+  }(Swal));
+}
+
+// private global state for the queue feature
+var currentSteps = [];
+
+/*
+ * Global function for chaining sweetAlert popups
+ */
+var queue = function queue(steps) {
+  var swal = this;
+  currentSteps = steps;
+  var resetQueue = function resetQueue() {
+    currentSteps = [];
+    document.body.removeAttribute('data-swal2-queue-step');
+  };
+  var queueResult = [];
+  return new Promise(function (resolve, reject) {
+    (function step(i, callback) {
+      if (i < currentSteps.length) {
+        document.body.setAttribute('data-swal2-queue-step', i);
+
+        swal(currentSteps[i]).then(function (result) {
+          if (typeof result.value !== 'undefined') {
+            queueResult.push(result.value);
+            step(i + 1, callback);
+          } else {
+            resetQueue();
+            resolve({ dismiss: result.dismiss });
+          }
+        });
+      } else {
+        resetQueue();
+        resolve({ value: queueResult });
+      }
+    })(0);
+  });
+};
+
+/*
+ * Global function for getting the index of current popup in queue
+ */
+var getQueueStep = function getQueueStep() {
+  return document.body.getAttribute('data-swal2-queue-step');
+};
+
+/*
+ * Global function for inserting a popup to the queue
+ */
+var insertQueueStep = function insertQueueStep(step, index) {
+  if (index && index < currentSteps.length) {
+    return currentSteps.splice(index, 0, step);
+  }
+  return currentSteps.push(step);
+};
+
+/*
+ * Global function for deleting a popup from the queue
+ */
+var deleteQueueStep = function deleteQueueStep(index) {
+  if (typeof currentSteps[index] !== 'undefined') {
+    currentSteps.splice(index, 1);
+  }
+};
+
+/**
+ * Show spinner instead of Confirm button and disable Cancel button
+ */
+var showLoading = function showLoading() {
+  var popup = getPopup();
+  if (!popup) {
+    Swal('');
+  }
+  popup = getPopup();
+  var actions = getActions();
+  var confirmButton = getConfirmButton();
+  var cancelButton = getCancelButton();
+
+  show(actions);
+  show(confirmButton);
+  addClass([popup, actions], swalClasses.loading);
+  confirmButton.disabled = true;
+  cancelButton.disabled = true;
+
+  popup.setAttribute('data-loading', true);
+  popup.setAttribute('aria-busy', true);
+  popup.focus();
+};
+
+function fire() {
+  var Swal = this;
+
+  for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+    args[_key] = arguments[_key];
+  }
+
+  return new (Function.prototype.bind.apply(Swal, [null].concat(args)))();
+}
+
+
+
+var staticMethods = Object.freeze({
+	isValidParameter: isValidParameter,
+	isDeprecatedParameter: isDeprecatedParameter,
+	argsToParams: argsToParams,
+	adaptInputValidator: adaptInputValidator,
+	close: close,
+	closePopup: close,
+	closeModal: close,
+	closeToast: close,
+	isVisible: isVisible$1,
+	clickConfirm: clickConfirm,
+	clickCancel: clickCancel,
+	getPopup: getPopup,
+	getTitle: getTitle,
+	getContent: getContent,
+	getImage: getImage,
+	getButtonsWrapper: getButtonsWrapper,
+	getActions: getActions,
+	getConfirmButton: getConfirmButton,
+	getCancelButton: getCancelButton,
+	getFooter: getFooter,
+	isLoading: isLoading,
+	mixin: mixin,
+	queue: queue,
+	getQueueStep: getQueueStep,
+	insertQueueStep: insertQueueStep,
+	deleteQueueStep: deleteQueueStep,
+	showLoading: showLoading,
+	enableLoading: showLoading,
+	fire: fire
+});
+
+/**
+ * This module containts `WeakMap`s for each effectively-"private  property" that a `swal` has.
+ * For example, to set the private property "foo" of `this` to "bar", you can `privateProps.foo.set(this, 'bar')`
+ * This is the approach that Babel will probably take to implement private methods/fields
+ *   https://github.com/tc39/proposal-private-methods
+ *   https://github.com/babel/babel/pull/7555
+ * Once we have the changes from that PR in Babel, and our core class fits reasonable in *one module*
+ *   then we can use that language feature.
+ */
+
+// WeakMap polyfill, needed for Android 4.4
+// Related issue: https://github.com/sweetalert2/sweetalert2/issues/1071
+if (typeof window !== 'undefined' && typeof window.WeakMap !== 'function') {
+  // https://github.com/Riim/symbol-polyfill/blob/master/index.js
+  var idCounter = 0;
+  window.Symbol = function _Symbol(key) {
+    return '__' + key + '_' + Math.floor(Math.random() * 1e9) + '_' + ++idCounter + '__';
+  };
+  Symbol.iterator = Symbol('Symbol.iterator');
+
+  // http://webreflection.blogspot.fi/2015/04/a-weakmap-polyfill-in-20-lines-of-code.html
+  window.WeakMap = function (s, dP, hOP) {
+    function WeakMap() {
+      dP(this, s, { value: Symbol('WeakMap') });
+    }
+    WeakMap.prototype = {
+      'delete': function del(o) {
+        delete o[this[s]];
+      },
+      get: function get(o) {
+        return o[this[s]];
+      },
+      has: function has(o) {
+        return hOP.call(o, this[s]);
+      },
+      set: function set(o, v) {
+        dP(o, this[s], { configurable: true, value: v });
+      }
+    };
+    return WeakMap;
+  }(Symbol('WeakMap'), Object.defineProperty, {}.hasOwnProperty);
+}
+
+var privateProps = {
+  promise: new WeakMap(),
+  innerParams: new WeakMap(),
+  domCache: new WeakMap()
+};
+
+/**
+ * Show spinner instead of Confirm button and disable Cancel button
+ */
+function hideLoading() {
+  var innerParams = privateProps.innerParams.get(this);
+  var domCache = privateProps.domCache.get(this);
+  if (!innerParams.showConfirmButton) {
+    hide(domCache.confirmButton);
+    if (!innerParams.showCancelButton) {
+      hide(domCache.actions);
+    }
+  }
+  removeClass([domCache.popup, domCache.actions], swalClasses.loading);
+  domCache.popup.removeAttribute('aria-busy');
+  domCache.popup.removeAttribute('data-loading');
+  domCache.confirmButton.disabled = false;
+  domCache.cancelButton.disabled = false;
+}
+
+// Get input element by specified type or, if type isn't specified, by params.input
+function getInput(inputType) {
+  var innerParams = privateProps.innerParams.get(this);
+  var domCache = privateProps.domCache.get(this);
+  inputType = inputType || innerParams.input;
+  if (!inputType) {
+    return null;
+  }
+  switch (inputType) {
+    case 'select':
+    case 'textarea':
+    case 'file':
+      return getChildByClass(domCache.content, swalClasses[inputType]);
+    case 'checkbox':
+      return domCache.popup.querySelector('.' + swalClasses.checkbox + ' input');
+    case 'radio':
+      return domCache.popup.querySelector('.' + swalClasses.radio + ' input:checked') || domCache.popup.querySelector('.' + swalClasses.radio + ' input:first-child');
+    case 'range':
+      return domCache.popup.querySelector('.' + swalClasses.range + ' input');
+    default:
+      return getChildByClass(domCache.content, swalClasses.input);
+  }
+}
+
+function enableButtons() {
+  var domCache = privateProps.domCache.get(this);
+  domCache.confirmButton.disabled = false;
+  domCache.cancelButton.disabled = false;
+}
+
+function disableButtons() {
+  var domCache = privateProps.domCache.get(this);
+  domCache.confirmButton.disabled = true;
+  domCache.cancelButton.disabled = true;
+}
+
+function enableConfirmButton() {
+  var domCache = privateProps.domCache.get(this);
+  domCache.confirmButton.disabled = false;
+}
+
+function disableConfirmButton() {
+  var domCache = privateProps.domCache.get(this);
+  domCache.confirmButton.disabled = true;
+}
+
+function enableInput() {
+  var input = this.getInput();
+  if (!input) {
+    return false;
+  }
+  if (input.type === 'radio') {
+    var radiosContainer = input.parentNode.parentNode;
+    var radios = radiosContainer.querySelectorAll('input');
+    for (var i = 0; i < radios.length; i++) {
+      radios[i].disabled = false;
+    }
+  } else {
+    input.disabled = false;
+  }
+}
+
+function disableInput() {
+  var input = this.getInput();
+  if (!input) {
+    return false;
+  }
+  if (input && input.type === 'radio') {
+    var radiosContainer = input.parentNode.parentNode;
+    var radios = radiosContainer.querySelectorAll('input');
+    for (var i = 0; i < radios.length; i++) {
+      radios[i].disabled = true;
+    }
+  } else {
+    input.disabled = true;
+  }
+}
+
+// Show block with validation error
+function showValidationError(error) {
+  var domCache = privateProps.domCache.get(this);
+  domCache.validationError.innerHTML = error;
+  var popupComputedStyle = window.getComputedStyle(domCache.popup);
+  domCache.validationError.style.marginLeft = '-' + popupComputedStyle.getPropertyValue('padding-left');
+  domCache.validationError.style.marginRight = '-' + popupComputedStyle.getPropertyValue('padding-right');
+  show(domCache.validationError);
+
+  var input = this.getInput();
+  if (input) {
+    input.setAttribute('aria-invalid', true);
+    input.setAttribute('aria-describedBy', swalClasses.validationerror);
+    focusInput(input);
+    addClass(input, swalClasses.inputerror);
+  }
+}
+
+// Hide block with validation error
+function resetValidationError() {
+  var domCache = privateProps.domCache.get(this);
+  if (domCache.validationError) {
+    hide(domCache.validationError);
+  }
+
+  var input = this.getInput();
+  if (input) {
+    input.removeAttribute('aria-invalid');
+    input.removeAttribute('aria-describedBy');
+    removeClass(input, swalClasses.inputerror);
+  }
+}
+
+var defaultInputValidators = {
+  email: function email(string, extraParams) {
+    return (/^[a-zA-Z0-9.+_-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9-]{2,24}$/.test(string) ? Promise.resolve() : Promise.reject(extraParams && extraParams.validationMessage ? extraParams.validationMessage : 'Invalid email address')
+    );
+  },
+  url: function url(string, extraParams) {
+    // taken from https://stackoverflow.com/a/3809435/1331425
+    return (/^https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_+.~#?&//=]*)$/.test(string) ? Promise.resolve() : Promise.reject(extraParams && extraParams.validationMessage ? extraParams.validationMessage : 'Invalid URL')
+    );
+  }
+};
+
+/**
+ * Set type, text and actions on popup
+ *
+ * @param params
+ * @returns {boolean}
+ */
+function setParameters(params) {
+  // Use default `inputValidator` for supported input types if not provided
+  if (!params.inputValidator) {
+    Object.keys(defaultInputValidators).forEach(function (key) {
+      if (params.input === key) {
+        params.inputValidator = params.expectRejections ? defaultInputValidators[key] : Swal.adaptInputValidator(defaultInputValidators[key]);
+      }
+    });
+  }
+
+  // Determine if the custom target element is valid
+  if (!params.target || typeof params.target === 'string' && !document.querySelector(params.target) || typeof params.target !== 'string' && !params.target.appendChild) {
+    warn('Target parameter is not valid, defaulting to "body"');
+    params.target = 'body';
+  }
+
+  var popup = void 0;
+  var oldPopup = getPopup();
+  var targetElement = typeof params.target === 'string' ? document.querySelector(params.target) : params.target;
+  // If the model target has changed, refresh the popup
+  if (oldPopup && targetElement && oldPopup.parentNode !== targetElement.parentNode) {
+    popup = init(params);
+  } else {
+    popup = oldPopup || init(params);
+  }
+
+  // Set popup width
+  if (params.width) {
+    popup.style.width = typeof params.width === 'number' ? params.width + 'px' : params.width;
+  }
+
+  // Set popup padding
+  if (params.padding) {
+    popup.style.padding = typeof params.padding === 'number' ? params.padding + 'px' : params.padding;
+  }
+
+  // Set popup background
+  if (params.background) {
+    popup.style.background = params.background;
+  }
+  var popupBackgroundColor = window.getComputedStyle(popup).getPropertyValue('background-color');
+  var successIconParts = popup.querySelectorAll('[class^=swal2-success-circular-line], .swal2-success-fix');
+  for (var i = 0; i < successIconParts.length; i++) {
+    successIconParts[i].style.backgroundColor = popupBackgroundColor;
+  }
+
+  var container = getContainer();
+  var title = getTitle();
+  var content = getContent().querySelector('#' + swalClasses.content);
+  var actions = getActions();
+  var confirmButton = getConfirmButton();
+  var cancelButton = getCancelButton();
+  var closeButton = getCloseButton();
+  var footer = getFooter();
+
+  // Title
+  if (params.titleText) {
+    title.innerText = params.titleText;
+  } else if (params.title) {
+    title.innerHTML = params.title.split('\n').join('<br />');
+  }
+
+  if (typeof params.backdrop === 'string') {
+    getContainer().style.background = params.backdrop;
+  } else if (!params.backdrop) {
+    addClass([document.documentElement, document.body], swalClasses['no-backdrop']);
+  }
+
+  // Content as HTML
+  if (params.html) {
+    parseHtmlToContainer(params.html, content);
+
+    // Content as plain text
+  } else if (params.text) {
+    content.textContent = params.text;
+    show(content);
+  } else {
+    hide(content);
+  }
+
+  // Position
+  if (params.position in swalClasses) {
+    addClass(container, swalClasses[params.position]);
+  } else {
+    warn('The "position" parameter is not valid, defaulting to "center"');
+    addClass(container, swalClasses.center);
+  }
+
+  // Grow
+  if (params.grow && typeof params.grow === 'string') {
+    var growClass = 'grow-' + params.grow;
+    if (growClass in swalClasses) {
+      addClass(container, swalClasses[growClass]);
+    }
+  }
+
+  // Animation
+  if (typeof params.animation === 'function') {
+    params.animation = params.animation.call();
+  }
+
+  // Close button
+  if (params.showCloseButton) {
+    closeButton.setAttribute('aria-label', params.closeButtonAriaLabel);
+    show(closeButton);
+  } else {
+    hide(closeButton);
+  }
+
+  // Default Class
+  popup.className = swalClasses.popup;
+  if (params.toast) {
+    addClass([document.documentElement, document.body], swalClasses['toast-shown']);
+    addClass(popup, swalClasses.toast);
+  } else {
+    addClass(popup, swalClasses.modal);
+  }
+
+  // Custom Class
+  if (params.customClass) {
+    addClass(popup, params.customClass);
+  }
+
+  // Progress steps
+  var progressStepsContainer = getProgressSteps();
+  var currentProgressStep = parseInt(params.currentProgressStep === null ? Swal.getQueueStep() : params.currentProgressStep, 10);
+  if (params.progressSteps && params.progressSteps.length) {
+    show(progressStepsContainer);
+    empty(progressStepsContainer);
+    if (currentProgressStep >= params.progressSteps.length) {
+      warn('Invalid currentProgressStep parameter, it should be less than progressSteps.length ' + '(currentProgressStep like JS arrays starts from 0)');
+    }
+    params.progressSteps.forEach(function (step, index) {
+      var circle = document.createElement('li');
+      addClass(circle, swalClasses.progresscircle);
+      circle.innerHTML = step;
+      if (index === currentProgressStep) {
+        addClass(circle, swalClasses.activeprogressstep);
+      }
+      progressStepsContainer.appendChild(circle);
+      if (index !== params.progressSteps.length - 1) {
+        var line = document.createElement('li');
+        addClass(line, swalClasses.progressline);
+        if (params.progressStepsDistance) {
+          line.style.width = params.progressStepsDistance;
+        }
+        progressStepsContainer.appendChild(line);
+      }
+    });
+  } else {
+    hide(progressStepsContainer);
+  }
+
+  // Icon
+  var icons = getIcons();
+  for (var _i = 0; _i < icons.length; _i++) {
+    hide(icons[_i]);
+  }
+  if (params.type) {
+    var validType = false;
+    for (var iconType in iconTypes) {
+      if (params.type === iconType) {
+        validType = true;
+        break;
+      }
+    }
+    if (!validType) {
+      error('Unknown alert type: ' + params.type);
+      return false;
+    }
+    var icon = popup.querySelector('.' + swalClasses.icon + '.' + iconTypes[params.type]);
+    show(icon);
+
+    // Animate icon
+    if (params.animation) {
+      addClass(icon, 'swal2-animate-' + params.type + '-icon');
+    }
+  }
+
+  // Custom image
+  var image = getImage();
+  if (params.imageUrl) {
+    image.setAttribute('src', params.imageUrl);
+    image.setAttribute('alt', params.imageAlt);
+    show(image);
+
+    if (params.imageWidth) {
+      image.setAttribute('width', params.imageWidth);
+    } else {
+      image.removeAttribute('width');
+    }
+
+    if (params.imageHeight) {
+      image.setAttribute('height', params.imageHeight);
+    } else {
+      image.removeAttribute('height');
+    }
+
+    image.className = swalClasses.image;
+    if (params.imageClass) {
+      addClass(image, params.imageClass);
+    }
+  } else {
+    hide(image);
+  }
+
+  // Cancel button
+  if (params.showCancelButton) {
+    cancelButton.style.display = 'inline-block';
+  } else {
+    hide(cancelButton);
+  }
+
+  // Confirm button
+  if (params.showConfirmButton) {
+    removeStyleProperty(confirmButton, 'display');
+  } else {
+    hide(confirmButton);
+  }
+
+  // Actions (buttons) wrapper
+  if (!params.showConfirmButton && !params.showCancelButton) {
+    hide(actions);
+  } else {
+    show(actions);
+  }
+
+  // Edit text on confirm and cancel buttons
+  confirmButton.innerHTML = params.confirmButtonText;
+  cancelButton.innerHTML = params.cancelButtonText;
+
+  // ARIA labels for confirm and cancel buttons
+  confirmButton.setAttribute('aria-label', params.confirmButtonAriaLabel);
+  cancelButton.setAttribute('aria-label', params.cancelButtonAriaLabel);
+
+  // Add buttons custom classes
+  confirmButton.className = swalClasses.confirm;
+  addClass(confirmButton, params.confirmButtonClass);
+  cancelButton.className = swalClasses.cancel;
+  addClass(cancelButton, params.cancelButtonClass);
+
+  // Buttons styling
+  if (params.buttonsStyling) {
+    addClass([confirmButton, cancelButton], swalClasses.styled);
+
+    // Buttons background colors
+    if (params.confirmButtonColor) {
+      confirmButton.style.backgroundColor = params.confirmButtonColor;
+    }
+    if (params.cancelButtonColor) {
+      cancelButton.style.backgroundColor = params.cancelButtonColor;
+    }
+
+    // Loading state
+    var confirmButtonBackgroundColor = window.getComputedStyle(confirmButton).getPropertyValue('background-color');
+    confirmButton.style.borderLeftColor = confirmButtonBackgroundColor;
+    confirmButton.style.borderRightColor = confirmButtonBackgroundColor;
+  } else {
+    removeClass([confirmButton, cancelButton], swalClasses.styled);
+
+    confirmButton.style.backgroundColor = confirmButton.style.borderLeftColor = confirmButton.style.borderRightColor = '';
+    cancelButton.style.backgroundColor = cancelButton.style.borderLeftColor = cancelButton.style.borderRightColor = '';
+  }
+
+  // Footer
+  parseHtmlToContainer(params.footer, footer);
+
+  // CSS animation
+  if (params.animation === true) {
+    removeClass(popup, swalClasses.noanimation);
+  } else {
+    addClass(popup, swalClasses.noanimation);
+  }
+
+  // showLoaderOnConfirm && preConfirm
+  if (params.showLoaderOnConfirm && !params.preConfirm) {
+    warn('showLoaderOnConfirm is set to true, but preConfirm is not defined.\n' + 'showLoaderOnConfirm should be used together with preConfirm, see usage example:\n' + 'https://sweetalert2.github.io/#ajax-request');
+  }
+}
+
+/**
+ * Open popup, add necessary classes and styles, fix scrollbar
+ *
+ * @param {Array} params
+ */
+var openPopup = function openPopup(params) {
+  var container = getContainer();
+  var popup = getPopup();
+
+  if (params.onBeforeOpen !== null && typeof params.onBeforeOpen === 'function') {
+    params.onBeforeOpen(popup);
+  }
+
+  if (params.animation) {
+    addClass(popup, swalClasses.show);
+    addClass(container, swalClasses.fade);
+    removeClass(popup, swalClasses.hide);
+  } else {
+    removeClass(popup, swalClasses.fade);
+  }
+  show(popup);
+
+  // scrolling is 'hidden' until animation is done, after that 'auto'
+  container.style.overflowY = 'hidden';
+  if (animationEndEvent && !hasClass(popup, swalClasses.noanimation)) {
+    popup.addEventListener(animationEndEvent, function swalCloseEventFinished() {
+      popup.removeEventListener(animationEndEvent, swalCloseEventFinished);
+      container.style.overflowY = 'auto';
+    });
+  } else {
+    container.style.overflowY = 'auto';
+  }
+
+  addClass([document.documentElement, document.body, container], swalClasses.shown);
+  if (params.heightAuto && params.backdrop && !params.toast) {
+    addClass([document.documentElement, document.body], swalClasses['height-auto']);
+  }
+
+  if (isModal()) {
+    fixScrollbar();
+    iOSfix();
+  }
+  if (!globalState.previousActiveElement) {
+    globalState.previousActiveElement = document.activeElement;
+  }
+  if (params.onOpen !== null && typeof params.onOpen === 'function') {
+    setTimeout(function () {
+      params.onOpen(popup);
+    });
+  }
+};
+
+function _main(userParams) {
+  var _this = this;
+
+  showWarningsForParams(userParams);
+
+  var innerParams = _extends({}, defaultParams, userParams);
+  setParameters(innerParams);
+  Object.freeze(innerParams);
+  privateProps.innerParams.set(this, innerParams);
+
+  // clear the previous timer
+  clearTimeout(globalState.timeout);
+
+  var domCache = {
+    popup: getPopup(),
+    container: getContainer(),
+    content: getContent(),
+    actions: getActions(),
+    confirmButton: getConfirmButton(),
+    cancelButton: getCancelButton(),
+    closeButton: getCloseButton(),
+    validationError: getValidationError(),
+    progressSteps: getProgressSteps()
+  };
+  privateProps.domCache.set(this, domCache);
+
+  var constructor = this.constructor;
+
+  return new Promise(function (resolve, reject) {
+    // functions to handle all resolving/rejecting/settling
+    var succeedWith = function succeedWith(value) {
+      constructor.closePopup(innerParams.onClose, innerParams.onAfterClose); // TODO: make closePopup an *instance* method
+      if (innerParams.useRejections) {
+        resolve(value);
+      } else {
+        resolve({ value: value });
+      }
+    };
+    var dismissWith = function dismissWith(dismiss) {
+      constructor.closePopup(innerParams.onClose, innerParams.onAfterClose);
+      if (innerParams.useRejections) {
+        reject(dismiss);
+      } else {
+        resolve({ dismiss: dismiss });
+      }
+    };
+    var errorWith = function errorWith(error$$1) {
+      constructor.closePopup(innerParams.onClose, innerParams.onAfterClose);
+      reject(error$$1);
+    };
+
+    // Close on timer
+    if (innerParams.timer) {
+      globalState.timeout = setTimeout(function () {
+        return dismissWith('timer');
+      }, innerParams.timer);
+    }
+
+    // Get the value of the popup input
+    var getInputValue = function getInputValue() {
+      var input = _this.getInput();
+      if (!input) {
+        return null;
+      }
+      switch (innerParams.input) {
+        case 'checkbox':
+          return input.checked ? 1 : 0;
+        case 'radio':
+          return input.checked ? input.value : null;
+        case 'file':
+          return input.files.length ? input.files[0] : null;
+        default:
+          return innerParams.inputAutoTrim ? input.value.trim() : input.value;
+      }
+    };
+
+    // input autofocus
+    if (innerParams.input) {
+      setTimeout(function () {
+        var input = _this.getInput();
+        if (input) {
+          focusInput(input);
+        }
+      }, 0);
+    }
+
+    var confirm = function confirm(value) {
+      if (innerParams.showLoaderOnConfirm) {
+        constructor.showLoading(); // TODO: make showLoading an *instance* method
+      }
+
+      if (innerParams.preConfirm) {
+        _this.resetValidationError();
+        var preConfirmPromise = Promise.resolve().then(function () {
+          return innerParams.preConfirm(value, innerParams.extraParams);
+        });
+        if (innerParams.expectRejections) {
+          preConfirmPromise.then(function (preConfirmValue) {
+            return succeedWith(preConfirmValue || value);
+          }, function (validationError) {
+            _this.hideLoading();
+            if (validationError) {
+              _this.showValidationError(validationError);
+            }
+          });
+        } else {
+          preConfirmPromise.then(function (preConfirmValue) {
+            if (isVisible(domCache.validationError) || preConfirmValue === false) {
+              _this.hideLoading();
+            } else {
+              succeedWith(preConfirmValue || value);
+            }
+          }, function (error$$1) {
+            return errorWith(error$$1);
+          });
+        }
+      } else {
+        succeedWith(value);
+      }
+    };
+
+    // Mouse interactions
+    var onButtonEvent = function onButtonEvent(event) {
+      var e = event || window.event;
+      var target = e.target || e.srcElement;
+      var confirmButton = domCache.confirmButton,
+          cancelButton = domCache.cancelButton;
+
+      var targetedConfirm = confirmButton && (confirmButton === target || confirmButton.contains(target));
+      var targetedCancel = cancelButton && (cancelButton === target || cancelButton.contains(target));
+
+      switch (e.type) {
+        case 'click':
+          // Clicked 'confirm'
+          if (targetedConfirm && constructor.isVisible()) {
+            _this.disableButtons();
+            if (innerParams.input) {
+              var inputValue = getInputValue();
+
+              if (innerParams.inputValidator) {
+                _this.disableInput();
+                var validationPromise = Promise.resolve().then(function () {
+                  return innerParams.inputValidator(inputValue, innerParams.extraParams);
+                });
+                if (innerParams.expectRejections) {
+                  validationPromise.then(function () {
+                    _this.enableButtons();
+                    _this.enableInput();
+                    confirm(inputValue);
+                  }, function (validationError) {
+                    _this.enableButtons();
+                    _this.enableInput();
+                    if (validationError) {
+                      _this.showValidationError(validationError);
+                    }
+                  });
+                } else {
+                  validationPromise.then(function (validationError) {
+                    _this.enableButtons();
+                    _this.enableInput();
+                    if (validationError) {
+                      _this.showValidationError(validationError);
+                    } else {
+                      confirm(inputValue);
+                    }
+                  }, function (error$$1) {
+                    return errorWith(error$$1);
+                  });
+                }
+              } else {
+                confirm(inputValue);
+              }
+            } else {
+              confirm(true);
+            }
+
+            // Clicked 'cancel'
+          } else if (targetedCancel && constructor.isVisible()) {
+            _this.disableButtons();
+            dismissWith(constructor.DismissReason.cancel);
+          }
+          break;
+        default:
+      }
+    };
+
+    var buttons = domCache.popup.querySelectorAll('button');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].onclick = onButtonEvent;
+      buttons[i].onmouseover = onButtonEvent;
+      buttons[i].onmouseout = onButtonEvent;
+      buttons[i].onmousedown = onButtonEvent;
+    }
+
+    // Closing popup by close button
+    domCache.closeButton.onclick = function () {
+      dismissWith(constructor.DismissReason.close);
+    };
+
+    if (innerParams.toast) {
+      // Closing popup by internal click
+      domCache.popup.onclick = function (e) {
+        if (innerParams.showConfirmButton || innerParams.showCancelButton || innerParams.showCloseButton || innerParams.input) {
+          return;
+        }
+        constructor.closePopup(innerParams.onClose, innerParams.onAfterClose);
+        dismissWith(constructor.DismissReason.close);
+      };
+    } else {
+      var ignoreOutsideClick = false;
+
+      // Ignore click events that had mousedown on the popup but mouseup on the container
+      // This can happen when the user drags a slider
+      domCache.popup.onmousedown = function () {
+        domCache.container.onmouseup = function (e) {
+          domCache.container.onmouseup = undefined;
+          // We only check if the mouseup target is the container because usually it doesn't
+          // have any other direct children aside of the popup
+          if (e.target === domCache.container) {
+            ignoreOutsideClick = true;
+          }
+        };
+      };
+
+      // Ignore click events that had mousedown on the container but mouseup on the popup
+      domCache.container.onmousedown = function () {
+        domCache.popup.onmouseup = function (e) {
+          domCache.popup.onmouseup = undefined;
+          // We also need to check if the mouseup target is a child of the popup
+          if (e.target === domCache.popup || domCache.popup.contains(e.target)) {
+            ignoreOutsideClick = true;
+          }
+        };
+      };
+
+      domCache.container.onclick = function (e) {
+        if (ignoreOutsideClick) {
+          ignoreOutsideClick = false;
+          return;
+        }
+        if (e.target !== domCache.container) {
+          return;
+        }
+        if (callIfFunction(innerParams.allowOutsideClick)) {
+          dismissWith(constructor.DismissReason.backdrop);
+        }
+      };
+    }
+
+    // Reverse buttons (Confirm on the right side)
+    if (innerParams.reverseButtons) {
+      domCache.confirmButton.parentNode.insertBefore(domCache.cancelButton, domCache.confirmButton);
+    } else {
+      domCache.confirmButton.parentNode.insertBefore(domCache.confirmButton, domCache.cancelButton);
+    }
+
+    // Focus handling
+    var setFocus = function setFocus(index, increment) {
+      var focusableElements = getFocusableElements(innerParams.focusCancel);
+      // search for visible elements and select the next possible match
+      for (var _i = 0; _i < focusableElements.length; _i++) {
+        index = index + increment;
+
+        // rollover to first item
+        if (index === focusableElements.length) {
+          index = 0;
+
+          // go to last item
+        } else if (index === -1) {
+          index = focusableElements.length - 1;
+        }
+
+        // determine if element is visible
+        var el = focusableElements[index];
+        if (isVisible(el)) {
+          return el.focus();
+        }
+      }
+      // no visible focusable elements, focus the popup
+      domCache.popup.focus();
+    };
+
+    var keydownHandler = function keydownHandler(e, innerParams) {
+      e.stopPropagation();
+
+      var arrowKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Left', 'Right', 'Up', 'Down' // IE11
+      ];
+
+      if (e.key === 'Enter' && !e.isComposing) {
+        if (e.target && _this.getInput() && e.target.outerHTML === _this.getInput().outerHTML) {
+          if (['textarea', 'file'].indexOf(innerParams.input) !== -1) {
+            return; // do not submit
+          }
+
+          constructor.clickConfirm();
+          e.preventDefault();
+        }
+
+        // TAB
+      } else if (e.key === 'Tab') {
+        var targetElement = e.target || e.srcElement;
+
+        var focusableElements = getFocusableElements(innerParams.focusCancel);
+        var btnIndex = -1; // Find the button - note, this is a nodelist, not an array.
+        for (var _i2 = 0; _i2 < focusableElements.length; _i2++) {
+          if (targetElement === focusableElements[_i2]) {
+            btnIndex = _i2;
+            break;
+          }
+        }
+
+        if (!e.shiftKey) {
+          // Cycle to the next button
+          setFocus(btnIndex, 1);
+        } else {
+          // Cycle to the prev button
+          setFocus(btnIndex, -1);
+        }
+        e.stopPropagation();
+        e.preventDefault();
+
+        // ARROWS - switch focus between buttons
+      } else if (arrowKeys.indexOf(e.key) !== -1) {
+        // focus Cancel button if Confirm button is currently focused
+        if (document.activeElement === domCache.confirmButton && isVisible(domCache.cancelButton)) {
+          domCache.cancelButton.focus();
+          // and vice versa
+        } else if (document.activeElement === domCache.cancelButton && isVisible(domCache.confirmButton)) {
+          domCache.confirmButton.focus();
+        }
+
+        // ESC
+      } else if ((e.key === 'Escape' || e.key === 'Esc') && callIfFunction(innerParams.allowEscapeKey) === true) {
+        dismissWith(constructor.DismissReason.esc);
+      }
+    };
+
+    if (globalState.keydownHandlerAdded) {
+      window.removeEventListener('keydown', globalState.keydownHandler, { capture: true });
+      globalState.keydownHandlerAdded = false;
+    }
+
+    if (!innerParams.toast) {
+      globalState.keydownHandler = function (e) {
+        return keydownHandler(e, innerParams);
+      };
+      window.addEventListener('keydown', globalState.keydownHandler, { capture: true });
+      globalState.keydownHandlerAdded = true;
+    }
+
+    _this.enableButtons();
+    _this.hideLoading();
+    _this.resetValidationError();
+
+    if (innerParams.input) {
+      addClass(document.body, swalClasses['has-input']);
+    }
+
+    // inputs
+    var inputTypes = ['input', 'file', 'range', 'select', 'radio', 'checkbox', 'textarea'];
+    var input = void 0;
+    for (var _i3 = 0; _i3 < inputTypes.length; _i3++) {
+      var inputClass = swalClasses[inputTypes[_i3]];
+      var inputContainer = getChildByClass(domCache.content, inputClass);
+      input = _this.getInput(inputTypes[_i3]);
+
+      // set attributes
+      if (input) {
+        for (var j in input.attributes) {
+          if (input.attributes.hasOwnProperty(j)) {
+            var attrName = input.attributes[j].name;
+            if (attrName !== 'type' && attrName !== 'value') {
+              input.removeAttribute(attrName);
+            }
+          }
+        }
+        for (var attr in innerParams.inputAttributes) {
+          input.setAttribute(attr, innerParams.inputAttributes[attr]);
+        }
+      }
+
+      // set class
+      inputContainer.className = inputClass;
+      if (innerParams.inputClass) {
+        addClass(inputContainer, innerParams.inputClass);
+      }
+
+      hide(inputContainer);
+    }
+
+    var populateInputOptions = void 0;
+    switch (innerParams.input) {
+      case 'text':
+      case 'email':
+      case 'password':
+      case 'number':
+      case 'tel':
+      case 'url':
+        input = getChildByClass(domCache.content, swalClasses.input);
+        input.value = innerParams.inputValue;
+        input.placeholder = innerParams.inputPlaceholder;
+        input.type = innerParams.input;
+        show(input);
+        break;
+      case 'file':
+        input = getChildByClass(domCache.content, swalClasses.file);
+        input.placeholder = innerParams.inputPlaceholder;
+        input.type = innerParams.input;
+        show(input);
+        break;
+      case 'range':
+        var range = getChildByClass(domCache.content, swalClasses.range);
+        var rangeInput = range.querySelector('input');
+        var rangeOutput = range.querySelector('output');
+        rangeInput.value = innerParams.inputValue;
+        rangeInput.type = innerParams.input;
+        rangeOutput.value = innerParams.inputValue;
+        show(range);
+        break;
+      case 'select':
+        var select = getChildByClass(domCache.content, swalClasses.select);
+        select.innerHTML = '';
+        if (innerParams.inputPlaceholder) {
+          var placeholder = document.createElement('option');
+          placeholder.innerHTML = innerParams.inputPlaceholder;
+          placeholder.value = '';
+          placeholder.disabled = true;
+          placeholder.selected = true;
+          select.appendChild(placeholder);
+        }
+        populateInputOptions = function populateInputOptions(inputOptions) {
+          inputOptions.forEach(function (_ref) {
+            var _ref2 = slicedToArray(_ref, 2),
+                optionValue = _ref2[0],
+                optionLabel = _ref2[1];
+
+            var option = document.createElement('option');
+            option.value = optionValue;
+            option.innerHTML = optionLabel;
+            if (innerParams.inputValue.toString() === optionValue.toString()) {
+              option.selected = true;
+            }
+            select.appendChild(option);
+          });
+          show(select);
+          select.focus();
+        };
+        break;
+      case 'radio':
+        var radio = getChildByClass(domCache.content, swalClasses.radio);
+        radio.innerHTML = '';
+        populateInputOptions = function populateInputOptions(inputOptions) {
+          inputOptions.forEach(function (_ref3) {
+            var _ref4 = slicedToArray(_ref3, 2),
+                radioValue = _ref4[0],
+                radioLabel = _ref4[1];
+
+            var radioInput = document.createElement('input');
+            var radioLabelElement = document.createElement('label');
+            radioInput.type = 'radio';
+            radioInput.name = swalClasses.radio;
+            radioInput.value = radioValue;
+            if (innerParams.inputValue.toString() === radioValue.toString()) {
+              radioInput.checked = true;
+            }
+            radioLabelElement.innerHTML = radioLabel;
+            radioLabelElement.insertBefore(radioInput, radioLabelElement.firstChild);
+            radio.appendChild(radioLabelElement);
+          });
+          show(radio);
+          var radios = radio.querySelectorAll('input');
+          if (radios.length) {
+            radios[0].focus();
+          }
+        };
+        break;
+      case 'checkbox':
+        var checkbox = getChildByClass(domCache.content, swalClasses.checkbox);
+        var checkboxInput = _this.getInput('checkbox');
+        checkboxInput.type = 'checkbox';
+        checkboxInput.value = 1;
+        checkboxInput.id = swalClasses.checkbox;
+        checkboxInput.checked = Boolean(innerParams.inputValue);
+        var label = checkbox.getElementsByTagName('span');
+        if (label.length) {
+          checkbox.removeChild(label[0]);
+        }
+        label = document.createElement('span');
+        label.innerHTML = innerParams.inputPlaceholder;
+        checkbox.appendChild(label);
+        show(checkbox);
+        break;
+      case 'textarea':
+        var textarea = getChildByClass(domCache.content, swalClasses.textarea);
+        textarea.value = innerParams.inputValue;
+        textarea.placeholder = innerParams.inputPlaceholder;
+        show(textarea);
+        break;
+      case null:
+        break;
+      default:
+        error('Unexpected type of input! Expected "text", "email", "password", "number", "tel", "select", "radio", "checkbox", "textarea", "file" or "url", got "' + innerParams.input + '"');
+        break;
+    }
+
+    if (innerParams.input === 'select' || innerParams.input === 'radio') {
+      var processInputOptions = function processInputOptions(inputOptions) {
+        return populateInputOptions(formatInputOptions(inputOptions));
+      };
+      if (isThenable(innerParams.inputOptions)) {
+        constructor.showLoading();
+        innerParams.inputOptions.then(function (inputOptions) {
+          _this.hideLoading();
+          processInputOptions(inputOptions);
+        });
+      } else if (_typeof(innerParams.inputOptions) === 'object') {
+        processInputOptions(innerParams.inputOptions);
+      } else {
+        error('Unexpected type of inputOptions! Expected object, Map or Promise, got ' + _typeof(innerParams.inputOptions));
+      }
+    } else if (['text', 'email', 'number', 'tel', 'textarea'].indexOf(innerParams.input) !== -1 && isThenable(innerParams.inputValue)) {
+      constructor.showLoading();
+      hide(input);
+      innerParams.inputValue.then(function (inputValue) {
+        input.value = innerParams.input === 'number' ? parseFloat(inputValue) || 0 : inputValue + '';
+        show(input);
+        _this.hideLoading();
+      }).catch(function (err) {
+        error('Error in inputValue promise: ' + err);
+        input.value = '';
+        show(input);
+        _this.hideLoading();
+      });
+    }
+
+    openPopup(innerParams);
+
+    if (!innerParams.toast) {
+      if (!callIfFunction(innerParams.allowEnterKey)) {
+        if (document.activeElement) {
+          document.activeElement.blur();
+        }
+      } else if (innerParams.focusCancel && isVisible(domCache.cancelButton)) {
+        domCache.cancelButton.focus();
+      } else if (innerParams.focusConfirm && isVisible(domCache.confirmButton)) {
+        domCache.confirmButton.focus();
+      } else {
+        setFocus(-1, 1);
+      }
+    }
+
+    // fix scroll
+    domCache.container.scrollTop = 0;
+  });
+}
+
+
+
+var instanceMethods = Object.freeze({
+	hideLoading: hideLoading,
+	disableLoading: hideLoading,
+	getInput: getInput,
+	enableButtons: enableButtons,
+	disableButtons: disableButtons,
+	enableConfirmButton: enableConfirmButton,
+	disableConfirmButton: disableConfirmButton,
+	enableInput: enableInput,
+	disableInput: disableInput,
+	showValidationError: showValidationError,
+	resetValidationError: resetValidationError,
+	_main: _main
+});
+
+var currentInstance = void 0;
+
+// SweetAlert constructor
+function SweetAlert() {
+  // Prevent run in Node env
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  // Check for the existence of Promise
+  if (typeof Promise === 'undefined') {
+    error('This package requires a Promise library, please include a shim to enable it in this browser (See: https://github.com/sweetalert2/sweetalert2/wiki/Migration-from-SweetAlert-to-SweetAlert2#1-ie-support)');
+  }
+
+  for (var _len = arguments.length, args = Array(_len), _key = 0; _key < _len; _key++) {
+    args[_key] = arguments[_key];
+  }
+
+  if (typeof args[0] === 'undefined') {
+    error('SweetAlert2 expects at least 1 attribute!');
+    return false;
+  }
+
+  currentInstance = this;
+
+  var outerParams = Object.freeze(this.constructor.argsToParams(args));
+
+  Object.defineProperties(this, {
+    params: {
+      value: outerParams,
+      writable: false,
+      enumerable: true
+    }
+  });
+
+  var promise = this._main(this.params);
+  privateProps.promise.set(this, promise);
+}
+
+// `catch` cannot be the name of a module export, so we define our thenable methods here instead
+SweetAlert.prototype.then = function (onFulfilled, onRejected) {
+  var promise = privateProps.promise.get(this);
+  return promise.then(onFulfilled, onRejected);
+};
+SweetAlert.prototype.catch = function (onRejected) {
+  var promise = privateProps.promise.get(this);
+  return promise.catch(onRejected);
+};
+SweetAlert.prototype.finally = function (onFinally) {
+  var promise = privateProps.promise.get(this);
+  return promise.finally(onFinally);
+};
+
+// Assign instance methods from src/instanceMethods/*.js to prototype
+_extends(SweetAlert.prototype, instanceMethods);
+
+// Assign static methods from src/staticMethods/*.js to constructor
+_extends(SweetAlert, staticMethods);
+
+// Proxy to instance methods to constructor, for now, for backwards compatibility
+Object.keys(instanceMethods).forEach(function (key) {
+  SweetAlert[key] = function () {
+    if (currentInstance) {
+      var _currentInstance;
+
+      return (_currentInstance = currentInstance)[key].apply(_currentInstance, arguments);
+    }
+  };
+});
+
+SweetAlert.DismissReason = DismissReason;
+
+SweetAlert.noop = function () {};
+
+SweetAlert.version = version;
+
+var Swal = withNoNewKeyword(withGlobalDefaults(SweetAlert));
+Swal.default = Swal;
+
+return Swal;
+
+})));
+if (typeof window !== 'undefined' && window.Sweetalert2){  window.swal = window.sweetAlert = window.Swal = window.SweetAlert = window.Sweetalert2}
+
+"undefined"!=typeof document&&function(e,t){var n=e.createElement("style");if(e.getElementsByTagName("head")[0].appendChild(n),n.styleSheet)n.styleSheet.disabled||(n.styleSheet.cssText=t);else try{n.innerHTML=t}catch(e){n.innerText=t}}(document,"@-webkit-keyframes swal2-show {\n" +
+"  0% {\n" +
+"    -webkit-transform: scale(0.7);\n" +
+"            transform: scale(0.7); }\n" +
+"  45% {\n" +
+"    -webkit-transform: scale(1.05);\n" +
+"            transform: scale(1.05); }\n" +
+"  80% {\n" +
+"    -webkit-transform: scale(0.95);\n" +
+"            transform: scale(0.95); }\n" +
+"  100% {\n" +
+"    -webkit-transform: scale(1);\n" +
+"            transform: scale(1); } }\n" +
+"\n" +
+"@keyframes swal2-show {\n" +
+"  0% {\n" +
+"    -webkit-transform: scale(0.7);\n" +
+"            transform: scale(0.7); }\n" +
+"  45% {\n" +
+"    -webkit-transform: scale(1.05);\n" +
+"            transform: scale(1.05); }\n" +
+"  80% {\n" +
+"    -webkit-transform: scale(0.95);\n" +
+"            transform: scale(0.95); }\n" +
+"  100% {\n" +
+"    -webkit-transform: scale(1);\n" +
+"            transform: scale(1); } }\n" +
+"\n" +
+"@-webkit-keyframes swal2-hide {\n" +
+"  0% {\n" +
+"    -webkit-transform: scale(1);\n" +
+"            transform: scale(1);\n" +
+"    opacity: 1; }\n" +
+"  100% {\n" +
+"    -webkit-transform: scale(0.5);\n" +
+"            transform: scale(0.5);\n" +
+"    opacity: 0; } }\n" +
+"\n" +
+"@keyframes swal2-hide {\n" +
+"  0% {\n" +
+"    -webkit-transform: scale(1);\n" +
+"            transform: scale(1);\n" +
+"    opacity: 1; }\n" +
+"  100% {\n" +
+"    -webkit-transform: scale(0.5);\n" +
+"            transform: scale(0.5);\n" +
+"    opacity: 0; } }\n" +
+"\n" +
+"@-webkit-keyframes swal2-animate-success-line-tip {\n" +
+"  0% {\n" +
+"    top: 1.1875em;\n" +
+"    left: .0625em;\n" +
+"    width: 0; }\n" +
+"  54% {\n" +
+"    top: 1.0625em;\n" +
+"    left: .125em;\n" +
+"    width: 0; }\n" +
+"  70% {\n" +
+"    top: 2.1875em;\n" +
+"    left: -.375em;\n" +
+"    width: 3.125em; }\n" +
+"  84% {\n" +
+"    top: 3em;\n" +
+"    left: 1.3125em;\n" +
+"    width: 1.0625em; }\n" +
+"  100% {\n" +
+"    top: 2.8125em;\n" +
+"    left: .875em;\n" +
+"    width: 1.5625em; } }\n" +
+"\n" +
+"@keyframes swal2-animate-success-line-tip {\n" +
+"  0% {\n" +
+"    top: 1.1875em;\n" +
+"    left: .0625em;\n" +
+"    width: 0; }\n" +
+"  54% {\n" +
+"    top: 1.0625em;\n" +
+"    left: .125em;\n" +
+"    width: 0; }\n" +
+"  70% {\n" +
+"    top: 2.1875em;\n" +
+"    left: -.375em;\n" +
+"    width: 3.125em; }\n" +
+"  84% {\n" +
+"    top: 3em;\n" +
+"    left: 1.3125em;\n" +
+"    width: 1.0625em; }\n" +
+"  100% {\n" +
+"    top: 2.8125em;\n" +
+"    left: .875em;\n" +
+"    width: 1.5625em; } }\n" +
+"\n" +
+"@-webkit-keyframes swal2-animate-success-line-long {\n" +
+"  0% {\n" +
+"    top: 3.375em;\n" +
+"    right: 2.875em;\n" +
+"    width: 0; }\n" +
+"  65% {\n" +
+"    top: 3.375em;\n" +
+"    right: 2.875em;\n" +
+"    width: 0; }\n" +
+"  84% {\n" +
+"    top: 2.1875em;\n" +
+"    right: 0;\n" +
+"    width: 3.4375em; }\n" +
+"  100% {\n" +
+"    top: 2.375em;\n" +
+"    right: .5em;\n" +
+"    width: 2.9375em; } }\n" +
+"\n" +
+"@keyframes swal2-animate-success-line-long {\n" +
+"  0% {\n" +
+"    top: 3.375em;\n" +
+"    right: 2.875em;\n" +
+"    width: 0; }\n" +
+"  65% {\n" +
+"    top: 3.375em;\n" +
+"    right: 2.875em;\n" +
+"    width: 0; }\n" +
+"  84% {\n" +
+"    top: 2.1875em;\n" +
+"    right: 0;\n" +
+"    width: 3.4375em; }\n" +
+"  100% {\n" +
+"    top: 2.375em;\n" +
+"    right: .5em;\n" +
+"    width: 2.9375em; } }\n" +
+"\n" +
+"@-webkit-keyframes swal2-rotate-success-circular-line {\n" +
+"  0% {\n" +
+"    -webkit-transform: rotate(-45deg);\n" +
+"            transform: rotate(-45deg); }\n" +
+"  5% {\n" +
+"    -webkit-transform: rotate(-45deg);\n" +
+"            transform: rotate(-45deg); }\n" +
+"  12% {\n" +
+"    -webkit-transform: rotate(-405deg);\n" +
+"            transform: rotate(-405deg); }\n" +
+"  100% {\n" +
+"    -webkit-transform: rotate(-405deg);\n" +
+"            transform: rotate(-405deg); } }\n" +
+"\n" +
+"@keyframes swal2-rotate-success-circular-line {\n" +
+"  0% {\n" +
+"    -webkit-transform: rotate(-45deg);\n" +
+"            transform: rotate(-45deg); }\n" +
+"  5% {\n" +
+"    -webkit-transform: rotate(-45deg);\n" +
+"            transform: rotate(-45deg); }\n" +
+"  12% {\n" +
+"    -webkit-transform: rotate(-405deg);\n" +
+"            transform: rotate(-405deg); }\n" +
+"  100% {\n" +
+"    -webkit-transform: rotate(-405deg);\n" +
+"            transform: rotate(-405deg); } }\n" +
+"\n" +
+"@-webkit-keyframes swal2-animate-error-x-mark {\n" +
+"  0% {\n" +
+"    margin-top: 1.625em;\n" +
+"    -webkit-transform: scale(0.4);\n" +
+"            transform: scale(0.4);\n" +
+"    opacity: 0; }\n" +
+"  50% {\n" +
+"    margin-top: 1.625em;\n" +
+"    -webkit-transform: scale(0.4);\n" +
+"            transform: scale(0.4);\n" +
+"    opacity: 0; }\n" +
+"  80% {\n" +
+"    margin-top: -.375em;\n" +
+"    -webkit-transform: scale(1.15);\n" +
+"            transform: scale(1.15); }\n" +
+"  100% {\n" +
+"    margin-top: 0;\n" +
+"    -webkit-transform: scale(1);\n" +
+"            transform: scale(1);\n" +
+"    opacity: 1; } }\n" +
+"\n" +
+"@keyframes swal2-animate-error-x-mark {\n" +
+"  0% {\n" +
+"    margin-top: 1.625em;\n" +
+"    -webkit-transform: scale(0.4);\n" +
+"            transform: scale(0.4);\n" +
+"    opacity: 0; }\n" +
+"  50% {\n" +
+"    margin-top: 1.625em;\n" +
+"    -webkit-transform: scale(0.4);\n" +
+"            transform: scale(0.4);\n" +
+"    opacity: 0; }\n" +
+"  80% {\n" +
+"    margin-top: -.375em;\n" +
+"    -webkit-transform: scale(1.15);\n" +
+"            transform: scale(1.15); }\n" +
+"  100% {\n" +
+"    margin-top: 0;\n" +
+"    -webkit-transform: scale(1);\n" +
+"            transform: scale(1);\n" +
+"    opacity: 1; } }\n" +
+"\n" +
+"@-webkit-keyframes swal2-animate-error-icon {\n" +
+"  0% {\n" +
+"    -webkit-transform: rotateX(100deg);\n" +
+"            transform: rotateX(100deg);\n" +
+"    opacity: 0; }\n" +
+"  100% {\n" +
+"    -webkit-transform: rotateX(0deg);\n" +
+"            transform: rotateX(0deg);\n" +
+"    opacity: 1; } }\n" +
+"\n" +
+"@keyframes swal2-animate-error-icon {\n" +
+"  0% {\n" +
+"    -webkit-transform: rotateX(100deg);\n" +
+"            transform: rotateX(100deg);\n" +
+"    opacity: 0; }\n" +
+"  100% {\n" +
+"    -webkit-transform: rotateX(0deg);\n" +
+"            transform: rotateX(0deg);\n" +
+"    opacity: 1; } }\n" +
+"\n" +
+"body.swal2-toast-shown.swal2-has-input > .swal2-container > .swal2-toast {\n" +
+"  flex-direction: column;\n" +
+"  align-items: stretch; }\n" +
+"  body.swal2-toast-shown.swal2-has-input > .swal2-container > .swal2-toast .swal2-actions {\n" +
+"    flex: 1;\n" +
+"    align-self: stretch;\n" +
+"    justify-content: flex-end;\n" +
+"    height: 2.2em; }\n" +
+"  body.swal2-toast-shown.swal2-has-input > .swal2-container > .swal2-toast .swal2-loading {\n" +
+"    justify-content: center; }\n" +
+"  body.swal2-toast-shown.swal2-has-input > .swal2-container > .swal2-toast .swal2-input {\n" +
+"    height: 2em;\n" +
+"    margin: .3125em auto;\n" +
+"    font-size: 1em; }\n" +
+"  body.swal2-toast-shown.swal2-has-input > .swal2-container > .swal2-toast .swal2-validationerror {\n" +
+"    font-size: 1em; }\n" +
+"\n" +
+"body.swal2-toast-shown > .swal2-container {\n" +
+"  position: fixed;\n" +
+"  background-color: transparent; }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-shown {\n" +
+"    background-color: transparent; }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-top {\n" +
+"    top: 0;\n" +
+"    right: auto;\n" +
+"    bottom: auto;\n" +
+"    left: 50%;\n" +
+"    -webkit-transform: translateX(-50%);\n" +
+"            transform: translateX(-50%); }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-top-end, body.swal2-toast-shown > .swal2-container.swal2-top-right {\n" +
+"    top: 0;\n" +
+"    right: 0;\n" +
+"    bottom: auto;\n" +
+"    left: auto; }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-top-start, body.swal2-toast-shown > .swal2-container.swal2-top-left {\n" +
+"    top: 0;\n" +
+"    right: auto;\n" +
+"    bottom: auto;\n" +
+"    left: 0; }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-center-start, body.swal2-toast-shown > .swal2-container.swal2-center-left {\n" +
+"    top: 50%;\n" +
+"    right: auto;\n" +
+"    bottom: auto;\n" +
+"    left: 0;\n" +
+"    -webkit-transform: translateY(-50%);\n" +
+"            transform: translateY(-50%); }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-center {\n" +
+"    top: 50%;\n" +
+"    right: auto;\n" +
+"    bottom: auto;\n" +
+"    left: 50%;\n" +
+"    -webkit-transform: translate(-50%, -50%);\n" +
+"            transform: translate(-50%, -50%); }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-center-end, body.swal2-toast-shown > .swal2-container.swal2-center-right {\n" +
+"    top: 50%;\n" +
+"    right: 0;\n" +
+"    bottom: auto;\n" +
+"    left: auto;\n" +
+"    -webkit-transform: translateY(-50%);\n" +
+"            transform: translateY(-50%); }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-bottom-start, body.swal2-toast-shown > .swal2-container.swal2-bottom-left {\n" +
+"    top: auto;\n" +
+"    right: auto;\n" +
+"    bottom: 0;\n" +
+"    left: 0; }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-bottom {\n" +
+"    top: auto;\n" +
+"    right: auto;\n" +
+"    bottom: 0;\n" +
+"    left: 50%;\n" +
+"    -webkit-transform: translateX(-50%);\n" +
+"            transform: translateX(-50%); }\n" +
+"  body.swal2-toast-shown > .swal2-container.swal2-bottom-end, body.swal2-toast-shown > .swal2-container.swal2-bottom-right {\n" +
+"    top: auto;\n" +
+"    right: 0;\n" +
+"    bottom: 0;\n" +
+"    left: auto; }\n" +
+"\n" +
+".swal2-popup.swal2-toast {\n" +
+"  flex-direction: row;\n" +
+"  align-items: center;\n" +
+"  width: auto;\n" +
+"  padding: 0.625em;\n" +
+"  box-shadow: 0 0 0.625em #d9d9d9;\n" +
+"  overflow-y: hidden; }\n" +
+"  .swal2-popup.swal2-toast .swal2-header {\n" +
+"    flex-direction: row; }\n" +
+"  .swal2-popup.swal2-toast .swal2-title {\n" +
+"    justify-content: flex-start;\n" +
+"    margin: 0 .6em;\n" +
+"    font-size: 1em; }\n" +
+"  .swal2-popup.swal2-toast .swal2-close {\n" +
+"    position: initial; }\n" +
+"  .swal2-popup.swal2-toast .swal2-content {\n" +
+"    justify-content: flex-start;\n" +
+"    font-size: 1em; }\n" +
+"  .swal2-popup.swal2-toast .swal2-icon {\n" +
+"    width: 2em;\n" +
+"    min-width: 2em;\n" +
+"    height: 2em;\n" +
+"    margin: 0; }\n" +
+"    .swal2-popup.swal2-toast .swal2-icon-text {\n" +
+"      font-size: 2em;\n" +
+"      font-weight: bold;\n" +
+"      line-height: 1em; }\n" +
+"    .swal2-popup.swal2-toast .swal2-icon.swal2-success .swal2-success-ring {\n" +
+"      width: 2em;\n" +
+"      height: 2em; }\n" +
+"    .swal2-popup.swal2-toast .swal2-icon.swal2-error [class^='swal2-x-mark-line'] {\n" +
+"      top: .875em;\n" +
+"      width: 1.375em; }\n" +
+"      .swal2-popup.swal2-toast .swal2-icon.swal2-error [class^='swal2-x-mark-line'][class$='left'] {\n" +
+"        left: .3125em; }\n" +
+"      .swal2-popup.swal2-toast .swal2-icon.swal2-error [class^='swal2-x-mark-line'][class$='right'] {\n" +
+"        right: .3125em; }\n" +
+"  .swal2-popup.swal2-toast .swal2-actions {\n" +
+"    height: auto;\n" +
+"    margin: 0 .3125em; }\n" +
+"  .swal2-popup.swal2-toast .swal2-styled {\n" +
+"    margin: 0 .3125em;\n" +
+"    padding: .3125em .625em;\n" +
+"    font-size: 1em; }\n" +
+"    .swal2-popup.swal2-toast .swal2-styled:focus {\n" +
+"      box-shadow: 0 0 0 0.0625em #fff, 0 0 0 0.125em rgba(50, 100, 150, 0.4); }\n" +
+"  .swal2-popup.swal2-toast .swal2-success {\n" +
+"    border-color: #a5dc86; }\n" +
+"    .swal2-popup.swal2-toast .swal2-success [class^='swal2-success-circular-line'] {\n" +
+"      position: absolute;\n" +
+"      width: 2em;\n" +
+"      height: 2.8125em;\n" +
+"      -webkit-transform: rotate(45deg);\n" +
+"              transform: rotate(45deg);\n" +
+"      border-radius: 50%; }\n" +
+"      .swal2-popup.swal2-toast .swal2-success [class^='swal2-success-circular-line'][class$='left'] {\n" +
+"        top: -.25em;\n" +
+"        left: -.9375em;\n" +
+"        -webkit-transform: rotate(-45deg);\n" +
+"                transform: rotate(-45deg);\n" +
+"        -webkit-transform-origin: 2em 2em;\n" +
+"                transform-origin: 2em 2em;\n" +
+"        border-radius: 4em 0 0 4em; }\n" +
+"      .swal2-popup.swal2-toast .swal2-success [class^='swal2-success-circular-line'][class$='right'] {\n" +
+"        top: -.25em;\n" +
+"        left: .9375em;\n" +
+"        -webkit-transform-origin: 0 2em;\n" +
+"                transform-origin: 0 2em;\n" +
+"        border-radius: 0 4em 4em 0; }\n" +
+"    .swal2-popup.swal2-toast .swal2-success .swal2-success-ring {\n" +
+"      width: 2em;\n" +
+"      height: 2em; }\n" +
+"    .swal2-popup.swal2-toast .swal2-success .swal2-success-fix {\n" +
+"      top: 0;\n" +
+"      left: .4375em;\n" +
+"      width: .4375em;\n" +
+"      height: 2.6875em; }\n" +
+"    .swal2-popup.swal2-toast .swal2-success [class^='swal2-success-line'] {\n" +
+"      height: .3125em; }\n" +
+"      .swal2-popup.swal2-toast .swal2-success [class^='swal2-success-line'][class$='tip'] {\n" +
+"        top: 1.125em;\n" +
+"        left: .1875em;\n" +
+"        width: .75em; }\n" +
+"      .swal2-popup.swal2-toast .swal2-success [class^='swal2-success-line'][class$='long'] {\n" +
+"        top: .9375em;\n" +
+"        right: .1875em;\n" +
+"        width: 1.375em; }\n" +
+"  .swal2-popup.swal2-toast.swal2-show {\n" +
+"    -webkit-animation: showSweetToast .5s;\n" +
+"            animation: showSweetToast .5s; }\n" +
+"  .swal2-popup.swal2-toast.swal2-hide {\n" +
+"    -webkit-animation: hideSweetToast .2s forwards;\n" +
+"            animation: hideSweetToast .2s forwards; }\n" +
+"  .swal2-popup.swal2-toast .swal2-animate-success-icon .swal2-success-line-tip {\n" +
+"    -webkit-animation: animate-toast-success-tip .75s;\n" +
+"            animation: animate-toast-success-tip .75s; }\n" +
+"  .swal2-popup.swal2-toast .swal2-animate-success-icon .swal2-success-line-long {\n" +
+"    -webkit-animation: animate-toast-success-long .75s;\n" +
+"            animation: animate-toast-success-long .75s; }\n" +
+"\n" +
+"@-webkit-keyframes showSweetToast {\n" +
+"  0% {\n" +
+"    -webkit-transform: translateY(-0.625em) rotateZ(2deg);\n" +
+"            transform: translateY(-0.625em) rotateZ(2deg);\n" +
+"    opacity: 0; }\n" +
+"  33% {\n" +
+"    -webkit-transform: translateY(0) rotateZ(-2deg);\n" +
+"            transform: translateY(0) rotateZ(-2deg);\n" +
+"    opacity: .5; }\n" +
+"  66% {\n" +
+"    -webkit-transform: translateY(0.3125em) rotateZ(2deg);\n" +
+"            transform: translateY(0.3125em) rotateZ(2deg);\n" +
+"    opacity: .7; }\n" +
+"  100% {\n" +
+"    -webkit-transform: translateY(0) rotateZ(0);\n" +
+"            transform: translateY(0) rotateZ(0);\n" +
+"    opacity: 1; } }\n" +
+"\n" +
+"@keyframes showSweetToast {\n" +
+"  0% {\n" +
+"    -webkit-transform: translateY(-0.625em) rotateZ(2deg);\n" +
+"            transform: translateY(-0.625em) rotateZ(2deg);\n" +
+"    opacity: 0; }\n" +
+"  33% {\n" +
+"    -webkit-transform: translateY(0) rotateZ(-2deg);\n" +
+"            transform: translateY(0) rotateZ(-2deg);\n" +
+"    opacity: .5; }\n" +
+"  66% {\n" +
+"    -webkit-transform: translateY(0.3125em) rotateZ(2deg);\n" +
+"            transform: translateY(0.3125em) rotateZ(2deg);\n" +
+"    opacity: .7; }\n" +
+"  100% {\n" +
+"    -webkit-transform: translateY(0) rotateZ(0);\n" +
+"            transform: translateY(0) rotateZ(0);\n" +
+"    opacity: 1; } }\n" +
+"\n" +
+"@-webkit-keyframes hideSweetToast {\n" +
+"  0% {\n" +
+"    opacity: 1; }\n" +
+"  33% {\n" +
+"    opacity: .5; }\n" +
+"  100% {\n" +
+"    -webkit-transform: rotateZ(1deg);\n" +
+"            transform: rotateZ(1deg);\n" +
+"    opacity: 0; } }\n" +
+"\n" +
+"@keyframes hideSweetToast {\n" +
+"  0% {\n" +
+"    opacity: 1; }\n" +
+"  33% {\n" +
+"    opacity: .5; }\n" +
+"  100% {\n" +
+"    -webkit-transform: rotateZ(1deg);\n" +
+"            transform: rotateZ(1deg);\n" +
+"    opacity: 0; } }\n" +
+"\n" +
+"@-webkit-keyframes animate-toast-success-tip {\n" +
+"  0% {\n" +
+"    top: .5625em;\n" +
+"    left: .0625em;\n" +
+"    width: 0; }\n" +
+"  54% {\n" +
+"    top: .125em;\n" +
+"    left: .125em;\n" +
+"    width: 0; }\n" +
+"  70% {\n" +
+"    top: .625em;\n" +
+"    left: -.25em;\n" +
+"    width: 1.625em; }\n" +
+"  84% {\n" +
+"    top: 1.0625em;\n" +
+"    left: .75em;\n" +
+"    width: .5em; }\n" +
+"  100% {\n" +
+"    top: 1.125em;\n" +
+"    left: .1875em;\n" +
+"    width: .75em; } }\n" +
+"\n" +
+"@keyframes animate-toast-success-tip {\n" +
+"  0% {\n" +
+"    top: .5625em;\n" +
+"    left: .0625em;\n" +
+"    width: 0; }\n" +
+"  54% {\n" +
+"    top: .125em;\n" +
+"    left: .125em;\n" +
+"    width: 0; }\n" +
+"  70% {\n" +
+"    top: .625em;\n" +
+"    left: -.25em;\n" +
+"    width: 1.625em; }\n" +
+"  84% {\n" +
+"    top: 1.0625em;\n" +
+"    left: .75em;\n" +
+"    width: .5em; }\n" +
+"  100% {\n" +
+"    top: 1.125em;\n" +
+"    left: .1875em;\n" +
+"    width: .75em; } }\n" +
+"\n" +
+"@-webkit-keyframes animate-toast-success-long {\n" +
+"  0% {\n" +
+"    top: 1.625em;\n" +
+"    right: 1.375em;\n" +
+"    width: 0; }\n" +
+"  65% {\n" +
+"    top: 1.25em;\n" +
+"    right: .9375em;\n" +
+"    width: 0; }\n" +
+"  84% {\n" +
+"    top: .9375em;\n" +
+"    right: 0;\n" +
+"    width: 1.125em; }\n" +
+"  100% {\n" +
+"    top: .9375em;\n" +
+"    right: .1875em;\n" +
+"    width: 1.375em; } }\n" +
+"\n" +
+"@keyframes animate-toast-success-long {\n" +
+"  0% {\n" +
+"    top: 1.625em;\n" +
+"    right: 1.375em;\n" +
+"    width: 0; }\n" +
+"  65% {\n" +
+"    top: 1.25em;\n" +
+"    right: .9375em;\n" +
+"    width: 0; }\n" +
+"  84% {\n" +
+"    top: .9375em;\n" +
+"    right: 0;\n" +
+"    width: 1.125em; }\n" +
+"  100% {\n" +
+"    top: .9375em;\n" +
+"    right: .1875em;\n" +
+"    width: 1.375em; } }\n" +
+"\n" +
+"body.swal2-shown:not(.swal2-no-backdrop):not(.swal2-toast-shown) {\n" +
+"  overflow-y: hidden; }\n" +
+"\n" +
+"body.swal2-height-auto {\n" +
+"  height: auto !important; }\n" +
+"\n" +
+"body.swal2-no-backdrop .swal2-shown {\n" +
+"  top: auto;\n" +
+"  right: auto;\n" +
+"  bottom: auto;\n" +
+"  left: auto;\n" +
+"  background-color: transparent; }\n" +
+"  body.swal2-no-backdrop .swal2-shown > .swal2-modal {\n" +
+"    box-shadow: 0 0 10px rgba(0, 0, 0, 0.4); }\n" +
+"  body.swal2-no-backdrop .swal2-shown.swal2-top {\n" +
+"    top: 0;\n" +
+"    left: 50%;\n" +
+"    -webkit-transform: translateX(-50%);\n" +
+"            transform: translateX(-50%); }\n" +
+"  body.swal2-no-backdrop .swal2-shown.swal2-top-start, body.swal2-no-backdrop .swal2-shown.swal2-top-left {\n" +
+"    top: 0;\n" +
+"    left: 0; }\n" +
+"  body.swal2-no-backdrop .swal2-shown.swal2-top-end, body.swal2-no-backdrop .swal2-shown.swal2-top-right {\n" +
+"    top: 0;\n" +
+"    right: 0; }\n" +
+"  body.swal2-no-backdrop .swal2-shown.swal2-center {\n" +
+"    top: 50%;\n" +
+"    left: 50%;\n" +
+"    -webkit-transform: translate(-50%, -50%);\n" +
+"            transform: translate(-50%, -50%); }\n" +
+"  body.swal2-no-backdrop .swal2-shown.swal2-center-start, body.swal2-no-backdrop .swal2-shown.swal2-center-left {\n" +
+"    top: 50%;\n" +
+"    left: 0;\n" +
+"    -webkit-transform: translateY(-50%);\n" +
+"            transform: translateY(-50%); }\n" +
+"  body.swal2-no-backdrop .swal2-shown.swal2-center-end, body.swal2-no-backdrop .swal2-shown.swal2-center-right {\n" +
+"    top: 50%;\n" +
+"    right: 0;\n" +
+"    -webkit-transform: translateY(-50%);\n" +
+"            transform: translateY(-50%); }\n" +
+"  body.swal2-no-backdrop .swal2-shown.swal2-bottom {\n" +
+"    bottom: 0;\n" +
+"    left: 50%;\n" +
+"    -webkit-transform: translateX(-50%);\n" +
+"            transform: translateX(-50%); }\n" +
+"  body.swal2-no-backdrop .swal2-shown.swal2-bottom-start, body.swal2-no-backdrop .swal2-shown.swal2-bottom-left {\n" +
+"    bottom: 0;\n" +
+"    left: 0; }\n" +
+"  body.swal2-no-backdrop .swal2-shown.swal2-bottom-end, body.swal2-no-backdrop .swal2-shown.swal2-bottom-right {\n" +
+"    right: 0;\n" +
+"    bottom: 0; }\n" +
+"\n" +
+".swal2-container {\n" +
+"  display: flex;\n" +
+"  position: fixed;\n" +
+"  top: 0;\n" +
+"  right: 0;\n" +
+"  bottom: 0;\n" +
+"  left: 0;\n" +
+"  flex-direction: row;\n" +
+"  align-items: center;\n" +
+"  justify-content: center;\n" +
+"  padding: 10px;\n" +
+"  background-color: transparent;\n" +
+"  z-index: 1060;\n" +
+"  overflow-x: hidden;\n" +
+"  -webkit-overflow-scrolling: touch; }\n" +
+"  .swal2-container.swal2-top {\n" +
+"    align-items: flex-start; }\n" +
+"  .swal2-container.swal2-top-start, .swal2-container.swal2-top-left {\n" +
+"    align-items: flex-start;\n" +
+"    justify-content: flex-start; }\n" +
+"  .swal2-container.swal2-top-end, .swal2-container.swal2-top-right {\n" +
+"    align-items: flex-start;\n" +
+"    justify-content: flex-end; }\n" +
+"  .swal2-container.swal2-center {\n" +
+"    align-items: center; }\n" +
+"  .swal2-container.swal2-center-start, .swal2-container.swal2-center-left {\n" +
+"    align-items: center;\n" +
+"    justify-content: flex-start; }\n" +
+"  .swal2-container.swal2-center-end, .swal2-container.swal2-center-right {\n" +
+"    align-items: center;\n" +
+"    justify-content: flex-end; }\n" +
+"  .swal2-container.swal2-bottom {\n" +
+"    align-items: flex-end; }\n" +
+"  .swal2-container.swal2-bottom-start, .swal2-container.swal2-bottom-left {\n" +
+"    align-items: flex-end;\n" +
+"    justify-content: flex-start; }\n" +
+"  .swal2-container.swal2-bottom-end, .swal2-container.swal2-bottom-right {\n" +
+"    align-items: flex-end;\n" +
+"    justify-content: flex-end; }\n" +
+"  .swal2-container.swal2-grow-fullscreen > .swal2-modal {\n" +
+"    display: flex !important;\n" +
+"    flex: 1;\n" +
+"    align-self: stretch;\n" +
+"    justify-content: center; }\n" +
+"  .swal2-container.swal2-grow-row > .swal2-modal {\n" +
+"    display: flex !important;\n" +
+"    flex: 1;\n" +
+"    align-content: center;\n" +
+"    justify-content: center; }\n" +
+"  .swal2-container.swal2-grow-column {\n" +
+"    flex: 1;\n" +
+"    flex-direction: column; }\n" +
+"    .swal2-container.swal2-grow-column.swal2-top, .swal2-container.swal2-grow-column.swal2-center, .swal2-container.swal2-grow-column.swal2-bottom {\n" +
+"      align-items: center; }\n" +
+"    .swal2-container.swal2-grow-column.swal2-top-start, .swal2-container.swal2-grow-column.swal2-center-start, .swal2-container.swal2-grow-column.swal2-bottom-start, .swal2-container.swal2-grow-column.swal2-top-left, .swal2-container.swal2-grow-column.swal2-center-left, .swal2-container.swal2-grow-column.swal2-bottom-left {\n" +
+"      align-items: flex-start; }\n" +
+"    .swal2-container.swal2-grow-column.swal2-top-end, .swal2-container.swal2-grow-column.swal2-center-end, .swal2-container.swal2-grow-column.swal2-bottom-end, .swal2-container.swal2-grow-column.swal2-top-right, .swal2-container.swal2-grow-column.swal2-center-right, .swal2-container.swal2-grow-column.swal2-bottom-right {\n" +
+"      align-items: flex-end; }\n" +
+"    .swal2-container.swal2-grow-column > .swal2-modal {\n" +
+"      display: flex !important;\n" +
+"      flex: 1;\n" +
+"      align-content: center;\n" +
+"      justify-content: center; }\n" +
+"  .swal2-container:not(.swal2-top):not(.swal2-top-start):not(.swal2-top-end):not(.swal2-top-left):not(.swal2-top-right):not(.swal2-center-start):not(.swal2-center-end):not(.swal2-center-left):not(.swal2-center-right):not(.swal2-bottom):not(.swal2-bottom-start):not(.swal2-bottom-end):not(.swal2-bottom-left):not(.swal2-bottom-right) > .swal2-modal {\n" +
+"    margin: auto; }\n" +
+"  @media all and (-ms-high-contrast: none), (-ms-high-contrast: active) {\n" +
+"    .swal2-container .swal2-modal {\n" +
+"      margin: 0 !important; } }\n" +
+"  .swal2-container.swal2-fade {\n" +
+"    transition: background-color .1s; }\n" +
+"  .swal2-container.swal2-shown {\n" +
+"    background-color: rgba(0, 0, 0, 0.4); }\n" +
+"\n" +
+".swal2-popup {\n" +
+"  display: none;\n" +
+"  position: relative;\n" +
+"  flex-direction: column;\n" +
+"  justify-content: center;\n" +
+"  width: 32em;\n" +
+"  max-width: 100%;\n" +
+"  padding: 1.25em;\n" +
+"  border-radius: 0.3125em;\n" +
+"  background: #fff;\n" +
+"  font-family: inherit;\n" +
+"  font-size: 1rem;\n" +
+"  box-sizing: border-box; }\n" +
+"  .swal2-popup:focus {\n" +
+"    outline: none; }\n" +
+"  .swal2-popup.swal2-loading {\n" +
+"    overflow-y: hidden; }\n" +
+"  .swal2-popup .swal2-header {\n" +
+"    display: flex;\n" +
+"    flex-direction: column;\n" +
+"    align-items: center; }\n" +
+"  .swal2-popup .swal2-title {\n" +
+"    display: block;\n" +
+"    position: relative;\n" +
+"    max-width: 100%;\n" +
+"    margin: 0 0 0.4em;\n" +
+"    padding: 0;\n" +
+"    color: #595959;\n" +
+"    font-size: 1.875em;\n" +
+"    font-weight: 600;\n" +
+"    text-align: center;\n" +
+"    text-transform: none;\n" +
+"    word-wrap: break-word; }\n" +
+"  .swal2-popup .swal2-actions {\n" +
+"    align-items: center;\n" +
+"    justify-content: center;\n" +
+"    margin: 1.25em auto 0; }\n" +
+"    .swal2-popup .swal2-actions:not(.swal2-loading) .swal2-styled[disabled] {\n" +
+"      opacity: .4; }\n" +
+"    .swal2-popup .swal2-actions:not(.swal2-loading) .swal2-styled:hover {\n" +
+"      background-image: linear-gradient(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.1)); }\n" +
+"    .swal2-popup .swal2-actions:not(.swal2-loading) .swal2-styled:active {\n" +
+"      background-image: linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)); }\n" +
+"    .swal2-popup .swal2-actions.swal2-loading .swal2-styled.swal2-confirm {\n" +
+"      width: 2.5em;\n" +
+"      height: 2.5em;\n" +
+"      margin: .46875em;\n" +
+"      padding: 0;\n" +
+"      border: .25em solid transparent;\n" +
+"      border-radius: 100%;\n" +
+"      border-color: transparent;\n" +
+"      background-color: transparent !important;\n" +
+"      color: transparent;\n" +
+"      cursor: default;\n" +
+"      box-sizing: border-box;\n" +
+"      -webkit-animation: swal2-rotate-loading 1.5s linear 0s infinite normal;\n" +
+"              animation: swal2-rotate-loading 1.5s linear 0s infinite normal;\n" +
+"      -webkit-user-select: none;\n" +
+"         -moz-user-select: none;\n" +
+"          -ms-user-select: none;\n" +
+"              user-select: none; }\n" +
+"    .swal2-popup .swal2-actions.swal2-loading .swal2-styled.swal2-cancel {\n" +
+"      margin-right: 30px;\n" +
+"      margin-left: 30px; }\n" +
+"    .swal2-popup .swal2-actions.swal2-loading :not(.swal2-styled).swal2-confirm::after {\n" +
+"      display: inline-block;\n" +
+"      width: 15px;\n" +
+"      height: 15px;\n" +
+"      margin-left: 5px;\n" +
+"      border: 3px solid #999999;\n" +
+"      border-radius: 50%;\n" +
+"      border-right-color: transparent;\n" +
+"      box-shadow: 1px 1px 1px #fff;\n" +
+"      content: '';\n" +
+"      -webkit-animation: swal2-rotate-loading 1.5s linear 0s infinite normal;\n" +
+"              animation: swal2-rotate-loading 1.5s linear 0s infinite normal; }\n" +
+"  .swal2-popup .swal2-styled {\n" +
+"    margin: 0 .3125em;\n" +
+"    padding: .625em 2em;\n" +
+"    font-weight: 500;\n" +
+"    box-shadow: none; }\n" +
+"    .swal2-popup .swal2-styled:not([disabled]) {\n" +
+"      cursor: pointer; }\n" +
+"    .swal2-popup .swal2-styled.swal2-confirm {\n" +
+"      border: 0;\n" +
+"      border-radius: 0.25em;\n" +
+"      background: initial;\n" +
+"      background-color: #3085d6;\n" +
+"      color: #fff;\n" +
+"      font-size: 1.0625em; }\n" +
+"    .swal2-popup .swal2-styled.swal2-cancel {\n" +
+"      border: 0;\n" +
+"      border-radius: 0.25em;\n" +
+"      background: initial;\n" +
+"      background-color: #aaa;\n" +
+"      color: #fff;\n" +
+"      font-size: 1.0625em; }\n" +
+"    .swal2-popup .swal2-styled:focus {\n" +
+"      outline: none;\n" +
+"      box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(50, 100, 150, 0.4); }\n" +
+"    .swal2-popup .swal2-styled::-moz-focus-inner {\n" +
+"      border: 0; }\n" +
+"  .swal2-popup .swal2-footer {\n" +
+"    justify-content: center;\n" +
+"    margin: 1.25em 0 0;\n" +
+"    padding-top: 1em;\n" +
+"    border-top: 1px solid #eee;\n" +
+"    color: #545454;\n" +
+"    font-size: 1em; }\n" +
+"  .swal2-popup .swal2-image {\n" +
+"    max-width: 100%;\n" +
+"    margin: 1.25em auto; }\n" +
+"  .swal2-popup .swal2-close {\n" +
+"    position: absolute;\n" +
+"    top: 0;\n" +
+"    right: 0;\n" +
+"    justify-content: center;\n" +
+"    width: 1.2em;\n" +
+"    height: 1.2em;\n" +
+"    padding: 0;\n" +
+"    transition: color 0.1s ease-out;\n" +
+"    border: none;\n" +
+"    border-radius: 0;\n" +
+"    background: transparent;\n" +
+"    color: #cccccc;\n" +
+"    font-family: serif;\n" +
+"    font-size: 2.5em;\n" +
+"    line-height: 1.2;\n" +
+"    cursor: pointer;\n" +
+"    overflow: hidden; }\n" +
+"    .swal2-popup .swal2-close:hover {\n" +
+"      -webkit-transform: none;\n" +
+"              transform: none;\n" +
+"      color: #f27474; }\n" +
+"  .swal2-popup > .swal2-input,\n" +
+"  .swal2-popup > .swal2-file,\n" +
+"  .swal2-popup > .swal2-textarea,\n" +
+"  .swal2-popup > .swal2-select,\n" +
+"  .swal2-popup > .swal2-radio,\n" +
+"  .swal2-popup > .swal2-checkbox {\n" +
+"    display: none; }\n" +
+"  .swal2-popup .swal2-content {\n" +
+"    justify-content: center;\n" +
+"    margin: 0;\n" +
+"    padding: 0;\n" +
+"    color: #545454;\n" +
+"    font-size: 1.125em;\n" +
+"    font-weight: 300;\n" +
+"    line-height: normal;\n" +
+"    word-wrap: break-word; }\n" +
+"  .swal2-popup #swal2-content {\n" +
+"    text-align: center; }\n" +
+"  .swal2-popup .swal2-input,\n" +
+"  .swal2-popup .swal2-file,\n" +
+"  .swal2-popup .swal2-textarea,\n" +
+"  .swal2-popup .swal2-select,\n" +
+"  .swal2-popup .swal2-radio,\n" +
+"  .swal2-popup .swal2-checkbox {\n" +
+"    margin: 1em auto; }\n" +
+"  .swal2-popup .swal2-input,\n" +
+"  .swal2-popup .swal2-file,\n" +
+"  .swal2-popup .swal2-textarea {\n" +
+"    width: 100%;\n" +
+"    transition: border-color .3s, box-shadow .3s;\n" +
+"    border: 1px solid #d9d9d9;\n" +
+"    border-radius: 0.1875em;\n" +
+"    font-size: 1.125em;\n" +
+"    box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.06);\n" +
+"    box-sizing: border-box; }\n" +
+"    .swal2-popup .swal2-input.swal2-inputerror,\n" +
+"    .swal2-popup .swal2-file.swal2-inputerror,\n" +
+"    .swal2-popup .swal2-textarea.swal2-inputerror {\n" +
+"      border-color: #f27474 !important;\n" +
+"      box-shadow: 0 0 2px #f27474 !important; }\n" +
+"    .swal2-popup .swal2-input:focus,\n" +
+"    .swal2-popup .swal2-file:focus,\n" +
+"    .swal2-popup .swal2-textarea:focus {\n" +
+"      border: 1px solid #b4dbed;\n" +
+"      outline: none;\n" +
+"      box-shadow: 0 0 3px #c4e6f5; }\n" +
+"    .swal2-popup .swal2-input::-webkit-input-placeholder,\n" +
+"    .swal2-popup .swal2-file::-webkit-input-placeholder,\n" +
+"    .swal2-popup .swal2-textarea::-webkit-input-placeholder {\n" +
+"      color: #cccccc; }\n" +
+"    .swal2-popup .swal2-input:-ms-input-placeholder,\n" +
+"    .swal2-popup .swal2-file:-ms-input-placeholder,\n" +
+"    .swal2-popup .swal2-textarea:-ms-input-placeholder {\n" +
+"      color: #cccccc; }\n" +
+"    .swal2-popup .swal2-input::-ms-input-placeholder,\n" +
+"    .swal2-popup .swal2-file::-ms-input-placeholder,\n" +
+"    .swal2-popup .swal2-textarea::-ms-input-placeholder {\n" +
+"      color: #cccccc; }\n" +
+"    .swal2-popup .swal2-input::placeholder,\n" +
+"    .swal2-popup .swal2-file::placeholder,\n" +
+"    .swal2-popup .swal2-textarea::placeholder {\n" +
+"      color: #cccccc; }\n" +
+"  .swal2-popup .swal2-range input {\n" +
+"    width: 80%; }\n" +
+"  .swal2-popup .swal2-range output {\n" +
+"    width: 20%;\n" +
+"    font-weight: 600;\n" +
+"    text-align: center; }\n" +
+"  .swal2-popup .swal2-range input,\n" +
+"  .swal2-popup .swal2-range output {\n" +
+"    height: 2.625em;\n" +
+"    margin: 1em auto;\n" +
+"    padding: 0;\n" +
+"    font-size: 1.125em;\n" +
+"    line-height: 2.625em; }\n" +
+"  .swal2-popup .swal2-input {\n" +
+"    height: 2.625em;\n" +
+"    padding: 0.75em; }\n" +
+"    .swal2-popup .swal2-input[type='number'] {\n" +
+"      max-width: 10em; }\n" +
+"  .swal2-popup .swal2-file {\n" +
+"    font-size: 1.125em; }\n" +
+"  .swal2-popup .swal2-textarea {\n" +
+"    height: 6.75em;\n" +
+"    padding: 0.75em; }\n" +
+"  .swal2-popup .swal2-select {\n" +
+"    min-width: 50%;\n" +
+"    max-width: 100%;\n" +
+"    padding: .375em .625em;\n" +
+"    color: #545454;\n" +
+"    font-size: 1.125em; }\n" +
+"  .swal2-popup .swal2-radio,\n" +
+"  .swal2-popup .swal2-checkbox {\n" +
+"    align-items: center;\n" +
+"    justify-content: center; }\n" +
+"    .swal2-popup .swal2-radio label,\n" +
+"    .swal2-popup .swal2-checkbox label {\n" +
+"      margin: 0 .6em;\n" +
+"      font-size: 1.125em; }\n" +
+"    .swal2-popup .swal2-radio input,\n" +
+"    .swal2-popup .swal2-checkbox input {\n" +
+"      margin: 0 .4em; }\n" +
+"  .swal2-popup .swal2-validationerror {\n" +
+"    display: none;\n" +
+"    align-items: center;\n" +
+"    justify-content: center;\n" +
+"    padding: 0.625em;\n" +
+"    background: #f0f0f0;\n" +
+"    color: #666666;\n" +
+"    font-size: 1em;\n" +
+"    font-weight: 300;\n" +
+"    overflow: hidden; }\n" +
+"    .swal2-popup .swal2-validationerror::before {\n" +
+"      display: inline-block;\n" +
+"      width: 1.5em;\n" +
+"      min-width: 1.5em;\n" +
+"      height: 1.5em;\n" +
+"      margin: 0 .625em;\n" +
+"      border-radius: 50%;\n" +
+"      background-color: #f27474;\n" +
+"      color: #fff;\n" +
+"      font-weight: 600;\n" +
+"      line-height: 1.5em;\n" +
+"      text-align: center;\n" +
+"      content: '!';\n" +
+"      zoom: normal; }\n" +
+"\n" +
+"@supports (-ms-accelerator: true) {\n" +
+"  .swal2-range input {\n" +
+"    width: 100% !important; }\n" +
+"  .swal2-range output {\n" +
+"    display: none; } }\n" +
+"\n" +
+"@media all and (-ms-high-contrast: none), (-ms-high-contrast: active) {\n" +
+"  .swal2-range input {\n" +
+"    width: 100% !important; }\n" +
+"  .swal2-range output {\n" +
+"    display: none; } }\n" +
+"\n" +
+"@-moz-document url-prefix() {\n" +
+"  .swal2-close:focus {\n" +
+"    outline: 2px solid rgba(50, 100, 150, 0.4); } }\n" +
+"\n" +
+".swal2-icon {\n" +
+"  position: relative;\n" +
+"  justify-content: center;\n" +
+"  width: 5em;\n" +
+"  height: 5em;\n" +
+"  margin: 1.25em auto 1.875em;\n" +
+"  border: .25em solid transparent;\n" +
+"  border-radius: 50%;\n" +
+"  line-height: 5em;\n" +
+"  cursor: default;\n" +
+"  box-sizing: content-box;\n" +
+"  -webkit-user-select: none;\n" +
+"     -moz-user-select: none;\n" +
+"      -ms-user-select: none;\n" +
+"          user-select: none;\n" +
+"  zoom: normal; }\n" +
+"  .swal2-icon-text {\n" +
+"    font-size: 3.75em; }\n" +
+"  .swal2-icon.swal2-error {\n" +
+"    border-color: #f27474; }\n" +
+"    .swal2-icon.swal2-error .swal2-x-mark {\n" +
+"      position: relative;\n" +
+"      flex-grow: 1; }\n" +
+"    .swal2-icon.swal2-error [class^='swal2-x-mark-line'] {\n" +
+"      display: block;\n" +
+"      position: absolute;\n" +
+"      top: 2.3125em;\n" +
+"      width: 2.9375em;\n" +
+"      height: .3125em;\n" +
+"      border-radius: .125em;\n" +
+"      background-color: #f27474; }\n" +
+"      .swal2-icon.swal2-error [class^='swal2-x-mark-line'][class$='left'] {\n" +
+"        left: 1.0625em;\n" +
+"        -webkit-transform: rotate(45deg);\n" +
+"                transform: rotate(45deg); }\n" +
+"      .swal2-icon.swal2-error [class^='swal2-x-mark-line'][class$='right'] {\n" +
+"        right: 1em;\n" +
+"        -webkit-transform: rotate(-45deg);\n" +
+"                transform: rotate(-45deg); }\n" +
+"  .swal2-icon.swal2-warning {\n" +
+"    border-color: #facea8;\n" +
+"    color: #f8bb86; }\n" +
+"  .swal2-icon.swal2-info {\n" +
+"    border-color: #9de0f6;\n" +
+"    color: #3fc3ee; }\n" +
+"  .swal2-icon.swal2-question {\n" +
+"    border-color: #c9dae1;\n" +
+"    color: #87adbd; }\n" +
+"  .swal2-icon.swal2-success {\n" +
+"    border-color: #a5dc86; }\n" +
+"    .swal2-icon.swal2-success [class^='swal2-success-circular-line'] {\n" +
+"      position: absolute;\n" +
+"      width: 3.75em;\n" +
+"      height: 7.5em;\n" +
+"      -webkit-transform: rotate(45deg);\n" +
+"              transform: rotate(45deg);\n" +
+"      border-radius: 50%; }\n" +
+"      .swal2-icon.swal2-success [class^='swal2-success-circular-line'][class$='left'] {\n" +
+"        top: -.4375em;\n" +
+"        left: -2.0635em;\n" +
+"        -webkit-transform: rotate(-45deg);\n" +
+"                transform: rotate(-45deg);\n" +
+"        -webkit-transform-origin: 3.75em 3.75em;\n" +
+"                transform-origin: 3.75em 3.75em;\n" +
+"        border-radius: 7.5em 0 0 7.5em; }\n" +
+"      .swal2-icon.swal2-success [class^='swal2-success-circular-line'][class$='right'] {\n" +
+"        top: -.6875em;\n" +
+"        left: 1.875em;\n" +
+"        -webkit-transform: rotate(-45deg);\n" +
+"                transform: rotate(-45deg);\n" +
+"        -webkit-transform-origin: 0 3.75em;\n" +
+"                transform-origin: 0 3.75em;\n" +
+"        border-radius: 0 7.5em 7.5em 0; }\n" +
+"    .swal2-icon.swal2-success .swal2-success-ring {\n" +
+"      position: absolute;\n" +
+"      top: -.25em;\n" +
+"      left: -.25em;\n" +
+"      width: 100%;\n" +
+"      height: 100%;\n" +
+"      border: 0.25em solid rgba(165, 220, 134, 0.3);\n" +
+"      border-radius: 50%;\n" +
+"      z-index: 2;\n" +
+"      box-sizing: content-box; }\n" +
+"    .swal2-icon.swal2-success .swal2-success-fix {\n" +
+"      position: absolute;\n" +
+"      top: .5em;\n" +
+"      left: 1.625em;\n" +
+"      width: .4375em;\n" +
+"      height: 5.625em;\n" +
+"      -webkit-transform: rotate(-45deg);\n" +
+"              transform: rotate(-45deg);\n" +
+"      z-index: 1; }\n" +
+"    .swal2-icon.swal2-success [class^='swal2-success-line'] {\n" +
+"      display: block;\n" +
+"      position: absolute;\n" +
+"      height: .3125em;\n" +
+"      border-radius: .125em;\n" +
+"      background-color: #a5dc86;\n" +
+"      z-index: 2; }\n" +
+"      .swal2-icon.swal2-success [class^='swal2-success-line'][class$='tip'] {\n" +
+"        top: 2.875em;\n" +
+"        left: .875em;\n" +
+"        width: 1.5625em;\n" +
+"        -webkit-transform: rotate(45deg);\n" +
+"                transform: rotate(45deg); }\n" +
+"      .swal2-icon.swal2-success [class^='swal2-success-line'][class$='long'] {\n" +
+"        top: 2.375em;\n" +
+"        right: .5em;\n" +
+"        width: 2.9375em;\n" +
+"        -webkit-transform: rotate(-45deg);\n" +
+"                transform: rotate(-45deg); }\n" +
+"\n" +
+".swal2-progresssteps {\n" +
+"  align-items: center;\n" +
+"  margin: 0 0 1.25em;\n" +
+"  padding: 0;\n" +
+"  font-weight: 600; }\n" +
+"  .swal2-progresssteps li {\n" +
+"    display: inline-block;\n" +
+"    position: relative; }\n" +
+"  .swal2-progresssteps .swal2-progresscircle {\n" +
+"    width: 2em;\n" +
+"    height: 2em;\n" +
+"    border-radius: 2em;\n" +
+"    background: #3085d6;\n" +
+"    color: #fff;\n" +
+"    line-height: 2em;\n" +
+"    text-align: center;\n" +
+"    z-index: 20; }\n" +
+"    .swal2-progresssteps .swal2-progresscircle:first-child {\n" +
+"      margin-left: 0; }\n" +
+"    .swal2-progresssteps .swal2-progresscircle:last-child {\n" +
+"      margin-right: 0; }\n" +
+"    .swal2-progresssteps .swal2-progresscircle.swal2-activeprogressstep {\n" +
+"      background: #3085d6; }\n" +
+"      .swal2-progresssteps .swal2-progresscircle.swal2-activeprogressstep ~ .swal2-progresscircle {\n" +
+"        background: #add8e6; }\n" +
+"      .swal2-progresssteps .swal2-progresscircle.swal2-activeprogressstep ~ .swal2-progressline {\n" +
+"        background: #add8e6; }\n" +
+"  .swal2-progresssteps .swal2-progressline {\n" +
+"    width: 2.5em;\n" +
+"    height: .4em;\n" +
+"    margin: 0 -1px;\n" +
+"    background: #3085d6;\n" +
+"    z-index: 10; }\n" +
+"\n" +
+"[class^='swal2'] {\n" +
+"  -webkit-tap-highlight-color: transparent; }\n" +
+"\n" +
+".swal2-show {\n" +
+"  -webkit-animation: swal2-show 0.3s;\n" +
+"          animation: swal2-show 0.3s; }\n" +
+"  .swal2-show.swal2-noanimation {\n" +
+"    -webkit-animation: none;\n" +
+"            animation: none; }\n" +
+"\n" +
+".swal2-hide {\n" +
+"  -webkit-animation: swal2-hide 0.15s forwards;\n" +
+"          animation: swal2-hide 0.15s forwards; }\n" +
+"  .swal2-hide.swal2-noanimation {\n" +
+"    -webkit-animation: none;\n" +
+"            animation: none; }\n" +
+"\n" +
+"[dir='rtl'] .swal2-close {\n" +
+"  right: auto;\n" +
+"  left: 0; }\n" +
+"\n" +
+".swal2-animate-success-icon .swal2-success-line-tip {\n" +
+"  -webkit-animation: swal2-animate-success-line-tip 0.75s;\n" +
+"          animation: swal2-animate-success-line-tip 0.75s; }\n" +
+"\n" +
+".swal2-animate-success-icon .swal2-success-line-long {\n" +
+"  -webkit-animation: swal2-animate-success-line-long 0.75s;\n" +
+"          animation: swal2-animate-success-line-long 0.75s; }\n" +
+"\n" +
+".swal2-animate-success-icon .swal2-success-circular-line-right {\n" +
+"  -webkit-animation: swal2-rotate-success-circular-line 4.25s ease-in;\n" +
+"          animation: swal2-rotate-success-circular-line 4.25s ease-in; }\n" +
+"\n" +
+".swal2-animate-error-icon {\n" +
+"  -webkit-animation: swal2-animate-error-icon 0.5s;\n" +
+"          animation: swal2-animate-error-icon 0.5s; }\n" +
+"  .swal2-animate-error-icon .swal2-x-mark {\n" +
+"    -webkit-animation: swal2-animate-error-x-mark 0.5s;\n" +
+"            animation: swal2-animate-error-x-mark 0.5s; }\n" +
+"\n" +
+"@-webkit-keyframes swal2-rotate-loading {\n" +
+"  0% {\n" +
+"    -webkit-transform: rotate(0deg);\n" +
+"            transform: rotate(0deg); }\n" +
+"  100% {\n" +
+"    -webkit-transform: rotate(360deg);\n" +
+"            transform: rotate(360deg); } }\n" +
+"\n" +
+"@keyframes swal2-rotate-loading {\n" +
+"  0% {\n" +
+"    -webkit-transform: rotate(0deg);\n" +
+"            transform: rotate(0deg); }\n" +
+"  100% {\n" +
+"    -webkit-transform: rotate(360deg);\n" +
+"            transform: rotate(360deg); } }");
 
 /***/ })
 /******/ ]);
