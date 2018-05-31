@@ -48,24 +48,24 @@ class RegisterController extends Controller
     protected function validator(array $data)
     {
 
+
         if($data['account_type'] == 'email'){
             return Validator::make($data, [
                 'name' => 'required|string|max:100|unique:users',
                 'accountSign' => ['required','string','max:32',function($attribute,$value,$fail){
-                    if(User::where('account',$value)->get()){
-                        dd(User::where('account',$value)->get());
+                    if(User::where('account',$value)->first()){
+                        
                         return $fail($attribute.'is exists');
                     };
                 }],
                 'passwordSign' => 'required|string|min:6|confirmed',
             ]);
         }else{
-
                 return Validator::make($data, [
                     'name' => 'required|string|max:100|unique:users',
                     'accountSign' => ['required','string','max:20','regex:/^1[34578]{1}\d{9}$/',function($attribute,$value,$fail){
-                        if(User::where('accountSign',$value)->get()){
-                                return $fail($attribute.'is wrong');
+                        if(User::where('account',$value)->first()){
+                                return $fail($attribute.' phone is wrong');
                             };
                         }],
                     'passwordSign' => 'required|string|min:6|confirmed',

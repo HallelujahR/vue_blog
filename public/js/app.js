@@ -56130,6 +56130,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 					alert('2');
 				}
 			}).catch(function (error) {
+				self.errors = error.response.data;
 				console.log(error);
 			});
 		},

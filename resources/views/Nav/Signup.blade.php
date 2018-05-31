@@ -209,8 +209,6 @@
     });     
 </script>
 
-@endsection
-
 @if( $errors->first('name'))
     <script type="text/javascript">
         $('#qh').trigger('click');
@@ -236,3 +234,4 @@
         $('#qh').trigger('click');
     </script>
 @endif
+@endsection

@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Repositories\QuestionRepository;
 use Illuminate\Http\Request;
 
+
 class QuestionController extends Controller
 {
     //
     protected $QuestionRepository;
+
 
     public function __construct(QuestionRepository $QuestionRepository){
     	$this->QuestionRepository = $QuestionRepository;
@@ -23,6 +25,10 @@ class QuestionController extends Controller
     }
 
     public function createQuestion(Request $request){
+    	$this->validate($request, [
+	        $request->question['title'] => 'min:2',
+     	]);
+
     	$status = $this->QuestionRepository->store($request);
     	return $status;
     }

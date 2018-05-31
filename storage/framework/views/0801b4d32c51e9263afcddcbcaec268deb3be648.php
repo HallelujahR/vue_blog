@@ -210,8 +210,6 @@
     });     
 </script>
 
-<?php $__env->stopSection(); ?>
-
 <?php if( $errors->first('name')): ?>
     <script type="text/javascript">
         $('#qh').trigger('click');
@@ -237,3 +235,4 @@
         $('#qh').trigger('click');
     </script>
 <?php endif; ?>
+<?php $__env->stopSection(); ?>

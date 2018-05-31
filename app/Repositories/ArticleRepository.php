@@ -28,6 +28,7 @@ class ArticleRepository {
 	    	for($i =0 ;$i<count($top);$i++){
 	    		Topic::findOrFail($top[$i])->increment('article_count');
 	    	}
+	    	User::findOrFail($request->user()['id'])->increment('question_count');
      		return '1';
         }else{
         	return '0';
