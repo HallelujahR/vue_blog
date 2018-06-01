@@ -4,7 +4,7 @@
     <input type="submit" name="" id="logout" value="退出">
 </form>
 
-<nav id="nav" class="navbar navbar-default" role="navigation">
+<nav id="nav" class="navbar navbar-default" role="navigation" v-bind:style="styles">
     <div class="container"> 
             <div class="navbar-header">
                 <button type="button" class="navbar-toggle" data-toggle="collapse"
@@ -17,9 +17,8 @@
             </div>
             <div class="row"  id="head">
                 <div class="collapse navbar-collapse" id="example-navbar-collapse">
-                    <ul class="nav navbar-nav">
+                    <ul class="nav navbar-nav" id="tem">
                         <li><a class='fontColor' href="/article">文章</a></li>
-                      
                         <li><a class='fontColor' href="#">问题</a></li>
                         <li><a class='fontColor' href="#">话题</a></li>
                         <li>

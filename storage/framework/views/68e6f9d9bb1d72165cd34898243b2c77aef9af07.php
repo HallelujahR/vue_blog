@@ -10,12 +10,10 @@
         <link rel="stylesheet" href="<?php echo e(asset('css/home.css')); ?>">
         <link rel="stylesheet" href="<?php echo e(asset('css/release.css')); ?>">
         <link rel="stylesheet" href="<?php echo e(asset('font-awesome-4.7.0/css/font-awesome.min.css')); ?>">
+        <?php echo $__env->yieldContent('css'); ?>
         <title>Laravel</title>
-
-
         <!-- Styles -->
         <style>
-           <?php echo $__env->yieldContent('css'); ?>
            @media  only screen and (max-width: 1024px){ 
                 .main-header{
                     background:url(<?php echo e(asset('image/backgroundSmall2.jpg')); ?>);
@@ -42,16 +40,67 @@
         </header>
         <div id="app">
         <?php echo $__env->make('Nav.Navbar', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
-            <div class="main">
-                <?php echo $__env->yieldContent('content'); ?>
-                <div id="imp">
-                      <li><router-link to="/article">Go to Foo</router-link></li>
-                     <router-view></router-view>
+            <div class="main container " id="main"  v-bind:style="stylesImp" style="border:1px solid red;position:relative">
+                <div class="col-md-8" id="mainImp" style="border:1px solid red;height:1000px;position:relative">
+                    <?php echo $__env->yieldContent('content'); ?>
+                </div>
+                <div class="col-md-4" v-bind:style="styleFix"  style="border:1px solid pink;height:20px;right:0px;">
+                    
                 </div>
             </div>
         </div>
 
     </body>
 <script type="text/javascript" src="<?php echo e(mix('js/app.js')); ?>"></script>
+<script type="text/javascript">
+//遍历登录后显示的信息，同时用了vue的动画过渡效果
+var  personLink = new Vue({
+    el: '#nav',
+    data: {
+        show:false,
+        searchBarFixed:'',
+        styles:{
+            '':'',
+        },
+        stylesImp:{
+            'border':'1px solid red',
+        },
+    },
+    mounted () {
+        window.addEventListener('scroll', this.handleScroll)
+    },
+    destroyed () {
+      window.removeEventListener('scroll', this.handleScroll)
+    },
+    methods:{
+        //登出操作
+        out:function(){
+            $('#logout').trigger('click');
+        },
+       handleScroll () {
+            var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop
+            var offsetTop = $('.main-header').height();
+            if (scrollTop > offsetTop) {
+                // this.searchBarFixed = true
+                this.styles={
+                    'position':'fixed',
+                    'top':'0px',
+                    'width':'100%',
+                    'margin-bottom':'120px',
+                    'z-index':'100',
+                },
+                this.stylesImp={
+                    'margin-top':'120px',
+                    'border':'1px solid black',
+                }
+            } else {
+                // this.searchBarFixed = false
+                this.styles='';
+            }
+        },
+    }
+});
+
+</script>
 <?php echo $__env->yieldContent('js'); ?>
 </html>

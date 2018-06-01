@@ -114,22 +114,6 @@
 
 @section('js')
 <script type="text/javascript">
-    //遍历登录后显示的信息，同时用了vue的动画过渡效果
-    var  personLink = new Vue({
-      el: '#nav',
-      data: {
-        
-        show:false,
-
-      },
-      methods:{
-        //登出操作
-        out:function(){
-            $('#logout').trigger('click');
-        },
-
-      }
-    });
 
 
     const myModal = new Vue({  

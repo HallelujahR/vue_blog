@@ -1099,7 +1099,6 @@ __webpack_require__(12);
 window.E = __webpack_require__(36);
 window.Velocity = __webpack_require__(37);
 window.Swal = __webpack_require__(38);
-// window.VueRouter = require("vue-router");
 window.Vue = __webpack_require__(40);
 
 /**
@@ -1114,34 +1113,62 @@ Vue.use(__WEBPACK_IMPORTED_MODULE_0_vue_router__["a" /* default */]);
 
 Vue.component('Release', __WEBPACK_IMPORTED_MODULE_1__components_Release_vue___default.a);
 Vue.component('Question', __WEBPACK_IMPORTED_MODULE_2__components_Question_vue___default.a);
+
 new Vue({
-	el: '#Release',
-	data: {
-		show: true
-	},
-	methods: {
-		test: function test() {
-			this.show = true;
-		},
-		test1: function test1() {
-			this.show = false;
-		}
-	}
-
+  el: '#Release',
+  data: {
+    show: true
+  },
+  methods: {
+    test: function test() {
+      this.show = true;
+    },
+    test1: function test1() {
+      this.show = false;
+    }
+  }
 });
 
-// Vue.component('example', require('./components/Article.vue'));
+//Article作为组件名不好使，，不知道为什么 文章列表组件
 
+Vue.component('articlelist', __WEBPACK_IMPORTED_MODULE_3__components_Article_vue___default.a);
 
-var routes = [{ path: '/article', component: __WEBPACK_IMPORTED_MODULE_3__components_Article_vue___default.a }];
+new Vue({
+  el: '#main',
+  data: {
+    styleFix: {
+      '': ''
+    },
+    stylesImp: {
 
-var router = new __WEBPACK_IMPORTED_MODULE_0_vue_router__["a" /* default */]({
-	routes: routes // (缩写) 相当于 routes: routes
+      '': ''
+    }
+  },
+  mounted: function mounted() {
+    window.addEventListener('scroll', this.handleScroll);
+  },
+
+  methods: {
+    handleScroll: function handleScroll() {
+      var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
+      var offsetTop = $('.main-header').height();
+      if (scrollTop > offsetTop) {
+        // this.searchBarFixed = true
+
+        this.stylesImp = {
+          'margin-top': '140px',
+          'border': '1px solid black'
+        }, this.styleFix = {
+          'position': 'fixed'
+        };
+      } else {
+        this.stylesImp = {
+          '': ''
+        };
+      }
+    }
+  }
 });
-
-var app = new Vue({
-	router: router
-}).$mount('#imp');
 
 /***/ }),
 /* 12 */
@@ -59988,8 +60015,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 /* harmony default export */ __webpack_exports__["default"] = ({
 	data: function data() {
 		return {
-
-			message: '12312312312312'
+			msg: 'asdfasdasdfasdf'
 		};
 	}
 });
@@ -60002,7 +60028,7 @@ var render = function() {
   var _vm = this
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
-  return _c("div", [_vm._v("\n\t" + _vm._s(_vm.message) + "\n")])
+  return _c("div", [_vm._v("\n\t" + _vm._s(_vm.msg) + "\n")])
 }
 var staticRenderFns = []
 render._withStripped = true

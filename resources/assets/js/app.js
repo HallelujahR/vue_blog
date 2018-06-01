@@ -9,7 +9,6 @@ require('./bootstrap');
 window.E = require('wangeditor')
 window.Velocity = require('velocity-animate');
 window.Swal = require('sweetalert2');
-// window.VueRouter = require("vue-router");
 window.Vue = require('vue');
 import VueRouter from 'vue-router'
 /**
@@ -24,6 +23,7 @@ import Release from './components/Release.vue';
 import Question from './components/Question.vue';
 Vue.component('Release',Release);
 Vue.component('Question',Question);
+
 new Vue({
 	el:'#Release',
 	data:{
@@ -37,22 +37,48 @@ new Vue({
 			this.show = false;
 		}
 	},
-
-
-
 });
 
-// Vue.component('example', require('./components/Article.vue'));
-import Example from './components/Article.vue'
+//Article作为组件名不好使，，不知道为什么 文章列表组件
+import Article from './components/Article.vue';
+Vue.component('articlelist',Article);
 
-const routes = [
-  { path: '/article', component: Example },
-]
+new Vue({
+	el:'#main',
+	    data: {
+	    styleFix:{
+	    	'':''
+	    },
+        stylesImp:{
+            
+            '':'',
+        },
+    },
+    mounted () {
+        window.addEventListener('scroll', this.handleScroll)
+    },
+    methods:{
+      
+       handleScroll () {
+            var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop
+            var offsetTop = $('.main-header').height();
+            if (scrollTop > offsetTop) {
+                // this.searchBarFixed = true
 
-const router = new VueRouter({
-  routes // (缩写) 相当于 routes: routes
+                this.stylesImp={
+                    'margin-top':'140px',
+                    'border':'1px solid black',
+                },
+                this.styleFix={
+                	'position':'fixed',
+                }
+            } else {
+				this.stylesImp={
+					'':'',
+				}
+            }
+        },
+    }
 })
 
-const app = new Vue({
-  router
-}).$mount('#imp')
+

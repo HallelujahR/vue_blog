@@ -12,7 +12,7 @@
                 </div>
             </div>
             <div class="modal-body">
-                <div class="panel-body" id="re">
+                <div class="panel-body">
                     <transition name="component-fade" mode="out-in">
                         <Release v-if="show"></Release>
                         <Question v-else></Question>
@@ -22,8 +22,3 @@
         </div><!-- /.modal-content -->
     </div><!-- /.modal-dialog -->
 </div><!-- /.modal -->
-<?php $__env->startSection('js1'); ?>
-<script type="text/javascript">
-
-</script>
-<?php $__env->stopSection(); ?>

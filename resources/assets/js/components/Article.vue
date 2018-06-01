@@ -1,16 +1,14 @@
 <template>
 	<div>
-		{{message}}
+		{{msg}}
 	</div>
 </template>
 <script type="text/javascript">
-export default{
-
-	data(){
-		return {
-		
-		message:'12312312312312',
+	export default{
+		data(){
+			return{
+				msg:'asdfasdasdfasdf',
+			}
+		}
 	}
-	},
-}
 </script>
