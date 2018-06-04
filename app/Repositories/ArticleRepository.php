@@ -35,7 +35,24 @@ class ArticleRepository {
         };	   
         //有时间把base64改成文件上传到服务器,base64拖慢网页加载,并且数据库查询较慢
     }
-		    
+		  
+    public function getAll(){
+      $data = Article::limit('10')->get();
+
+      //分割字符串为数组并查询topic表中的数据然后返给data 再传递到前台
+      for($i=0;$i<count($data);$i++){
+        $topic = explode('/',$data[$i]->topicid);
+        for($n=0;$n<count($topic);$n++){
+          $newData['topicid'][$i][] = Topic::find($topic[$n]);
+          $data[$i]['topic'] = $newData['topicid'][$i];
+        }
+      }
+      return $data;
+    }
+
+    public function agree(){
+      
+    }
 
 }
 

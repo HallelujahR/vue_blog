@@ -9,6 +9,7 @@
         <link rel="stylesheet" href="{{mix('css/app.css')}}">
         <link rel="stylesheet" href="{{asset('css/home.css')}}">
         <link rel="stylesheet" href="{{asset('css/release.css')}}">
+        <link rel="stylesheet" href="{{asset('css/article.css')}}">
         <link rel="stylesheet" href="{{asset('font-awesome-4.7.0/css/font-awesome.min.css')}}">
         @yield('css')
         <title>Laravel</title>
@@ -40,8 +41,8 @@
         </header>
         <div id="app">
         @include('Nav.Navbar')
-            <div class="main container " id="main"  v-bind:style="stylesImp" style="border:1px solid red;position:relative">
-                <div class="col-md-8" id="mainImp" style="border:1px solid red;height:1000px;position:relative">
+            <div class="main container " id="main"  v-bind:style="stylesImp" style="position:relative">
+                <div class="col-md-8" id="mainImp" style="position:relative;padding:0px">
                     @yield('content')
                 </div>
                 <div class="col-md-4" v-bind:style="styleFix"  style="border:1px solid pink;height:20px;right:0px;">
@@ -49,7 +50,6 @@
                 </div>
             </div>
         </div>
-
     </body>
 <script type="text/javascript" src="{{mix('js/app.js')}}"></script>
 <script type="text/javascript">

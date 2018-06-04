@@ -9,6 +9,7 @@
         <link rel="stylesheet" href="<?php echo e(mix('css/app.css')); ?>">
         <link rel="stylesheet" href="<?php echo e(asset('css/home.css')); ?>">
         <link rel="stylesheet" href="<?php echo e(asset('css/release.css')); ?>">
+        <link rel="stylesheet" href="<?php echo e(asset('css/article.css')); ?>">
         <link rel="stylesheet" href="<?php echo e(asset('font-awesome-4.7.0/css/font-awesome.min.css')); ?>">
         <?php echo $__env->yieldContent('css'); ?>
         <title>Laravel</title>
@@ -40,8 +41,8 @@
         </header>
         <div id="app">
         <?php echo $__env->make('Nav.Navbar', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
-            <div class="main container " id="main"  v-bind:style="stylesImp" style="border:1px solid red;position:relative">
-                <div class="col-md-8" id="mainImp" style="border:1px solid red;height:1000px;position:relative">
+            <div class="main container " id="main"  v-bind:style="stylesImp" style="position:relative">
+                <div class="col-md-8" id="mainImp" style="position:relative;padding:0px">
                     <?php echo $__env->yieldContent('content'); ?>
                 </div>
                 <div class="col-md-4" v-bind:style="styleFix"  style="border:1px solid pink;height:20px;right:0px;">
@@ -49,7 +50,6 @@
                 </div>
             </div>
         </div>
-
     </body>
 <script type="text/javascript" src="<?php echo e(mix('js/app.js')); ?>"></script>
 <script type="text/javascript">

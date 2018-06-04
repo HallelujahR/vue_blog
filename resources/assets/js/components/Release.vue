@@ -44,8 +44,8 @@
 			  </transition-group>
 			</div>
 			<div class="form-group" id="topic">
-					
-					<i class="fa fa-search" aria-hidden="true"></i><input type="text" name="topic" id="searchTopic" v-model="query" v-on:input ="inputFunc" placeholder="选择文章标签,最多三个" autocomplete="off" />
+						<i class="fa fa-search" style="float:left" aria-hidden="true"></i>
+						<input type="text" name="topic" id="searchTopic" v-model="query" v-on:input ="inputFunc" placeholder="选择文章标签,最多三个" autocomplete="off" />
 					<ul id="selectul"  >
 						<li class="selectTopic"  v-for="(item,index) in selectTopic" style="float:left">
 							{{item.topic}}
@@ -188,13 +188,13 @@
 		    'quote',  // 引用
 		    'justify',  // 对齐方式
 		    'list',  // 列表
-		    'foreColor',  // 文字颜色
 		    'code',  // 插入代码
 		    'undo',  // 撤销
 		    'redo'  // 重复
 		    ]
 		    this.editor.customConfig.showLinkImg = false
 		    this.editor.customConfig.uploadImgShowBase64 = true;
+		    // this.editor.customConfig.uploadImgServer = '/upload'
 			this.editor.create();
 			this.editor.txt.html('<p>在此处输入文章内容</p>');
 

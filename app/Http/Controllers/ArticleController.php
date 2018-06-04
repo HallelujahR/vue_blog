@@ -25,5 +25,15 @@ class ArticleController extends Controller
     	$status = $this->ArticleRepository->store($request);
     	return $status;
     }
+
+    public function getAll(){
+        $data = $this->ArticleRepository->getAll();
+        return $data;
+    }
+
+    public function agree(request $request){
+        $statu = $this->ArticleRepository->agree($request->get('id'));
+        return $statu;
+    }
 }
 

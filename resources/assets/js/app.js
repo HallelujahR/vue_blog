@@ -53,6 +53,7 @@ new Vue({
             
             '':'',
         },
+
     },
     mounted () {
         window.addEventListener('scroll', this.handleScroll)
@@ -67,18 +68,22 @@ new Vue({
 
                 this.stylesImp={
                     'margin-top':'140px',
-                    'border':'1px solid black',
                 },
                 this.styleFix={
-                	'position':'fixed',
+                	'':'',
+
                 }
             } else {
 				this.stylesImp={
 					'':'',
+				},
+				this.styleFix={
+					'':'',
 				}
             }
         },
-    }
+    } 
 })
 
-
+import ArticleDetail  from './components/ArticleDetail.vue';
+Vue.component('ArticleDetail',ArticleDetail);
