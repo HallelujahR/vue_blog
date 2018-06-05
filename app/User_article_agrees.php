@@ -12,5 +12,7 @@ class User_article_agrees extends Model
     	'uid','article_id'
     ];
 
-    
+	public function Article(){
+		return $this->belongsTo('App\Article');
+	}    
 }

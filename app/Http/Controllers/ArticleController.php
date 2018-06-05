@@ -21,6 +21,7 @@ class ArticleController extends Controller
     	return 'ok';
     }
 
+    
     public function createArticle(Request $request){
     	$status = $this->ArticleRepository->store($request);
     	return $status;
@@ -32,8 +33,12 @@ class ArticleController extends Controller
     }
 
     public function agree(request $request){
-        $statu = $this->ArticleRepository->agree($request->get('id'));
+        $statu = $this->ArticleRepository->agree($request);
         return $statu;
+    }
+
+    public function detail(request $request){
+
     }
 }
 

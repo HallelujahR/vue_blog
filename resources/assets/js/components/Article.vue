@@ -8,7 +8,7 @@
 				</span>
 			</div>
 			<div class="a_article_title">
-				<span><a class="a_title" href="">{{item['title']}}</a></span>
+				<span><a class="a_title" :href="'/article/detail/'+item.id">{{item['title']}}</a></span>
 			</div>
 			<div class="a_article_body">
 
@@ -30,10 +30,13 @@
 			</div>
 
 			<div class="a_article_foot">
-				<i class="fa fa-thumbs-o-up" @click="agree($event,item['id'])" aria-hidden="true"></i>
+				<i class="fa fa-thumbs-o-up" v-if="item['isAgree'] == null " @click="agree($event,item['id'])" aria-hidden="true"></i>
+
+				<i class="fa fa-thumbs-up agreed"  v-else @click="agree($event,item['id'])" aria-hidden="true"></i>
 				<span >
 					{{item['agree_count']}}
 				</span>
+
 
 				<i class="fa fa-commenting-o" style="margin-left:10px;"  aria-hidden="true"></i> 
 				<span>{{item['comment_count']}}</span>
@@ -43,7 +46,6 @@
 				</span>
  -->
 			</div>
-
 		</div>
 
 
@@ -53,7 +55,6 @@
 	export default{
 		data(){
 			return{
-				msg:'asdfasdasdfasdf',
 				article:[],
 			} 
 		},
@@ -64,7 +65,6 @@
 			  .then(function (response) {
 			  	self.article = response;
 			  	console.log(self.article);
-
 			})
 			  .catch(function (error) {
 			    console.log(error);
@@ -76,10 +76,28 @@
         },
         methods:{
         	agree:function(event,id){
-        		//点赞请求s
+        		//点赞请求
 				axios.get('/article/agree?id='+id)
 				  .then(function (response) {
-				    console.log(response);
+
+				    switch(response['data']){
+				    	case 2:
+					    	new Swal({ 
+							  title: "请先登录", 
+							  timer: 1200, 
+							  showConfirmButton: false 
+							});
+				    	break;
+				    	case 0:
+					    	event.target.style.color="#636B6F"
+					    	event.target.nextElementSibling.innerText--
+				    	break;
+				    	case 1:
+					    	event.target.style.color="#66D9EF"
+					    	event.target.nextElementSibling.innerText++
+				    	break;
+				    }
+
 				  })
 				  .catch(function (error) {
 				    console.log(error);
@@ -87,6 +105,4 @@
         	}
         }
      }
-
-	
 </script>

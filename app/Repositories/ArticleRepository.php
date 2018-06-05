@@ -1,9 +1,10 @@
 <?php
-
 namespace App\Repositories;
 use App\Article;
 use App\Topic;
 use App\User;
+use App\User_article_agrees;
+use Auth;
 class ArticleRepository {
 
 	//发表文章
@@ -46,12 +47,36 @@ class ArticleRepository {
           $newData['topicid'][$i][] = Topic::find($topic[$n]);
           $data[$i]['topic'] = $newData['topicid'][$i];
         }
+
+        $data[$i]['isAgree'] = User_article_agrees::where('uid',Auth::id())->where('article_id',$data[$i]['id'])->first();
+        
       }
       return $data;
     }
 
-    public function agree(){
-      
+    public function agree($request){
+
+       if($request->user()['id'] == ''){
+          return '2';
+          exit;
+       }
+
+       if(User_article_agrees::where('uid',$request->user()['id'])->where('article_id',$request->get('id'))->count() > 0){
+          // 取消赞
+          User_article_agrees::where('uid',$request->user()['id'])->where('article_id',$request->get('id'))->delete();
+          Article::findOrFail($request->get('id'))->decrement('agree_count');
+
+          return '0';
+       }else{
+          //点赞
+          $data['uid'] = $request->user()['id'];
+          $data['article_id'] = $request->get('id');
+          if(User_article_agrees::create($data)){
+            Article::findOrFail($request->get('id'))->increment('agree_count');
+            return '1';
+          }
+
+       };
     }
 
 }

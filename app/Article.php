@@ -20,5 +20,8 @@ class Article extends Model
     public function topic(){
     	return $this->hasMany('App\Topic');
     }
-
+    
+    public function user_article_agrees(){
+        return $this->hasMany('App\User_article_agrees');
+    }
 }

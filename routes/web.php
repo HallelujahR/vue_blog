@@ -20,7 +20,7 @@ Route::get('/article/test','ArticleController@test');
 Route::post('/article/createArticle','ArticleController@createArticle');
 Route::post('/article/getAll','ArticleController@getAll');
 Route::get('/article/agree/{id?}','ArticleController@agree');
-
+Route::get('/article/detail/{id?}','ArtilceController@detail');
 
 Route::post('/question/createQuestion','QuestionController@createQuestion');
 Route::get('/test/{phone}','ArticleController@send');
