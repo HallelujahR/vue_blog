@@ -39,6 +39,8 @@ return array(
     'App\\Topic' => $baseDir . '/app/Topic.php',
     'App\\User' => $baseDir . '/app/User.php',
     'App\\User_article_agrees' => $baseDir . '/app/User_article_agrees.php',
+    'App\\User_collection' => $baseDir . '/app/User_collection.php',
+    'App\\User_detail' => $baseDir . '/app/User_detail.php',
     'Carbon\\Carbon' => $vendorDir . '/nesbot/carbon/src/Carbon/Carbon.php',
     'Carbon\\CarbonInterval' => $vendorDir . '/nesbot/carbon/src/Carbon/CarbonInterval.php',
     'Carbon\\Exceptions\\InvalidDateException' => $vendorDir . '/nesbot/carbon/src/Carbon/Exceptions/InvalidDateException.php',

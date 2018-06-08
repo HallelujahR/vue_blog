@@ -64,12 +64,12 @@
 		display:none;
 	}
 }
-.fa{
+.fa-i{
 	font-size:19px !important;
 }
-.fa:hover{
+.fa-i:hover{
 	cursor: pointer;
 }
 .agreed{
-	color:#66D9EF;
+	color:#00D1FF;
 }

@@ -377,33 +377,6 @@ module.exports = {
 /* 1 */
 /***/ (function(module, exports) {
 
-var g;
-
-// This works in non-strict mode
-g = (function() {
-	return this;
-})();
-
-try {
-	// This works if eval is allowed (see CSP)
-	g = g || Function("return this")() || (1,eval)("this");
-} catch(e) {
-	// This works if the window reference is available
-	if(typeof window === "object")
-		g = window;
-}
-
-// g can still be undefined, but nothing to do about it...
-// We return undefined, instead of nothing here, so it's
-// easier to handle this case. if(!global) { ...}
-
-module.exports = g;
-
-
-/***/ }),
-/* 2 */
-/***/ (function(module, exports) {
-
 /* globals __VUE_SSR_CONTEXT__ */
 
 // IMPORTANT: Do NOT use ES2015 features in this file.
@@ -507,6 +480,33 @@ module.exports = function normalizeComponent (
     options: options
   }
 }
+
+
+/***/ }),
+/* 2 */
+/***/ (function(module, exports) {
+
+var g;
+
+// This works in non-strict mode
+g = (function() {
+	return this;
+})();
+
+try {
+	// This works if eval is allowed (see CSP)
+	g = g || Function("return this")() || (1,eval)("this");
+} catch(e) {
+	// This works if the window reference is available
+	if(typeof window === "object")
+		g = window;
+}
+
+// g can still be undefined, but nothing to do about it...
+// We return undefined, instead of nothing here, so it's
+// easier to handle this case. if(!global) { ...}
+
+module.exports = g;
 
 
 /***/ }),
@@ -1072,7 +1072,7 @@ module.exports = Cancel;
 /***/ (function(module, exports, __webpack_require__) {
 
 __webpack_require__(11);
-module.exports = __webpack_require__(54);
+module.exports = __webpack_require__(58);
 
 
 /***/ }),
@@ -1115,68 +1115,13 @@ Vue.use(__WEBPACK_IMPORTED_MODULE_0_vue_router__["a" /* default */]);
 
 Vue.component('Release', __WEBPACK_IMPORTED_MODULE_1__components_Release_vue___default.a);
 Vue.component('Question', __WEBPACK_IMPORTED_MODULE_2__components_Question_vue___default.a);
-
-new Vue({
-  el: '#Release',
-  data: {
-    show: true
-  },
-  methods: {
-    test: function test() {
-      this.show = true;
-    },
-    test1: function test1() {
-      this.show = false;
-    }
-  }
-});
-
 //Article作为组件名不好使，，不知道为什么 文章列表组件
 
 Vue.component('articlelist', __WEBPACK_IMPORTED_MODULE_3__components_Article_vue___default.a);
 
-new Vue({
-  el: '#main',
-  data: {
-    styleFix: {
-      '': ''
-    },
-    stylesImp: {
 
-      '': ''
-    }
-
-  },
-  mounted: function mounted() {
-    window.addEventListener('scroll', this.handleScroll);
-  },
-
-  methods: {
-    handleScroll: function handleScroll() {
-      var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop;
-      var offsetTop = $('.main-header').height();
-      if (scrollTop > offsetTop) {
-        // this.searchBarFixed = true
-
-        this.stylesImp = {
-          'margin-top': '140px'
-        }, this.styleFix = {
-          '': ''
-
-        };
-      } else {
-        this.stylesImp = {
-          '': ''
-        }, this.styleFix = {
-          '': ''
-        };
-      }
-    }
-  }
-});
-
-
-Vue.component('ArticleDetail', __WEBPACK_IMPORTED_MODULE_4__components_ArticleDetail_vue___default.a);
+Vue.component('adetail', __WEBPACK_IMPORTED_MODULE_4__components_ArticleDetail_vue___default.a);
+Vue.component('comment-article', __webpack_require__(55));
 
 /***/ }),
 /* 12 */
@@ -18349,7 +18294,7 @@ if (token) {
   }
 }.call(this));
 
-/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(1), __webpack_require__(14)(module)))
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(2), __webpack_require__(14)(module)))
 
 /***/ }),
 /* 14 */
@@ -55887,7 +55832,7 @@ Vue.compile = compileToFunctions;
 
 module.exports = Vue;
 
-/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(1), __webpack_require__(40).setImmediate))
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(2), __webpack_require__(40).setImmediate))
 
 /***/ }),
 /* 40 */
@@ -55957,7 +55902,7 @@ exports.clearImmediate = (typeof self !== "undefined" && self.clearImmediate) ||
                          (typeof global !== "undefined" && global.clearImmediate) ||
                          (this && this.clearImmediate);
 
-/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(1)))
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(2)))
 
 /***/ }),
 /* 41 */
@@ -56150,7 +56095,7 @@ exports.clearImmediate = (typeof self !== "undefined" && self.clearImmediate) ||
     attachTo.clearImmediate = clearImmediate;
 }(typeof self === "undefined" ? typeof global === "undefined" ? this : global : self));
 
-/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(1), __webpack_require__(5)))
+/* WEBPACK VAR INJECTION */}.call(exports, __webpack_require__(2), __webpack_require__(5)))
 
 /***/ }),
 /* 42 */
@@ -58787,7 +58732,7 @@ if (inBrowser && window.Vue) {
 /***/ (function(module, exports, __webpack_require__) {
 
 var disposed = false
-var normalizeComponent = __webpack_require__(2)
+var normalizeComponent = __webpack_require__(1)
 /* script */
 var __vue_script__ = __webpack_require__(44)
 /* template */
@@ -59443,7 +59388,7 @@ if (false) {
 /***/ (function(module, exports, __webpack_require__) {
 
 var disposed = false
-var normalizeComponent = __webpack_require__(2)
+var normalizeComponent = __webpack_require__(1)
 /* script */
 var __vue_script__ = __webpack_require__(47)
 /* template */
@@ -59952,7 +59897,7 @@ if (false) {
 /***/ (function(module, exports, __webpack_require__) {
 
 var disposed = false
-var normalizeComponent = __webpack_require__(2)
+var normalizeComponent = __webpack_require__(1)
 /* script */
 var __vue_script__ = __webpack_require__(50)
 /* template */
@@ -60053,11 +59998,22 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //
 //
 //
+//
+//
+//
+//
+//
+//
+//
+//
+//
 
 /* harmony default export */ __webpack_exports__["default"] = ({
 	data: function data() {
 		return {
-			article: []
+			article: [],
+			isCollection: '',
+			collectionMes: ''
 		};
 	},
 
@@ -60091,8 +60047,45 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 						event.target.nextElementSibling.innerText--;
 						break;
 					case 1:
-						event.target.style.color = "#66D9EF";
+						event.target.style.color = "#00D1FF";
 						event.target.nextElementSibling.innerText++;
+						break;
+				}
+			}).catch(function (error) {
+				console.log(error);
+			});
+		},
+		collection: function collection(event, id) {
+			var self = this;
+			axios.get('/article/collection?id=' + id).then(function (response) {
+				console.log(response);
+				switch (response['data']) {
+					case 2:
+						new Swal({
+							title: "请先登录",
+							timer: 1200,
+							showConfirmButton: false
+						});
+						break;
+					case 0:
+						new Swal({
+							title: "取消收藏",
+							timer: 800,
+							showConfirmButton: false
+						});
+						event.target.style.color = "#636B6F";
+						self.isCollection = false;
+						event.target.nextElementSibling.innerText = '收藏';
+						break;
+					case 1:
+						new Swal({
+							title: "已收藏",
+							timer: 800,
+							showConfirmButton: false
+						});
+						event.target.style.color = "#00D1FF";
+						self.isCollection = true;
+						event.target.nextElementSibling.innerText = '已收藏';
 						break;
 				}
 			}).catch(function (error) {
@@ -60123,9 +60116,14 @@ var render = function() {
             _vm._v(" "),
             _vm._l(item["topic"], function(top) {
               return _c("span", [
-                _c("a", { staticClass: "a_topic", attrs: { href: "" } }, [
-                  _vm._v(_vm._s(top["topic"]))
-                ])
+                _c(
+                  "a",
+                  {
+                    staticClass: "a_topic",
+                    attrs: { href: "/topic/detail/" + top.id }
+                  },
+                  [_vm._v(_vm._s(top["topic"]))]
+                )
               ])
             })
           ],
@@ -60138,7 +60136,10 @@ var render = function() {
               "a",
               {
                 staticClass: "a_title",
-                attrs: { href: "/article/detail/" + item.id }
+                attrs: {
+                  href: "/article/detail?id=" + item.id,
+                  target: "_blank"
+                }
               },
               [_vm._v(_vm._s(item["title"]))]
             )
@@ -60171,7 +60172,7 @@ var render = function() {
         _c("div", { staticClass: "a_article_foot" }, [
           item["isAgree"] == null
             ? _c("i", {
-                staticClass: "fa fa-thumbs-o-up",
+                staticClass: "fa fa-thumbs-o-up fa-i",
                 attrs: { "aria-hidden": "true" },
                 on: {
                   click: function($event) {
@@ -60180,7 +60181,7 @@ var render = function() {
                 }
               })
             : _c("i", {
-                staticClass: "fa fa-thumbs-up agreed",
+                staticClass: "fa fa-thumbs-up agreed fa-i",
                 attrs: { "aria-hidden": "true" },
                 on: {
                   click: function($event) {
@@ -60194,12 +60195,38 @@ var render = function() {
           ]),
           _vm._v(" "),
           _c("i", {
-            staticClass: "fa fa-commenting-o",
+            staticClass: "fa fa-commenting-o fa-i",
             staticStyle: { "margin-left": "10px" },
             attrs: { "aria-hidden": "true" }
           }),
           _vm._v(" "),
-          _c("span", [_vm._v(_vm._s(item["comment_count"]))])
+          _c("span", [_vm._v(_vm._s(item["comment_count"]))]),
+          _vm._v(" "),
+          item["isCollection"] != null
+            ? _c("i", {
+                staticClass: "fa fa-star collection fa-i",
+                staticStyle: { color: "#00D1FF", "margin-left": "10px" },
+                attrs: { "aria-hidden": "true" },
+                on: {
+                  click: function($event) {
+                    _vm.collection($event, item["id"])
+                  }
+                }
+              })
+            : _c("i", {
+                staticClass: "fa fa-star-o collection fa-i",
+                staticStyle: { "margin-left": "10px" },
+                attrs: { "aria-hidden": "true" },
+                on: {
+                  click: function($event) {
+                    _vm.collection($event, item["id"])
+                  }
+                }
+              }),
+          _vm._v(" "),
+          item["isCollection"] == null
+            ? _c("span", [_vm._v("收藏")])
+            : _c("span", [_vm._v("已收藏")])
         ])
       ])
     })
@@ -60220,11 +60247,11 @@ if (false) {
 /***/ (function(module, exports, __webpack_require__) {
 
 var disposed = false
-var normalizeComponent = __webpack_require__(2)
+var normalizeComponent = __webpack_require__(1)
 /* script */
-var __vue_script__ = null
+var __vue_script__ = __webpack_require__(53)
 /* template */
-var __vue_template__ = __webpack_require__(53)
+var __vue_template__ = __webpack_require__(54)
 /* template functional */
 var __vue_template_functional__ = false
 /* styles */
@@ -60264,13 +60291,375 @@ module.exports = Component.exports
 
 /***/ }),
 /* 53 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+/* harmony default export */ __webpack_exports__["default"] = ({
+    data: function data() {
+        return {
+            ar: [],
+            aid: '',
+            user: '',
+            userdetail: '',
+            isCollection: '',
+            collectionMes: '',
+            isComment: ''
+        };
+    },
+
+    beforeMount: function beforeMount() {
+        var self = this;
+        this.aid = this.GetQueryString('id=');
+        axios.post('/article/detail', {
+            id: this.aid
+        }).then(function (response) {
+            self.ar = response['data'];
+            self.user = self.ar['user'];
+            self.userdetail = self.ar['userdetail'];
+            if (self.ar['isCollection'] == null) {
+                self.isCollection = false;
+                self.collectionMes = '收藏';
+            } else {
+                self.isCollection = true;
+                self.collectionMes = '已收藏';
+            }
+
+            if (self.ar['comment_count'] == 0) {
+                self.isComment = true;
+            } else {
+                self.isComment = false;
+            }
+        }).catch(function (error) {
+            console.log(error);
+        });
+    },
+    updated: function updated() {
+        console.log($('#ad_article').find('img').addClass('img-responsive'));
+    },
+    methods: {
+        //利用正则获取url地址的传递参数
+        GetQueryString: function GetQueryString(name) {
+            var reg = new RegExp("(^|&)" + name + "([^&]*)(&|$)");
+            var r = window.location.search.substr(1).match(reg);
+            if (r != null) return unescape(r[2]);return null;
+        },
+        agree: function agree(event, id) {
+            //点赞请求
+            axios.get('/article/agree?id=' + id).then(function (response) {
+
+                switch (response['data']) {
+                    case 2:
+                        new Swal({
+                            title: "请先登录",
+                            timer: 1200,
+                            showConfirmButton: false
+                        });
+                        break;
+                    case 0:
+                        event.target.style.color = "#636B6F";
+                        event.target.nextElementSibling.innerText--;
+                        break;
+                    case 1:
+                        event.target.style.color = "#00D1FF";
+                        event.target.nextElementSibling.innerText++;
+                        break;
+                }
+            }).catch(function (error) {
+                console.log(error);
+            });
+        },
+        collection: function collection(event, id) {
+            var self = this;
+            axios.get('/article/collection?id=' + id).then(function (response) {
+                console.log(response);
+                switch (response['data']) {
+                    case 2:
+                        new Swal({
+                            title: "请先登录",
+                            timer: 1200,
+                            showConfirmButton: false
+                        });
+                        break;
+                    case 0:
+                        new Swal({
+                            title: "取消收藏",
+                            timer: 800,
+                            showConfirmButton: false
+                        });
+                        event.target.style.color = "#636B6F";
+                        self.isCollection = false;
+                        event.target.nextElementSibling.innerText = '收藏';
+                        break;
+                    case 1:
+                        new Swal({
+                            title: "已收藏",
+                            timer: 800,
+                            showConfirmButton: false
+                        });
+                        event.target.style.color = "#00D1FF";
+                        self.isCollection = true;
+                        event.target.nextElementSibling.innerText = '已收藏';
+                        break;
+                }
+            }).catch(function (error) {
+                console.log(error);
+            });
+        }
+
+    }
+});
+
+/***/ }),
+/* 54 */
 /***/ (function(module, exports, __webpack_require__) {
 
 var render = function() {
   var _vm = this
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
-  return _c("div", [_vm._v("\n\tasdfsdfasdf;l310adsfkj30tkjfad f1f\n")])
+  return _c("div", { attrs: { id: "ad_body" } }, [
+    _c(
+      "div",
+      { staticClass: "container", staticStyle: { "margin-top": "60px" } },
+      [
+        _vm.ar["pic"] !== "0"
+          ? _c(
+              "div",
+              {
+                staticClass: "col-md-offset-2 col-md-8",
+                attrs: { id: "ad_main" }
+              },
+              [
+                _c("img", {
+                  staticClass: "img-responsive",
+                  attrs: { src: _vm.ar["pic"] }
+                })
+              ]
+            )
+          : _vm._e(),
+        _vm._v(" "),
+        _c(
+          "div",
+          {
+            staticClass: "col-md-offset-2 col-md-8",
+            attrs: { id: "ad_title" }
+          },
+          [_c("span", [_vm._v(_vm._s(_vm.ar["title"]))])]
+        ),
+        _vm._v(" "),
+        _c(
+          "div",
+          { staticClass: "col-md-offset-2 col-md-8", attrs: { id: "ad_user" } },
+          [
+            _c("div", { attrs: { id: "ad_user_pic" } }, [
+              _c("a", { attrs: { href: "" } }, [
+                _c("img", {
+                  staticClass: "img-responsive",
+                  staticStyle: { height: "50px" },
+                  attrs: {
+                    src: "http://www.vueblog.com/" + _vm.userdetail["headpic"]
+                  }
+                })
+              ])
+            ]),
+            _vm._v(" "),
+            _c("div", { attrs: { id: "ad_user_name" } }, [
+              _c("span", [_vm._v(_vm._s(_vm.user["name"]))])
+            ])
+          ]
+        ),
+        _vm._v(" "),
+        _c("div", {
+          staticClass: "col-md-offset-2 col-md-8",
+          attrs: { id: "ad_article" },
+          domProps: { innerHTML: _vm._s(_vm.ar.article) }
+        }),
+        _vm._v(" "),
+        _c(
+          "div",
+          { staticClass: "col-md-offset-2 col-md-8", attrs: { id: "ad_time" } },
+          [_c("span", [_vm._v("最后编辑于:" + _vm._s(_vm.ar["updated_at"]))])]
+        ),
+        _vm._v(" "),
+        _c(
+          "div",
+          {
+            staticClass: "col-md-offset-2 col-md-8",
+            attrs: { id: "ad_topic" }
+          },
+          _vm._l(_vm.ar.topic, function(topic) {
+            return _c("span", { staticClass: "ad_topicc" }, [
+              _c("a", { attrs: { href: "" } }, [_vm._v(_vm._s(topic["topic"]))])
+            ])
+          })
+        ),
+        _vm._v(" "),
+        _c(
+          "div",
+          { staticClass: "col-md-offset-2 col-md-8", attrs: { id: "ad_foot" } },
+          [
+            _vm.ar["isAgree"] == null
+              ? _c("i", {
+                  staticClass: "fa fa-thumbs-o-up fa-mm",
+                  attrs: { "aria-hidden": "true" },
+                  on: {
+                    click: function($event) {
+                      _vm.agree($event, _vm.ar["id"])
+                    }
+                  }
+                })
+              : _c("i", {
+                  staticClass: "fa fa-thumbs-up agreed fa-mm",
+                  staticStyle: { color: "#00D1FF" },
+                  attrs: { "aria-hidden": "true" },
+                  on: {
+                    click: function($event) {
+                      _vm.agree($event, _vm.ar["id"])
+                    }
+                  }
+                }),
+            _vm._v(" "),
+            _c("span", [
+              _vm._v(
+                "\r\n\t\t\t\t\t" +
+                  _vm._s(_vm.ar["agree_count"]) +
+                  "\r\n\t\t\t\t"
+              )
+            ]),
+            _vm._v(" "),
+            _c("i", {
+              staticClass: "fa fa-commenting-o fa-mm",
+              staticStyle: { "margin-left": "10px" },
+              attrs: { "aria-hidden": "true" }
+            }),
+            _vm._v(" "),
+            _c("span", [_vm._v(_vm._s(_vm.ar["comment_count"]))]),
+            _vm._v(" "),
+            _vm.isCollection
+              ? _c("i", {
+                  staticClass: "fa fa-star collection fa-mm",
+                  staticStyle: { color: "#00D1FF" },
+                  attrs: { "aria-hidden": "true" },
+                  on: {
+                    click: function($event) {
+                      _vm.collection($event, _vm.ar["id"])
+                    }
+                  }
+                })
+              : _c("i", {
+                  staticClass: "fa fa-star-o collection fa-mm",
+                  attrs: { "aria-hidden": "true" },
+                  on: {
+                    click: function($event) {
+                      _vm.collection($event, _vm.ar["id"])
+                    }
+                  }
+                }),
+            _vm._v(" "),
+            _c("span", [_vm._v(_vm._s(_vm.collectionMes))])
+          ]
+        ),
+        _vm._v(" "),
+        _vm.isComment
+          ? _c(
+              "div",
+              { staticClass: "col-md-offset-2 col-md-8 ad_comment_a" },
+              [
+                _c("div", { attrs: { id: "ad_comment_a_font" } }, [
+                  _vm._v("\r\n\t    \t\t还没有评论\r\n\t    \t")
+                ]),
+                _vm._v(" "),
+                _c("comment-article", {
+                  attrs: {
+                    ar: _vm.ar,
+                    user: _vm.user,
+                    userdetail: _vm.userdetail
+                  }
+                })
+              ],
+              1
+            )
+          : _c(
+              "div",
+              { staticClass: "col-md-offset-2 col-md-8 ad_comment_b" },
+              [_c("comment-article")],
+              1
+            )
+      ]
+    )
+  ])
 }
 var staticRenderFns = []
 render._withStripped = true
@@ -60283,7 +60672,138 @@ if (false) {
 }
 
 /***/ }),
-/* 54 */
+/* 55 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var disposed = false
+var normalizeComponent = __webpack_require__(1)
+/* script */
+var __vue_script__ = __webpack_require__(56)
+/* template */
+var __vue_template__ = __webpack_require__(57)
+/* template functional */
+var __vue_template_functional__ = false
+/* styles */
+var __vue_styles__ = null
+/* scopeId */
+var __vue_scopeId__ = null
+/* moduleIdentifier (server only) */
+var __vue_module_identifier__ = null
+var Component = normalizeComponent(
+  __vue_script__,
+  __vue_template__,
+  __vue_template_functional__,
+  __vue_styles__,
+  __vue_scopeId__,
+  __vue_module_identifier__
+)
+Component.options.__file = "resources\\assets\\js\\components\\comment-article.vue"
+
+/* hot reload */
+if (false) {(function () {
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), false)
+  if (!hotAPI.compatible) return
+  module.hot.accept()
+  if (!module.hot.data) {
+    hotAPI.createRecord("data-v-cd000cfe", Component.options)
+  } else {
+    hotAPI.reload("data-v-cd000cfe", Component.options)
+  }
+  module.hot.dispose(function (data) {
+    disposed = true
+  })
+})()}
+
+module.exports = Component.exports
+
+
+/***/ }),
+/* 56 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+/* harmony default export */ __webpack_exports__["default"] = ({
+	props: {
+		ar: Object,
+		user: Object,
+		userdetail: Object
+	}
+
+});
+
+/***/ }),
+/* 57 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var render = function() {
+  var _vm = this
+  var _h = _vm.$createElement
+  var _c = _vm._self._c || _h
+  return _vm._m(0)
+}
+var staticRenderFns = [
+  function() {
+    var _vm = this
+    var _h = _vm.$createElement
+    var _c = _vm._self._c || _h
+    return _c("div", [
+      _c("div", [
+        _c("form", { staticClass: "form-inline" }, [
+          _c(
+            "div",
+            { staticClass: "form-group", staticStyle: { width: "100%" } },
+            [
+              _c("input", {
+                staticClass: "form-control",
+                attrs: {
+                  type: "text",
+                  placeholder: "Text input",
+                  id: "ad_comment_content"
+                }
+              }),
+              _vm._v(" "),
+              _c(
+                "button",
+                {
+                  staticClass: "btn btn-default",
+                  attrs: { type: "submit", id: "ad_comment_bt" }
+                },
+                [_vm._v("评论")]
+              )
+            ]
+          )
+        ])
+      ])
+    ])
+  }
+]
+render._withStripped = true
+module.exports = { render: render, staticRenderFns: staticRenderFns }
+if (false) {
+  module.hot.accept()
+  if (module.hot.data) {
+    require("vue-hot-reload-api")      .rerender("data-v-cd000cfe", module.exports)
+  }
+}
+
+/***/ }),
+/* 58 */
 /***/ (function(module, exports) {
 
 // removed by extract-text-webpack-plugin

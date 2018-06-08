@@ -3,8 +3,11 @@ namespace App\Repositories;
 use App\Article;
 use App\Topic;
 use App\User;
+use App\User_detail;
 use App\User_article_agrees;
 use Auth;
+use App\User_collection;
+
 class ArticleRepository {
 
 	//发表文章
@@ -27,31 +30,46 @@ class ArticleRepository {
         // return
         if(Article::create($article)){
 	    	for($i =0 ;$i<count($top);$i++){
-	    		Topic::findOrFail($top[$i])->increment('article_count');
-	    	}
-	    	User::findOrFail($request->user()['id'])->increment('article_count');
-     		return '1';
+          Topic::findOrFail($top[$i])->increment('article_count');
+        }
+        User::findOrFail($request->user()['id'])->increment('article_count');
+        return '1';
         }else{
-        	return '0';
-        };	   
+          return '0';
+        };     
         //有时间把base64改成文件上传到服务器,base64拖慢网页加载,并且数据库查询较慢
     }
-		  
+    
+    //判断文章是否点过赞，遍历出topic
+    public function pd($data) {
+      //分割字符串为数组并查询topic表中的数据然后返给data 再传递到前台
+      if(count($data) == 1){
+        $topic = explode('/',$data->topicid);
+        for($n=0;$n<count($topic);$n++){
+          $newData['topicid'][] = Topic::find($topic[$n]);
+          $data['topic'] = $newData['topicid'];
+        }
+        $data['isAgree'] = User_article_agrees::where('uid',Auth::id())->where('article_id',$data['id'])->first();
+        $data['isCollection'] = User_collection::where('uid',Auth::id())->where('cid',$data['id'])->first();
+        return $data;
+      }else{
+        for($i=0;$i<count($data);$i++){
+          $topic = explode('/',$data[$i]->topicid);
+          for($n=0;$n<count($topic);$n++){
+            $newData['topicid'][$i][] = Topic::find($topic[$n]);
+            $data[$i]['topic'] = $newData['topicid'][$i];
+          }
+          $data[$i]['isAgree'] = User_article_agrees::where('uid',Auth::id())->where('article_id',$data[$i]['id'])->first();
+          $data[$i]['isCollection'] = User_collection::where('uid',Auth::id())->where('cid',$data[$i]['id'])->first();
+        }
+        return $data;
+      }
+    }
+
     public function getAll(){
       $data = Article::limit('10')->get();
-
-      //分割字符串为数组并查询topic表中的数据然后返给data 再传递到前台
-      for($i=0;$i<count($data);$i++){
-        $topic = explode('/',$data[$i]->topicid);
-        for($n=0;$n<count($topic);$n++){
-          $newData['topicid'][$i][] = Topic::find($topic[$n]);
-          $data[$i]['topic'] = $newData['topicid'][$i];
-        }
-
-        $data[$i]['isAgree'] = User_article_agrees::where('uid',Auth::id())->where('article_id',$data[$i]['id'])->first();
-        
-      }
-      return $data;
+      return $this->pd($data);
+      
     }
 
     public function agree($request){
@@ -79,6 +97,42 @@ class ArticleRepository {
        };
     }
 
+
+    public function getOne($request) {
+
+      $data = Article::findOrFail($request->get('id'));
+      $topic = explode('/',$data->topicid);
+      for($n=0;$n<count($topic);$n++){
+        $newData['topicid'][] = Topic::find($topic[$n]);
+        $data['topic'] = $newData['topicid'];
+      }
+      $data['isAgree'] = User_article_agrees::where('uid',Auth::id())->where('article_id',$data['id'])->first();
+      $data['isCollection'] = User_collection::where('uid',Auth::id())->where('cid',$data['id'])->first();
+      $data['user'] = User::findOrFail($data['uid']);
+      $data['userdetail'] = User_detail::where('uid',$data['uid'])->first();
+      return $data;
+
+    }
+
+    public function collection($request){
+      $pd = User_collection::where('cid',$request->get('id'))->where('uid',Auth::id())->first();
+      if(!$pd){
+        if(Auth::id()){
+          $data['uid'] = Auth::id();
+          $data['cid'] = $request->get('id');
+          $data['collection_type'] = 'article';
+          $data = User_collection::create($data);
+          return '1';
+        }else{
+          return '2';
+        }
+        
+      }else{
+        User_collection::where('cid',$request->get('id'))->where('uid',Auth::id())->delete();
+        return '0';
+      }
+
+    }
 }
 
 ?>

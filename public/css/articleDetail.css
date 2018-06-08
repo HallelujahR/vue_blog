@@ -1,0 +1,76 @@
+#ad_body{
+	background-color:#FFFFFF;
+	/*height:200px;*/
+}
+#ad_main{
+	margin-top:10px;
+}
+#ad_title{
+	font-size:25px;
+	font-weight:bold;
+	color:black;
+	margin-top:25px;
+}
+#ad_user{
+	margin-top:15px;
+	width:100%;
+	float:left;
+}
+#ad_user_pic{
+	width:50px;
+	border-radius:25px;
+	overflow: hidden;
+	float:left;
+}
+#ad_user_name{
+	float:left;
+	font-weight:bold;
+	margin-left:10px;
+}
+#ad_article{
+	margin-top:20px;
+	float:left;
+}
+#ad_foot{
+	margin-bottom:30px;
+}
+#ad_time{
+	margin-bottom:20px;
+	margin-top:10px;
+}
+#ad_topic{
+	margin-bottom:20px;
+}
+.ad_topicc{
+	background-color:#A5EDFC;
+	padding:5px;
+	border-radius:5px;
+	margin-right:10px;
+}
+.fa-mm{
+	font-size:19px !important;
+}
+.fa-mm:hover{
+	cursor: pointer;
+}
+.collection{
+	margin-left:4px !important;
+	margin-top:2px !important;
+	font-size:19px !important;
+}
+.ad_comment_a{
+	padding-bottom:20px;
+}
+#ad_comment_a_font{
+	color:black;
+	font-weight:bold;
+	margin-bottom:10px;
+}
+#ad_comment_content{
+	width:75% !important;
+	float:left;
+}
+#ad_comment_bt{
+	float:left;
+	margin-left:10px;
+}

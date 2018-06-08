@@ -23,67 +23,10 @@ import Release from './components/Release.vue';
 import Question from './components/Question.vue';
 Vue.component('Release',Release);
 Vue.component('Question',Question);
-
-new Vue({
-	el:'#Release',
-	data:{
-		show:true,
-	},
-	methods:{
-		test:function(){
-			this.show = true;
-		},
-		test1:function(){
-			this.show = false;
-		}
-	},
-});
-
 //Article作为组件名不好使，，不知道为什么 文章列表组件
 import Article from './components/Article.vue';
 Vue.component('articlelist',Article);
 
-new Vue({
-	el:'#main',
-	    data: {
-	    styleFix:{
-	    	'':''
-	    },
-        stylesImp:{
-            
-            '':'',
-        },
-
-    },
-    mounted () {
-        window.addEventListener('scroll', this.handleScroll)
-    },
-    methods:{
-      
-       handleScroll () {
-            var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop
-            var offsetTop = $('.main-header').height();
-            if (scrollTop > offsetTop) {
-                // this.searchBarFixed = true
-
-                this.stylesImp={
-                    'margin-top':'140px',
-                },
-                this.styleFix={
-                	'':'',
-
-                }
-            } else {
-				this.stylesImp={
-					'':'',
-				},
-				this.styleFix={
-					'':'',
-				}
-            }
-        },
-    } 
-})
-
 import ArticleDetail  from './components/ArticleDetail.vue';
-Vue.component('ArticleDetail',ArticleDetail);
+Vue.component('adetail',ArticleDetail);
+Vue.component('comment-article',require('./components/comment-article.vue'));

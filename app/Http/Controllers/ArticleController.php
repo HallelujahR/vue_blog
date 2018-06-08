@@ -21,7 +21,7 @@ class ArticleController extends Controller
     	return 'ok';
     }
 
-    
+
     public function createArticle(Request $request){
     	$status = $this->ArticleRepository->store($request);
     	return $status;
@@ -38,7 +38,19 @@ class ArticleController extends Controller
     }
 
     public function detail(request $request){
+        
+        return view('article.Detail');
+    }
 
+    public function getArticleDetail(request $request) {
+        $data = $this->ArticleRepository->getOne($request);
+        return $data;
+    }
+
+    public function collection(request $request){
+        $statu = $this->ArticleRepository->collection($request);
+        
+        return $statu;
     }
 }
 

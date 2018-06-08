@@ -48,6 +48,7 @@
                 <div class="col-md-4" v-bind:style="styleFix"  style="border:1px solid pink;height:20px;right:0px;">
                     
                 </div>
+                
             </div>
         </div>
     </body>
@@ -80,7 +81,7 @@ var  personLink = new Vue({
        handleScroll () {
             var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop
             var offsetTop = $('.main-header').height();
-            if (scrollTop > offsetTop) {
+            if (scrollTop > offsetTop+20) {
                 // this.searchBarFixed = true
                 this.styles={
                     'position':'fixed',
@@ -100,6 +101,65 @@ var  personLink = new Vue({
         },
     }
 });
+
+
+new Vue({
+    el:'#Release',
+    data:{
+        show:true,
+    },
+    methods:{
+        test:function(){
+            this.show = true;
+        },
+        test1:function(){
+            this.show = false;
+        }
+    },
+});
+
+
+new Vue({
+    el:'#main',
+        data: {
+        styleFix:{
+            '':''
+        },
+        stylesImp:{
+            
+            '':'',
+        },
+
+    },
+    mounted () {
+        window.addEventListener('scroll', this.handleScroll)
+    },
+    methods:{
+      
+       handleScroll () {
+            var scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop
+            var offsetTop = $('.main-header').height();
+            if (scrollTop > offsetTop) {
+                // this.searchBarFixed = true
+
+                this.stylesImp={
+                    'margin-top':'130px',
+                },
+                this.styleFix={
+                    '':'',
+                }
+            } else {
+                this.stylesImp={
+                    '':'',
+                },
+                this.styleFix={
+                    '':'',
+                }
+            }
+        },
+    } 
+})
+
 
 </script>
 <?php echo $__env->yieldContent('js'); ?>

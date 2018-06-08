@@ -371,6 +371,8 @@ class ComposerStaticInit97702af3a2896313c5c27228189d4cc4
         'App\\Topic' => __DIR__ . '/../..' . '/app/Topic.php',
         'App\\User' => __DIR__ . '/../..' . '/app/User.php',
         'App\\User_article_agrees' => __DIR__ . '/../..' . '/app/User_article_agrees.php',
+        'App\\User_collection' => __DIR__ . '/../..' . '/app/User_collection.php',
+        'App\\User_detail' => __DIR__ . '/../..' . '/app/User_detail.php',
         'Carbon\\Carbon' => __DIR__ . '/..' . '/nesbot/carbon/src/Carbon/Carbon.php',
         'Carbon\\CarbonInterval' => __DIR__ . '/..' . '/nesbot/carbon/src/Carbon/CarbonInterval.php',
         'Carbon\\Exceptions\\InvalidDateException' => __DIR__ . '/..' . '/nesbot/carbon/src/Carbon/Exceptions/InvalidDateException.php',

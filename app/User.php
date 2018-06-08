@@ -21,7 +21,7 @@ class User extends Authenticatable
     /**
      * The attributes that should be hidden for arrays.
      *
-     * @var array
+     * @var arrays
      */
     protected $hidden = [
         'password', 'remember_token',
@@ -54,5 +54,9 @@ class User extends Authenticatable
 
     public function question(){
         return $this->hasMany('App\Question');
+    }
+
+    public function User_detail(){
+        return $this->hasOne('App\User_detail');
     }
 }
