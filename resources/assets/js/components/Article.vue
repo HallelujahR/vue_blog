@@ -41,7 +41,7 @@
 				<i class="fa fa-commenting-o fa-i" style="margin-left:10px;"  aria-hidden="true"></i> 
 				<span>{{item['comment_count']}}</span>
 
-				<i class="fa fa-star collection fa-i" style="color:#00D1FF;margin-left:10px;" v-if="item['isCollection'] != null" @click="collection($event,item['id'])" aria-hidden="true"></i>
+				<i class="fa fa-star collection fa-i" style="color:#FF6666;margin-left:10px;" v-if="item['isCollection'] != null" @click="collection($event,item['id'])" aria-hidden="true"></i>
 
 				<i class="fa fa-star-o collection fa-i"  style="margin-left:10px;"v-else @click="collection($event,item['id'])" aria-hidden="true"></i>
 
@@ -104,7 +104,7 @@
 					    	event.target.nextElementSibling.innerText--
 				    	break;
 				    	case 1:
-					    	event.target.style.color="#00D1FF"
+					    	event.target.style.color="#FF6666"
 					    	event.target.nextElementSibling.innerText++
 				    	break;
 				    }
@@ -143,7 +143,7 @@
 						  timer: 800, 
 						  showConfirmButton: false 
 						});
-						event.target.style.color="#00D1FF";
+						event.target.style.color="#FF6666";
 						self.isCollection = true;
 						event.target.nextElementSibling.innerText = '已收藏';
 			    	break;
@@ -157,3 +157,4 @@
         }
      }
 </script>
+

@@ -60047,7 +60047,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 						event.target.nextElementSibling.innerText--;
 						break;
 					case 1:
-						event.target.style.color = "#00D1FF";
+						event.target.style.color = "#FF6666";
 						event.target.nextElementSibling.innerText++;
 						break;
 				}
@@ -60083,7 +60083,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 							timer: 800,
 							showConfirmButton: false
 						});
-						event.target.style.color = "#00D1FF";
+						event.target.style.color = "#FF6666";
 						self.isCollection = true;
 						event.target.nextElementSibling.innerText = '已收藏';
 						break;
@@ -60205,7 +60205,7 @@ var render = function() {
           item["isCollection"] != null
             ? _c("i", {
                 staticClass: "fa fa-star collection fa-i",
-                staticStyle: { color: "#00D1FF", "margin-left": "10px" },
+                staticStyle: { color: "#FF6666", "margin-left": "10px" },
                 attrs: { "aria-hidden": "true" },
                 on: {
                   click: function($event) {
@@ -60364,7 +60364,6 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //
 //
 //
-//
 
 /* harmony default export */ __webpack_exports__["default"] = ({
     data: function data() {
@@ -60375,7 +60374,8 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
             userdetail: '',
             isCollection: '',
             collectionMes: '',
-            isComment: ''
+            isComment: '',
+            isLoad: true
         };
     },
 
@@ -60385,6 +60385,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
         axios.post('/article/detail', {
             id: this.aid
         }).then(function (response) {
+            self.isLoad = false;
             self.ar = response['data'];
             self.user = self.ar['user'];
             self.userdetail = self.ar['userdetail'];
@@ -60432,7 +60433,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
                         event.target.nextElementSibling.innerText--;
                         break;
                     case 1:
-                        event.target.style.color = "#00D1FF";
+                        event.target.style.color = "#FF6666";
                         event.target.nextElementSibling.innerText++;
                         break;
                 }
@@ -60468,7 +60469,7 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
                             timer: 800,
                             showConfirmButton: false
                         });
-                        event.target.style.color = "#00D1FF";
+                        event.target.style.color = "#FF6666";
                         self.isCollection = true;
                         event.target.nextElementSibling.innerText = '已收藏';
                         break;
@@ -60490,156 +60491,183 @@ var render = function() {
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
   return _c("div", { attrs: { id: "ad_body" } }, [
-    _c(
-      "div",
-      { staticClass: "container", staticStyle: { "margin-top": "60px" } },
-      [
-        _vm.ar["pic"] !== "0"
-          ? _c(
+    _vm.isLoad
+      ? _c("div", { attrs: { id: "ad_load" } }, [
+          _c("i", { staticClass: "fa fa-spinner fa-spin fa-3x fa-fw" })
+        ])
+      : _c(
+          "div",
+          { staticClass: "container", staticStyle: { "margin-top": "60px" } },
+          [
+            _vm.ar["pic"] !== "0"
+              ? _c(
+                  "div",
+                  {
+                    staticClass: "col-md-offset-2 col-md-8",
+                    attrs: { id: "ad_main" }
+                  },
+                  [
+                    _c("img", {
+                      staticClass: "img-responsive",
+                      attrs: { src: _vm.ar["pic"] }
+                    })
+                  ]
+                )
+              : _vm._e(),
+            _vm._v(" "),
+            _c(
               "div",
               {
                 staticClass: "col-md-offset-2 col-md-8",
-                attrs: { id: "ad_main" }
+                attrs: { id: "ad_title" }
+              },
+              [_c("span", [_vm._v(_vm._s(_vm.ar["title"]))])]
+            ),
+            _vm._v(" "),
+            _c(
+              "div",
+              {
+                staticClass: "col-md-offset-2 col-md-8",
+                attrs: { id: "ad_user" }
               },
               [
-                _c("img", {
-                  staticClass: "img-responsive",
-                  attrs: { src: _vm.ar["pic"] }
-                })
+                _c("div", { attrs: { id: "ad_user_pic" } }, [
+                  _c("a", { attrs: { href: "" } }, [
+                    _c("img", {
+                      staticClass: "img-responsive",
+                      staticStyle: { height: "50px" },
+                      attrs: {
+                        src:
+                          "http://www.vueblog.com/" + _vm.userdetail["headpic"]
+                      }
+                    })
+                  ])
+                ]),
+                _vm._v(" "),
+                _c("div", { attrs: { id: "ad_user_name" } }, [
+                  _c("span", [_vm._v(_vm._s(_vm.user["name"]))])
+                ])
               ]
-            )
-          : _vm._e(),
-        _vm._v(" "),
-        _c(
-          "div",
-          {
-            staticClass: "col-md-offset-2 col-md-8",
-            attrs: { id: "ad_title" }
-          },
-          [_c("span", [_vm._v(_vm._s(_vm.ar["title"]))])]
-        ),
-        _vm._v(" "),
-        _c(
-          "div",
-          { staticClass: "col-md-offset-2 col-md-8", attrs: { id: "ad_user" } },
-          [
-            _c("div", { attrs: { id: "ad_user_pic" } }, [
-              _c("a", { attrs: { href: "" } }, [
-                _c("img", {
-                  staticClass: "img-responsive",
-                  staticStyle: { height: "50px" },
-                  attrs: {
-                    src: "http://www.vueblog.com/" + _vm.userdetail["headpic"]
-                  }
-                })
-              ])
-            ]),
+            ),
             _vm._v(" "),
-            _c("div", { attrs: { id: "ad_user_name" } }, [
-              _c("span", [_vm._v(_vm._s(_vm.user["name"]))])
-            ])
-          ]
-        ),
-        _vm._v(" "),
-        _c("div", {
-          staticClass: "col-md-offset-2 col-md-8",
-          attrs: { id: "ad_article" },
-          domProps: { innerHTML: _vm._s(_vm.ar.article) }
-        }),
-        _vm._v(" "),
-        _c(
-          "div",
-          { staticClass: "col-md-offset-2 col-md-8", attrs: { id: "ad_time" } },
-          [_c("span", [_vm._v("最后编辑于:" + _vm._s(_vm.ar["updated_at"]))])]
-        ),
-        _vm._v(" "),
-        _c(
-          "div",
-          {
-            staticClass: "col-md-offset-2 col-md-8",
-            attrs: { id: "ad_topic" }
-          },
-          _vm._l(_vm.ar.topic, function(topic) {
-            return _c("span", { staticClass: "ad_topicc" }, [
-              _c("a", { attrs: { href: "" } }, [_vm._v(_vm._s(topic["topic"]))])
-            ])
-          })
-        ),
-        _vm._v(" "),
-        _c(
-          "div",
-          { staticClass: "col-md-offset-2 col-md-8", attrs: { id: "ad_foot" } },
-          [
-            _vm.ar["isAgree"] == null
-              ? _c("i", {
-                  staticClass: "fa fa-thumbs-o-up fa-mm",
-                  attrs: { "aria-hidden": "true" },
-                  on: {
-                    click: function($event) {
-                      _vm.agree($event, _vm.ar["id"])
-                    }
-                  }
-                })
-              : _c("i", {
-                  staticClass: "fa fa-thumbs-up agreed fa-mm",
-                  staticStyle: { color: "#00D1FF" },
-                  attrs: { "aria-hidden": "true" },
-                  on: {
-                    click: function($event) {
-                      _vm.agree($event, _vm.ar["id"])
-                    }
-                  }
-                }),
-            _vm._v(" "),
-            _c("span", [
-              _vm._v(
-                "\r\n\t\t\t\t\t" +
-                  _vm._s(_vm.ar["agree_count"]) +
-                  "\r\n\t\t\t\t"
-              )
-            ]),
-            _vm._v(" "),
-            _c("i", {
-              staticClass: "fa fa-commenting-o fa-mm",
-              staticStyle: { "margin-left": "10px" },
-              attrs: { "aria-hidden": "true" }
+            _c("div", {
+              staticClass: "col-md-offset-2 col-md-8",
+              attrs: { id: "ad_article" },
+              domProps: { innerHTML: _vm._s(_vm.ar.article) }
             }),
             _vm._v(" "),
-            _c("span", [_vm._v(_vm._s(_vm.ar["comment_count"]))]),
+            _c(
+              "div",
+              {
+                staticClass: "col-md-offset-2 col-md-8",
+                attrs: { id: "ad_time" }
+              },
+              [
+                _c("span", [
+                  _vm._v("最后编辑于:" + _vm._s(_vm.ar["updated_at"]))
+                ])
+              ]
+            ),
             _vm._v(" "),
-            _vm.isCollection
-              ? _c("i", {
-                  staticClass: "fa fa-star collection fa-mm",
-                  staticStyle: { color: "#00D1FF" },
-                  attrs: { "aria-hidden": "true" },
-                  on: {
-                    click: function($event) {
-                      _vm.collection($event, _vm.ar["id"])
-                    }
-                  }
-                })
-              : _c("i", {
-                  staticClass: "fa fa-star-o collection fa-mm",
-                  attrs: { "aria-hidden": "true" },
-                  on: {
-                    click: function($event) {
-                      _vm.collection($event, _vm.ar["id"])
-                    }
-                  }
+            _c(
+              "div",
+              {
+                staticClass: "col-md-offset-2 col-md-8",
+                attrs: { id: "ad_topic" }
+              },
+              _vm._l(_vm.ar.topic, function(topic) {
+                return _c("span", { staticClass: "ad_topicc" }, [
+                  _c(
+                    "a",
+                    {
+                      staticClass: "ad_topic_a",
+                      staticStyle: { color: "white" },
+                      attrs: { href: "" }
+                    },
+                    [_vm._v(_vm._s(topic["topic"]))]
+                  )
+                ])
+              })
+            ),
+            _vm._v(" "),
+            _c(
+              "div",
+              {
+                staticClass: "col-md-offset-2 col-md-8",
+                attrs: { id: "ad_foot" }
+              },
+              [
+                _vm.ar["isAgree"] == null
+                  ? _c("i", {
+                      staticClass: "fa fa-thumbs-o-up fa-mm",
+                      attrs: { "aria-hidden": "true" },
+                      on: {
+                        click: function($event) {
+                          _vm.agree($event, _vm.ar["id"])
+                        }
+                      }
+                    })
+                  : _c("i", {
+                      staticClass: "fa fa-thumbs-up agreed fa-mm",
+                      staticStyle: { color: "#FF6666" },
+                      attrs: { "aria-hidden": "true" },
+                      on: {
+                        click: function($event) {
+                          _vm.agree($event, _vm.ar["id"])
+                        }
+                      }
+                    }),
+                _vm._v(" "),
+                _c("span", [
+                  _vm._v(
+                    "\r\n\t\t\t\t\t" +
+                      _vm._s(_vm.ar["agree_count"]) +
+                      "\r\n\t\t\t\t"
+                  )
+                ]),
+                _vm._v(" "),
+                _c("i", {
+                  staticClass: "fa fa-commenting-o fa-mm",
+                  staticStyle: { "margin-left": "10px" },
+                  attrs: { "aria-hidden": "true" }
                 }),
+                _vm._v(" "),
+                _c("span", [_vm._v(_vm._s(_vm.ar["comment_count"]))]),
+                _vm._v(" "),
+                _vm.isCollection
+                  ? _c("i", {
+                      staticClass: "fa fa-star collection fa-mm",
+                      staticStyle: { color: "#FF6666" },
+                      attrs: { "aria-hidden": "true" },
+                      on: {
+                        click: function($event) {
+                          _vm.collection($event, _vm.ar["id"])
+                        }
+                      }
+                    })
+                  : _c("i", {
+                      staticClass: "fa fa-star-o collection fa-mm",
+                      attrs: { "aria-hidden": "true" },
+                      on: {
+                        click: function($event) {
+                          _vm.collection($event, _vm.ar["id"])
+                        }
+                      }
+                    }),
+                _vm._v(" "),
+                _c("span", [_vm._v(_vm._s(_vm.collectionMes))])
+              ]
+            ),
             _vm._v(" "),
-            _c("span", [_vm._v(_vm._s(_vm.collectionMes))])
-          ]
-        ),
-        _vm._v(" "),
-        _vm.isComment
-          ? _c(
+            _c(
               "div",
               { staticClass: "col-md-offset-2 col-md-8 ad_comment_a" },
               [
-                _c("div", { attrs: { id: "ad_comment_a_font" } }, [
-                  _vm._v("\r\n\t    \t\t还没有评论\r\n\t    \t")
-                ]),
+                _vm.isComment
+                  ? _c("div", { attrs: { id: "ad_comment_a_font" } }, [
+                      _vm._v("\r\n\t    \t\t还没有评论\r\n\t    \t")
+                    ])
+                  : _vm._e(),
                 _vm._v(" "),
                 _c("comment-article", {
                   attrs: {
@@ -60651,14 +60679,8 @@ var render = function() {
               ],
               1
             )
-          : _c(
-              "div",
-              { staticClass: "col-md-offset-2 col-md-8 ad_comment_b" },
-              [_c("comment-article")],
-              1
-            )
-      ]
-    )
+          ]
+        )
   ])
 }
 var staticRenderFns = []
@@ -60737,41 +60759,117 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //
 //
 //
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
 
 /* harmony default export */ __webpack_exports__["default"] = ({
-	data: function data() {
-		return {
-			to_id: '0',
-			content: ''
-		};
-	},
+			data: function data() {
+						return {
+									to_id: '0',
+									content: '',
+									comment: ''
+						};
+			},
 
-	props: {
-		ar: Object,
-		user: Object,
-		userdetail: Object
-	},
-	methods: {
-		sub: function sub(event, id) {
+			props: {
+						ar: Object,
+						user: Object,
+						userdetail: Object
+			},
+			beforeMount: function beforeMount() {
+						var self = this;
+						axios.get('/article/getComment', {}).then(function (response) {
+									self.comment = response['data']['data'];
+									console.log(self.comment);
+									console.log(response);
+						}).catch(function (error) {
+									console.log(error);
+						});
+			},
+			methods: {
+						sub: function sub(event, id) {
 
-			var self = this;
-			this.content = $('#ad_comment_content').val();
-			axios.post('/article/comment', {
-				content: self.content,
-				to_id: self.to_id,
-				tid: '0',
-				comment_type: 'article',
-				from_id: id
-			}).then(function (response) {
-				console.log(response);
-			}).catch(function (error) {
-				console.log(error);
-			});
-		},
-		inputFunc: function inputFunc(event) {
-			console.log(event.target);
-		}
-	}
+									var self = this;
+									this.content = $('#ad_comment_content').val();
+									axios.post('/article/comment', {
+												content: self.content,
+												to_id: self.to_id,
+												tid: id,
+												comment_type: 'article'
+									}).then(function (response) {
+												console.log(response);
+												switch (response['data']) {
+															case 3:
+																		new Swal({
+																					title: "请输入内容",
+																					timer: 1200,
+																					showConfirmButton: false
+																		});
+																		break;
+															case 2:
+																		new Swal({
+																					title: "请登录",
+																					timer: 1200,
+																					showConfirmButton: false
+																		});
+																		break;
+															case 1:
+																		new Swal({
+																					title: "发布成功",
+																					timer: 1200,
+																					showConfirmButton: false
+																		});
+																		$('#ad_comment_content').val('');
+																		break;
+															case 0:
+																		new Swal({
+																					title: "发布失败",
+																					timer: 1200,
+																					showConfirmButton: false
+																		});
+																		break;
+												}
+									}).catch(function (error) {
+												console.log(error);
+									});
+						},
+						inputFunc: function inputFunc(event) {
+									console.log(event.target);
+						}
+			}
 
 });
 
@@ -60783,35 +60881,92 @@ var render = function() {
   var _vm = this
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
-  return _c("div", [
-    _c("div", [
-      _c("form", { staticClass: "form-inline" }, [
-        _c(
+  return _c(
+    "div",
+    { attrs: { id: "ad_comment" } },
+    [
+      _c("div", [
+        _c("form", { staticClass: "form-inline" }, [
+          _c(
+            "div",
+            { staticClass: "form-group", staticStyle: { width: "100%" } },
+            [
+              _c("input", {
+                attrs: { type: "text", id: "ad_comment_content", name: "" }
+              }),
+              _vm._v(" "),
+              _c(
+                "button",
+                {
+                  staticClass: "btn btn-default",
+                  attrs: { type: "button", id: "ad_comment_bt" },
+                  on: {
+                    click: function($event) {
+                      _vm.sub($event, _vm.ar["id"])
+                    }
+                  }
+                },
+                [_vm._v("评论")]
+              )
+            ]
+          )
+        ])
+      ]),
+      _vm._v(" "),
+      _c("div"),
+      _vm._v(" "),
+      _vm._l(_vm.comment, function(item) {
+        return _c(
           "div",
-          { staticClass: "form-group", staticStyle: { width: "100%" } },
+          { staticClass: "row", staticStyle: { border: "1px solid green" } },
           [
-            _c("input", {
-              attrs: { type: "text", id: "ad_comment_content", name: "" }
-            }),
+            _c(
+              "div",
+              {
+                staticClass: "col-md-2",
+                staticStyle: { border: "1px solid red" }
+              },
+              [
+                _c("a", { attrs: { href: "" } }, [
+                  _c("img", {
+                    staticClass: "img-responsive",
+                    staticStyle: { height: "20px" },
+                    attrs: {
+                      src: "http://www.vueblog.com/" + item["from_user_headpic"]
+                    }
+                  })
+                ])
+              ]
+            ),
             _vm._v(" "),
             _c(
-              "button",
+              "div",
               {
-                staticClass: "btn btn-default",
-                attrs: { type: "button", id: "ad_comment_bt" },
-                on: {
-                  click: function($event) {
-                    _vm.sub($event, _vm.ar["id"])
-                  }
-                }
+                staticClass: "col-md-10",
+                staticStyle: { border: "1px solid red" }
               },
-              [_vm._v("评论")]
+              [
+                _c("div", [
+                  _c("span", [_vm._v(_vm._s(item["from_user"]["name"]))]),
+                  _vm._v(" "),
+                  _c("span", [_vm._v("回复")]),
+                  _vm._v(" "),
+                  _c("span", [_vm._v("Raven")])
+                ]),
+                _vm._v(" "),
+                _c("div", [
+                  _vm._v(
+                    "\n\t\t\t\t\t" + _vm._s(item["content"]) + "\n\t\t\t\t"
+                  )
+                ])
+              ]
             )
           ]
         )
-      ])
-    ])
-  ])
+      })
+    ],
+    2
+  )
 }
 var staticRenderFns = []
 render._withStripped = true

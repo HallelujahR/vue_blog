@@ -1,6 +1,9 @@
 <template>
 <div id="ad_body">
-    <div class="container" style="margin-top:60px;">
+	<div id="ad_load" v-if="isLoad">
+		<i class="fa fa-spinner fa-spin fa-3x fa-fw"></i>
+	</div>
+    <div class="container" style="margin-top:60px;" v-else>
         <div class="col-md-offset-2 col-md-8"  id="ad_main" v-if="ar['pic'] !== '0' ">
             <img :src="ar['pic']" class="img-responsive">
         </div>
@@ -29,13 +32,13 @@
         </div>
         <div class="col-md-offset-2 col-md-8" id="ad_topic">
         	<span v-for="topic in ar.topic" class="ad_topicc">
-        		<a href="">{{topic['topic']}}</a>
+        		<a href="" class="ad_topic_a"  style="color:white">{{topic['topic']}}</a>
         	</span>
         </div>
         <div class="col-md-offset-2 col-md-8" id="ad_foot">
         		<i class="fa fa-thumbs-o-up fa-mm" v-if="ar['isAgree'] == null " @click="agree($event,ar['id'])" aria-hidden="true"></i>
 
-				<i class="fa fa-thumbs-up agreed fa-mm"  style="color:#00D1FF"  v-else @click="agree($event,ar['id'])" aria-hidden="true"></i>
+				<i class="fa fa-thumbs-up agreed fa-mm"  style="color:#FF6666"  v-else @click="agree($event,ar['id'])" aria-hidden="true"></i>
 				<span >
 					{{ar['agree_count']}}
 				</span>
@@ -45,13 +48,13 @@
 				<span>{{ar['comment_count']}}</span>
 
 
-				<i class="fa fa-star collection fa-mm" style="color:#00D1FF" v-if="isCollection" @click="collection($event,ar['id'])" aria-hidden="true"></i>
+				<i class="fa fa-star collection fa-mm" style="color:#FF6666" v-if="isCollection" @click="collection($event,ar['id'])" aria-hidden="true"></i>
 				<i class="fa fa-star-o collection fa-mm"  v-else @click="collection($event,ar['id'])" aria-hidden="true"></i>
 
 				<span>{{collectionMes}}</span>
         </div>
-	    <div class="col-md-offset-2 col-md-8 ad_comment_a" v-if="isComment">
-	    	<div id="ad_comment_a_font">
+	    <div class="col-md-offset-2 col-md-8 ad_comment_a" >
+	    	<div id="ad_comment_a_font"  v-if="isComment">
 	    		还没有评论
 	    	</div>
 			<comment-article 
@@ -59,10 +62,6 @@
 			:user="user"
 			:userdetail="userdetail"
 			></comment-article>	
-		</div>
-
-		<div class="col-md-offset-2 col-md-8 ad_comment_b" v-else>
-			<comment-article></comment-article>	
 		</div>
     </div>
 </div>
@@ -79,6 +78,7 @@
         isCollection:'',
         collectionMes:'',
         isComment:'',
+        isLoad:true,
     	}
     },
     beforeMount:function(){
@@ -88,6 +88,7 @@
             id:this.aid,
         })
         .then(function (response) {
+        	self.isLoad = false;
             self.ar = response['data'];
             self.user = self.ar['user'];
             self.userdetail = self.ar['userdetail'];
@@ -122,7 +123,7 @@
     	agree:function(event,id){
     		//点赞请求
 			axios.get('/article/agree?id='+id)
-			  .then(function (response) {
+			  .then(function (response){
 
 			    switch(response['data']){
 			    	case 2:
@@ -137,7 +138,7 @@
 				    	event.target.nextElementSibling.innerText--
 			    	break;
 			    	case 1:
-				    	event.target.style.color="#00D1FF"
+				    	event.target.style.color="#FF6666"
 				    	event.target.nextElementSibling.innerText++
 			    	break;
 			    }
@@ -176,7 +177,7 @@
 						  timer: 800, 
 						  showConfirmButton: false 
 						});
-						event.target.style.color="#00D1FF";
+						event.target.style.color="#FF6666";
 						self.isCollection = true;
 						event.target.nextElementSibling.innerText = '已收藏';
 			    	break;

@@ -1,6 +1,14 @@
 #ad_body{
 	background-color:#FFFFFF;
+	padding-bottom:20px;
 	/*height:200px;*/
+}
+#ad_load{
+	position:fixed;
+    top:50%;
+    left:48%;
+    width:100%;
+    font-size:30px;
 }
 #ad_main{
 	margin-top:10px;
@@ -42,7 +50,7 @@
 	margin-bottom:20px;
 }
 .ad_topicc{
-	background-color:#A5EDFC;
+	background-color:#28B5C2;
 	padding:5px;
 	border-radius:5px;
 	margin-right:10px;
@@ -73,8 +81,10 @@
 	border-radius: 5px 5px 5px 5px;
 	padding-top:5px;
 	padding-bottom:5px;
+	padding-left:10px;
 }
 #ad_comment_bt{
 	float:left;
 	margin-left:10px;
 }
+

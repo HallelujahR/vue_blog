@@ -57,5 +57,10 @@ class ArticleController extends Controller
         $statu = $this->ArticleRepository->comment($requests);
         return $statu;
     }
+
+    public function getComment(){
+        $data = $this->ArticleRepository->getComment();
+        return $data;
+    }
 }
 

@@ -24,7 +24,7 @@ Route::get('/article/detail/{id?}','ArticleController@detail');
 Route::post('/article/detail','ArticleController@getArticleDetail');
 Route::get('/article/collection/{id?}','ArticleController@collection');
 Route::post('/article/comment','ArticleController@comment');
-
+Route::get('/article/getComment','ArticleController@getComment');
 
 Route::post('/question/createQuestion','QuestionController@createQuestion');
 Route::get('/test/{phone}','ArticleController@send');

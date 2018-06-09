@@ -147,21 +147,35 @@ class ArticleRepository {
           //判断是否成功
           $data['to_id'] = $request->to_id;
           $data['content'] = $content;
-          $data['from_id']= $request->from_id;
+          $data['from_id']= Auth::id();
           $data['tid']= $request->tid;
           $data['comment_type']= $request->comment_type;
           if(Comments::create($data)){
+            Article::findOrFail($request->tid)->increment('comment_count');
             return '1';
           }else{
             return '0';
           }
         };
-
       }else{
         //判断是否登录
         return '2';
       };
 
+    }
+
+
+    public function getComment(){
+      $data = Comments::where('comment_type','article')->paginate(10);
+      foreach($data as $k=>$v){
+        $from_user = User::findOrFail($data[$k]['from_id']);
+        $data[$k]['from_user'] = $from_user;
+        $data[$k]['from_user_headpic'] = User_detail::where('uid',$from_user['id'])->select('headpic')->first()['headpic'];
+        if($data[$k]['to_id'] != 0){
+          $data[$k]['to_user'] = User::findOrFail($data[$k]['to_id']);
+        }
+      }
+      return $data;
     }
 }
 
