@@ -5,6 +5,7 @@ use App\Topic;
 use App\User;
 use App\User_detail;
 use App\User_article_agrees;
+use App\Comments;
 use Auth;
 use App\User_collection;
 
@@ -131,6 +132,35 @@ class ArticleRepository {
         User_collection::where('cid',$request->get('id'))->where('uid',Auth::id())->delete();
         return '0';
       }
+
+    }
+
+
+    public function comment($request){
+
+      if(Auth::id()){
+        $content = $request->content;
+        if(strlen(preg_replace('/\s+/', '', $content)) == 0){
+          //判断输入的是否是空格
+          return '3';
+        }else{
+          //判断是否成功
+          $data['to_id'] = $request->to_id;
+          $data['content'] = $content;
+          $data['from_id']= $request->from_id;
+          $data['tid']= $request->tid;
+          $data['comment_type']= $request->comment_type;
+          if(Comments::create($data)){
+            return '1';
+          }else{
+            return '0';
+          }
+        };
+
+      }else{
+        //判断是否登录
+        return '2';
+      };
 
     }
 }

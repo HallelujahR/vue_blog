@@ -23,7 +23,7 @@ Route::get('/article/agree/{id?}','ArticleController@agree');
 Route::get('/article/detail/{id?}','ArticleController@detail');
 Route::post('/article/detail','ArticleController@getArticleDetail');
 Route::get('/article/collection/{id?}','ArticleController@collection');
-
+Route::post('/article/comment','ArticleController@comment');
 
 
 Route::post('/question/createQuestion','QuestionController@createQuestion');

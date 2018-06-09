@@ -58,7 +58,7 @@
 	margin-top:2px !important;
 	font-size:19px !important;
 }
-.ad_comment_a{
+.ad_comment{
 	padding-bottom:20px;
 }
 #ad_comment_a_font{
@@ -69,6 +69,10 @@
 #ad_comment_content{
 	width:75% !important;
 	float:left;
+	border:1px solid #CCCCCC;
+	border-radius: 5px 5px 5px 5px;
+	padding-top:5px;
+	padding-bottom:5px;
 }
 #ad_comment_bt{
 	float:left;

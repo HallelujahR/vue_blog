@@ -60739,10 +60739,38 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //
 
 /* harmony default export */ __webpack_exports__["default"] = ({
+	data: function data() {
+		return {
+			to_id: '0',
+			content: ''
+		};
+	},
+
 	props: {
 		ar: Object,
 		user: Object,
 		userdetail: Object
+	},
+	methods: {
+		sub: function sub(event, id) {
+
+			var self = this;
+			this.content = $('#ad_comment_content').val();
+			axios.post('/article/comment', {
+				content: self.content,
+				to_id: self.to_id,
+				tid: '0',
+				comment_type: 'article',
+				from_id: id
+			}).then(function (response) {
+				console.log(response);
+			}).catch(function (error) {
+				console.log(error);
+			});
+		},
+		inputFunc: function inputFunc(event) {
+			console.log(event.target);
+		}
 	}
 
 });
@@ -60755,44 +60783,37 @@ var render = function() {
   var _vm = this
   var _h = _vm.$createElement
   var _c = _vm._self._c || _h
-  return _vm._m(0)
-}
-var staticRenderFns = [
-  function() {
-    var _vm = this
-    var _h = _vm.$createElement
-    var _c = _vm._self._c || _h
-    return _c("div", [
-      _c("div", [
-        _c("form", { staticClass: "form-inline" }, [
-          _c(
-            "div",
-            { staticClass: "form-group", staticStyle: { width: "100%" } },
-            [
-              _c("input", {
-                staticClass: "form-control",
-                attrs: {
-                  type: "text",
-                  placeholder: "Text input",
-                  id: "ad_comment_content"
+  return _c("div", [
+    _c("div", [
+      _c("form", { staticClass: "form-inline" }, [
+        _c(
+          "div",
+          { staticClass: "form-group", staticStyle: { width: "100%" } },
+          [
+            _c("input", {
+              attrs: { type: "text", id: "ad_comment_content", name: "" }
+            }),
+            _vm._v(" "),
+            _c(
+              "button",
+              {
+                staticClass: "btn btn-default",
+                attrs: { type: "button", id: "ad_comment_bt" },
+                on: {
+                  click: function($event) {
+                    _vm.sub($event, _vm.ar["id"])
+                  }
                 }
-              }),
-              _vm._v(" "),
-              _c(
-                "button",
-                {
-                  staticClass: "btn btn-default",
-                  attrs: { type: "submit", id: "ad_comment_bt" }
-                },
-                [_vm._v("评论")]
-              )
-            ]
-          )
-        ])
+              },
+              [_vm._v("评论")]
+            )
+          ]
+        )
       ])
     ])
-  }
-]
+  ])
+}
+var staticRenderFns = []
 render._withStripped = true
 module.exports = { render: render, staticRenderFns: staticRenderFns }
 if (false) {

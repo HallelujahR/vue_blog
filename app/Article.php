@@ -25,5 +25,8 @@ class Article extends Model
         return $this->hasMany('App\User_article_agrees');
     }
 
+    public function comments(){
+        return $this->hasMany('App\Comments');
+    }
 
 }

@@ -18,4 +18,8 @@ class Question extends Model
     public function topic(){
     	return $this->hasMany('App\Topic');
     }
+
+    public function comments(){
+        return $this->hasMany('App\Comments');
+    }
 }

@@ -52,5 +52,10 @@ class ArticleController extends Controller
         
         return $statu;
     }
+
+    public function comment(request $requests){
+        $statu = $this->ArticleRepository->comment($requests);
+        return $statu;
+    }
 }
 
