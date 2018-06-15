@@ -53,6 +53,7 @@
         </div>
     </body>
 <script type="text/javascript" src="{{mix('js/app.js')}}"></script>
+<script type="text/javascript" src="{{asset('js/Time.js')}}"></script>
 <script type="text/javascript">
 //遍历登录后显示的信息，同时用了vue的动画过渡效果
 var  personLink = new Vue({

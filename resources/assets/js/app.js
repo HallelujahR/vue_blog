@@ -30,3 +30,6 @@ Vue.component('articlelist',Article);
 import ArticleDetail  from './components/ArticleDetail.vue';
 Vue.component('adetail',ArticleDetail);
 Vue.component('comment-article',require('./components/comment-article.vue'));
+
+//注册修改文章组件
+Vue.component('article-edit',require('./components/article-edit.vue'));

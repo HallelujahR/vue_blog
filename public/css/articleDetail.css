@@ -3,6 +3,9 @@
 	padding-bottom:20px;
 	/*height:200px;*/
 }
+a:hover{
+	text-decoration: none;
+}
 #ad_load{
 	position:fixed;
     top:50%;
@@ -21,6 +24,7 @@
 }
 #ad_user{
 	margin-top:15px;
+	z-index: 100;
 	width:100%;
 	float:left;
 }
@@ -32,8 +36,10 @@
 }
 #ad_user_name{
 	float:left;
+	margin-left:15px;
+}
+#ad_user_name1{
 	font-weight:bold;
-	margin-left:10px;
 }
 #ad_article{
 	margin-top:20px;
@@ -45,6 +51,8 @@
 #ad_time{
 	margin-bottom:20px;
 	margin-top:10px;
+	width:100%;
+	float:left;
 }
 #ad_topic{
 	margin-bottom:20px;
@@ -67,6 +75,7 @@
 	font-size:19px !important;
 }
 .ad_comment{
+	padding-left:15px;
 	padding-bottom:20px;
 }
 #ad_comment_a_font{
@@ -83,8 +92,74 @@
 	padding-bottom:5px;
 	padding-left:10px;
 }
+
+@media only screen and (max-width: 1024px){
+	#ad_comment_content{
+		width:55% !important;
+		float:left;
+		border:1px solid #CCCCCC;
+		border-radius: 5px 5px 5px 5px;
+		padding-top:5px;
+		padding-bottom:5px;
+		padding-left:10px;
+	}
+	#small_edit{
+		padding:10px;
+	}
+}
 #ad_comment_bt{
 	float:left;
 	margin-left:10px;
 }
 
+.ad_comment_list{
+	border-bottom:1px solid #F6F6F6;
+	margin-left:0px;
+	margin-bottom:10px;
+}
+.ad_comment_from_pic{
+	height:100%;
+	float:left;
+}
+.ad_comment_fupic{
+	height:35px;
+	display: block;
+	width:35px;
+	float:left;
+	margin-right:10px;
+}
+
+.ad_comment_name{
+	font-weight:bold;
+	color:black !important;
+}
+.ad_comment_detail{
+	padding-top:10px;
+	padding-bottom:10px;
+	margin-top:15px;
+	color:black;
+	width:100%;
+}
+.ad_comment_time{
+	float:right;
+}
+.fa-set{
+	font-size:16px !important;
+	color:#989898;
+	/*float:right;*/
+	margin-left:20px;
+	margin-right:10px;
+}
+.fa-set:hover{
+	cursor: pointer;
+}
+.fade-enter-active, .fade-leave-active {
+  transition: opacity .5s;
+}
+.fade-enter, .fade-leave-to /* .fade-leave-active below version 2.1.8 */ {
+  opacity: 0;
+}
+#ad_edit{
+	/*float:right;*/
+	margin-right:10px;
+}

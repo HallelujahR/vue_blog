@@ -8,14 +8,13 @@ use App\User_article_agrees;
 use App\Comments;
 use Auth;
 use App\User_collection;
+use App\User_agree_comment;
 
 class ArticleRepository {
 
 	//发表文章
     public function store($request){
-    	$article = [];
-
-  		
+        	$article = [];
   		if($request->article['pic'] == ''){
   			$article['pic'] = '0';
   		}else{
@@ -62,13 +61,14 @@ class ArticleRepository {
           }
           $data[$i]['isAgree'] = User_article_agrees::where('uid',Auth::id())->where('article_id',$data[$i]['id'])->first();
           $data[$i]['isCollection'] = User_collection::where('uid',Auth::id())->where('cid',$data[$i]['id'])->first();
+          $data[$i]['user'] = User::leftJoin('User_details','users.id','=','user_details.uid')->where('users.id',$data[$i]['uid'])->first();
         }
         return $data;
       }
     }
 
     public function getAll(){
-      $data = Article::limit('10')->get();
+      $data = Article::limit('10')->where('is_delete','0')->get();
       return $this->pd($data);
       
     }
@@ -138,6 +138,7 @@ class ArticleRepository {
 
     public function comment($request){
 
+            
       if(Auth::id()){
         $content = $request->content;
         if(strlen(preg_replace('/\s+/', '', $content)) == 0){
@@ -150,9 +151,15 @@ class ArticleRepository {
           $data['from_id']= Auth::id();
           $data['tid']= $request->tid;
           $data['comment_type']= $request->comment_type;
-          if(Comments::create($data)){
+          $statu = Comments::create($data);          
+          if($statu){
             Article::findOrFail($request->tid)->increment('comment_count');
-            return '1';
+            $user = User::leftJoin('User_details','users.id','=','user_details.uid')->where('users.id',Auth::id())->first();
+            $user['content'] = $statu['content'];
+            $user['cid'] = $statu['id'];
+            $user['tid'] = $request->tid;
+            $user['to_user'] =User::leftJoin('User_details','users.id','=','user_details.uid')->where('users.id',$request->to_id)->first();
+            return $user;
           }else{
             return '0';
           }
@@ -165,17 +172,78 @@ class ArticleRepository {
     }
 
 
-    public function getComment(){
-      $data = Comments::where('comment_type','article')->paginate(10);
+    public function getComment($request){
+      $data = Comments::where('comment_type','article')->where('tid',$request->get('tid'))->get();
       foreach($data as $k=>$v){
         $from_user = User::findOrFail($data[$k]['from_id']);
         $data[$k]['from_user'] = $from_user;
         $data[$k]['from_user_headpic'] = User_detail::where('uid',$from_user['id'])->select('headpic')->first()['headpic'];
         if($data[$k]['to_id'] != 0){
           $data[$k]['to_user'] = User::findOrFail($data[$k]['to_id']);
-        }
+        };
+
+        $data[$k]['isAgree'] = User_agree_comment::where('uid',Auth::id())->where('comment_type','article')->where('tid',$data[$k]['id'])->first();
       }
       return $data;
+    }
+
+    public function commentAgree($request){
+      
+      if(Auth::id()){
+
+        if(User_agree_comment::where('tid',$request->get('id'))->where('uid',Auth::id())->get()->count() > 0){
+          Comments::findOrFail($request->get('id'))->decrement('agree_count');
+          User_agree_comment::where('tid',$request->get('id'))->where('uid',Auth::id())->first()->delete();
+          return '0';
+        }else{
+          $data['uid'] = Auth::id();
+          $data['tid'] = $request->get('id');
+          $dasta['comment_type'] = 'article';
+          User_agree_comment::create($data);
+          Comments::findOrFail($request->get('id'))->increment('agree_count');
+          return '1';
+        }
+      }else{
+        return '2';
+      }
+    }
+
+    //评论删除
+    public function commentDel($request){
+      $statu1= Article::findOrFail($request->tid)->decrement('comment_count');
+      $statu2 = Comments::find($request->id)->delete();
+      $statu = User_agree_comment::where('uid',Auth::id())->where('tid',$request->id)->get()->count();
+      if($statu > 0){
+        User_agree_comment::where('tid',$request->id)->first()->delete();
+      };
+      if($statu1 && $statu2){
+        return '1';
+      }else{
+        return '0';
+      }
+
+    }
+
+    //文章删除
+    public function delete($request){
+      if(!Auth::id()) return '2';
+      $statu1 = Article::where('id',$request->get('id'))->update(['is_delete'=>'1']);
+      $statu = User::findOrFail(Auth::id())->decrement('article_count');
+      if($statu1 && $statu) return '1';
+    }
+
+    //编辑文章
+    public function edit($request){
+      $data['topicid'] = implode('/',$request->article['topicid']);
+      $data['pic'] = $request->article['pic'];
+      $data['title'] = $request->article['title'];
+      $data['article'] = $request->article['html'];
+
+      if(Article::where('id',$request->article['id'])->update($data)){
+        return '1';
+      }else{
+        return '0';
+      };
     }
 }
 

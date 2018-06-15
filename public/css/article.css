@@ -73,3 +73,29 @@
 .agreed{
 	color:#FF6666;
 }
+#ad_load{
+	position:fixed;
+    top:50%;
+    left:48%;
+    width:100%;
+    font-size:30px;
+}
+.a_article_user{
+	padding-left:20px;
+}
+.aheadpic{
+	border-radius:25px;
+	margin:0px;
+}
+.ausername{
+	color:#33302B;
+	font-weight:bold;
+	margin-left:5px;
+}
+.atime{
+	float:right;
+	padding-right:15px;
+}
+a:hover{
+	text-decoration: none;
+}

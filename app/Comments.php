@@ -23,4 +23,7 @@ class Comments extends Model
     	return $this->belongsTo('App\Article');
     }
 
+    public function User_agree_comment(){
+        return $this->hasMany('App\User_agree_comment');
+    }
 }

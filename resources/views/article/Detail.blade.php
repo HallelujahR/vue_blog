@@ -50,7 +50,7 @@
                                             <li   v-if="show" class="personLi" key="1" >
                                                 <a class="personA" id="rel" href="#" data-toggle="modal" data-target="#Release" >
                                                     <span class="glyphicon glyphicon-pencil" ></span>
-                                                    发布
+                                                    我的
                                                 </a>
                                             </li>
                                             <li  v-if="show" class="personLi" key="2" >
@@ -70,7 +70,7 @@
                                             <span class="glyphicon glyphicon-plus"></span>
                                         </li>
                                         <li>
-                                            <a id="headA" href="">
+                                            <a id="headA" href="/user?id={{Auth::id()}}">
                                                 <img src="{{asset('image/testhead.jpg')}}" id="headImg" userid="{{Auth::id()}}" class="img-circle">
                                             </a>
                                         </li>
@@ -86,7 +86,6 @@
                 </div>
             </nav>
             @include('Nav.Signup')
-            @include('Release.Release')
             @include('Nav.Login')            
             <div id="addetail">
                 <adetail></adetail>   
@@ -95,6 +94,7 @@
         </div>
     </body>
 <script type="text/javascript" src="{{mix('js/app.js')}}"></script>
+<script type="text/javascript" src="{{asset('js/Time.js')}}"></script>
 <script type="text/javascript">
 //遍历登录后显示的信息，同时用了vue的动画过渡效果
 var  personLink = new Vue({

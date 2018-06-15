@@ -58,9 +58,31 @@ class ArticleController extends Controller
         return $statu;
     }
 
-    public function getComment(){
-        $data = $this->ArticleRepository->getComment();
+    public function getComment(request $request){
+        $data = $this->ArticleRepository->getComment($request);
         return $data;
+    }
+
+    public function commentAgree(request $request){
+        $data = $this->ArticleRepository->commentAgree($request);
+        return $data;
+    }
+
+    public function commentDel(request $request){
+        $data = $this->ArticleRepository->commentDel($request);
+        return $data;
+    }
+
+    //文章删除
+    public function delete(request $request){
+        $statu = $this->ArticleRepository->delete($request);
+        return $statu;
+    }
+
+    //修改文章
+    public function edit(request $request){
+        $statu = $this->ArticleRepository->edit($request);
+        return $statu;
     }
 }
 

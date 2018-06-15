@@ -1,15 +1,35 @@
 <template>
 	<div id="a_main">
-		<div class="a_body" v-for="item in article['data']">
+		<div id="ad_load" v-if="isLoad">
+			<i class="fa fa-spinner fa-spin fa-3x fa-fw"></i>
+		</div>
+		<div class="a_body" v-else v-for="item in article['data']">
 			<div class="a_head"> 
 				<span>相关话题:</span>
 				<span v-for="top in item['topic']">
-					<a :href="'/topic/detail/'+top.id" class="a_topic">{{top['topic']}}</a>
+					<a :href="'/topic/detail?id='+top.id" class="a_topic">{{top['topic']}}</a>
 				</span>
 			</div>
 			<div class="a_article_title">
 				<span><a class="a_title" :href="'/article/detail?id='+item.id" target="_blank">{{item['title']}}</a></span>
 			</div>
+
+			<div class="a_article_user">
+				<span>
+					<a :href="'/user?id='+item['user']['uid']" class="auser">
+						<img :src="'http://www.vueblog.com/'+item['user']['headpic']"  style="height:30px;border-radius:7px;">
+					</a>
+				</span>
+				<span>	
+					<a :href="'/user?id='+item['user']['uid']" class="ausername">
+						{{item['user']['name']}}
+					</a>
+				</span>
+				<span v-time="item['created_at']" class="atime">
+					
+				</span>
+			</div>
+
 			<div class="a_article_body">
 
 				<div class="col-md-4 a_article_pic" v-if="item['pic'] !== '0' ">
@@ -67,6 +87,7 @@
 				article:[],
 				isCollection:'',
         		collectionMes:'',
+        		isLoad:true,
 			} 
 		},
 		beforeMount: function () {
@@ -75,6 +96,7 @@
 			})
 			.then(function (response) {
 			  	self.article = response;
+			  	self.isLoad = false;
 			  	console.log(self.article);
 			})
 			  .catch(function (error) {

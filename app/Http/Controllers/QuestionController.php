@@ -17,7 +17,7 @@ class QuestionController extends Controller
     }
 
     public function Index() {
-    	return view('article.Index');
+    	return view('question.Index');
     }
 
     public function test(){

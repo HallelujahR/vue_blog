@@ -51,7 +51,7 @@
                                             <li   v-if="show" class="personLi" key="1" >
                                                 <a class="personA" id="rel" href="#" data-toggle="modal" data-target="#Release" >
                                                     <span class="glyphicon glyphicon-pencil" ></span>
-                                                    发布
+                                                    我的
                                                 </a>
                                             </li>
                                             <li  v-if="show" class="personLi" key="2" >
@@ -71,7 +71,7 @@
                                             <span class="glyphicon glyphicon-plus"></span>
                                         </li>
                                         <li>
-                                            <a id="headA" href="">
+                                            <a id="headA" href="/user?id=<?php echo e(Auth::id()); ?>">
                                                 <img src="<?php echo e(asset('image/testhead.jpg')); ?>" id="headImg" userid="<?php echo e(Auth::id()); ?>" class="img-circle">
                                             </a>
                                         </li>
@@ -87,7 +87,6 @@
                 </div>
             </nav>
             <?php echo $__env->make('Nav.Signup', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
-            <?php echo $__env->make('Release.Release', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>
             <?php echo $__env->make('Nav.Login', array_except(get_defined_vars(), array('__data', '__path')))->render(); ?>            
             <div id="addetail">
                 <adetail></adetail>   
@@ -96,6 +95,7 @@
         </div>
     </body>
 <script type="text/javascript" src="<?php echo e(mix('js/app.js')); ?>"></script>
+<script type="text/javascript" src="<?php echo e(asset('js/Time.js')); ?>"></script>
 <script type="text/javascript">
 //遍历登录后显示的信息，同时用了vue的动画过渡效果
 var  personLink = new Vue({

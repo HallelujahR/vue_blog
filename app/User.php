@@ -63,4 +63,8 @@ class User extends Authenticatable
     public function comments(){
         return $this->hasMany('App\Comments');
     }
+
+    public function User_agree_comment(){
+        return $this->hasMany('App\User_agree_comment');
+    }
 }
