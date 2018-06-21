@@ -1090,6 +1090,14 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_3__components_Article_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_3__components_Article_vue__);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__components_ArticleDetail_vue__ = __webpack_require__(52);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_4__components_ArticleDetail_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_4__components_ArticleDetail_vue__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__components_question_list_vue__ = __webpack_require__(81);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_5__components_question_list_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_5__components_question_list_vue__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__components_question_detail_vue__ = __webpack_require__(84);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_6__components_question_detail_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_6__components_question_detail_vue__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_7__components_question_comment_vue__ = __webpack_require__(87);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_7__components_question_comment_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_7__components_question_comment_vue__);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_8__components_question_answer_vue__ = __webpack_require__(90);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_8__components_question_answer_vue___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_8__components_question_answer_vue__);
 
 /**
  * First we will load all of this project's JavaScript dependencies which
@@ -1125,6 +1133,22 @@ Vue.component('comment-article', __webpack_require__(55));
 
 //注册修改文章组件
 Vue.component('article-edit', __webpack_require__(58));
+
+//注册问题首页组件
+
+Vue.component('question-list', __WEBPACK_IMPORTED_MODULE_5__components_question_list_vue___default.a);
+
+//问题详情
+
+Vue.component('question-detail', __WEBPACK_IMPORTED_MODULE_6__components_question_detail_vue___default.a);
+
+//评论问题
+
+Vue.component('question-comment', __WEBPACK_IMPORTED_MODULE_7__components_question_comment_vue___default.a);
+
+//问题答案
+
+Vue.component('question-answer', __WEBPACK_IMPORTED_MODULE_8__components_question_answer_vue___default.a);
 
 /***/ }),
 /* 12 */
@@ -59360,7 +59384,7 @@ var staticRenderFns = [
       _vm._v(" "),
       _c("div", {
         staticClass: "col-md-12",
-        attrs: { id: "editorTwo", require: "" }
+        attrs: { id: "editorTwo", required: "" }
       })
     ])
   },
@@ -62324,6 +62348,2061 @@ if (false) {
 /***/ (function(module, exports) {
 
 // removed by extract-text-webpack-plugin
+
+/***/ }),
+/* 62 */,
+/* 63 */,
+/* 64 */,
+/* 65 */,
+/* 66 */,
+/* 67 */,
+/* 68 */,
+/* 69 */,
+/* 70 */,
+/* 71 */,
+/* 72 */,
+/* 73 */,
+/* 74 */,
+/* 75 */,
+/* 76 */,
+/* 77 */,
+/* 78 */,
+/* 79 */,
+/* 80 */,
+/* 81 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var disposed = false
+var normalizeComponent = __webpack_require__(1)
+/* script */
+var __vue_script__ = __webpack_require__(82)
+/* template */
+var __vue_template__ = __webpack_require__(83)
+/* template functional */
+var __vue_template_functional__ = false
+/* styles */
+var __vue_styles__ = null
+/* scopeId */
+var __vue_scopeId__ = null
+/* moduleIdentifier (server only) */
+var __vue_module_identifier__ = null
+var Component = normalizeComponent(
+  __vue_script__,
+  __vue_template__,
+  __vue_template_functional__,
+  __vue_styles__,
+  __vue_scopeId__,
+  __vue_module_identifier__
+)
+Component.options.__file = "resources\\assets\\js\\components\\question-list.vue"
+
+/* hot reload */
+if (false) {(function () {
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), false)
+  if (!hotAPI.compatible) return
+  module.hot.accept()
+  if (!module.hot.data) {
+    hotAPI.createRecord("data-v-b61be444", Component.options)
+  } else {
+    hotAPI.reload("data-v-b61be444", Component.options)
+  }
+  module.hot.dispose(function (data) {
+    disposed = true
+  })
+})()}
+
+module.exports = Component.exports
+
+
+/***/ }),
+/* 82 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+/* harmony default export */ __webpack_exports__["default"] = ({
+	data: function data() {
+		return {
+			question: [],
+			isCollection: '',
+			collectionMes: '',
+			isLoad: true
+		};
+	},
+
+	beforeMount: function beforeMount() {
+		var self = this;
+		axios.post('/question/getAll', {}).then(function (response) {
+			self.question = response;
+			self.isLoad = false;
+			console.log(self.question);
+		}).catch(function (error) {
+			console.log(error);
+		});
+	},
+	updated: function updated() {
+		$('.a_article_neirong').find('img').remove();
+	},
+	methods: {
+		agree: function agree(event, id) {
+			//点赞请求
+			axios.get('/question/agree?id=' + id).then(function (response) {
+
+				switch (response['data']) {
+					case 2:
+						new Swal({
+							title: "请先登录",
+							timer: 1200,
+							showConfirmButton: false
+						});
+						break;
+					case 0:
+						event.target.style.color = "#636B6F";
+						event.target.nextElementSibling.innerText--;
+						break;
+					case 1:
+						event.target.style.color = "#FF6666";
+						event.target.nextElementSibling.innerText++;
+						break;
+				}
+			}).catch(function (error) {
+				console.log(error);
+			});
+		},
+		collection: function collection(event, id) {
+			var self = this;
+			axios.get('/question/collection?id=' + id).then(function (response) {
+				console.log(response);
+				switch (response['data']) {
+					case 2:
+						new Swal({
+							title: "请先登录",
+							timer: 1200,
+							showConfirmButton: false
+						});
+						break;
+					case 0:
+						new Swal({
+							title: "取消收藏",
+							timer: 800,
+							showConfirmButton: false
+						});
+						event.target.style.color = "#636B6F";
+						self.isCollection = false;
+						event.target.nextElementSibling.innerText = '收藏';
+						break;
+					case 1:
+						new Swal({
+							title: "已收藏",
+							timer: 800,
+							showConfirmButton: false
+						});
+						event.target.style.color = "#FF6666";
+						self.isCollection = true;
+						event.target.nextElementSibling.innerText = '已收藏';
+						break;
+				}
+			}).catch(function (error) {
+				console.log(error);
+			});
+		}
+	}
+});
+
+/***/ }),
+/* 83 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var render = function() {
+  var _vm = this
+  var _h = _vm.$createElement
+  var _c = _vm._self._c || _h
+  return _c(
+    "div",
+    { attrs: { id: "a_main" } },
+    [
+      _vm.isLoad
+        ? _c("div", { attrs: { id: "ad_load" } }, [
+            _c("i", { staticClass: "fa fa-spinner fa-spin fa-3x fa-fw" })
+          ])
+        : _vm._l(_vm.question["data"], function(item) {
+            return _c("div", { staticClass: "a_body" }, [
+              _c(
+                "div",
+                { staticClass: "a_head" },
+                [
+                  _c("span", [_vm._v("相关话题:")]),
+                  _vm._v(" "),
+                  _vm._l(item["topic"], function(top) {
+                    return _c("span", [
+                      _c(
+                        "a",
+                        {
+                          staticClass: "a_topic",
+                          attrs: { href: "/topic/detail?id=" + top.id }
+                        },
+                        [_vm._v(_vm._s(top["topic"]))]
+                      )
+                    ])
+                  })
+                ],
+                2
+              ),
+              _vm._v(" "),
+              _c("div", { staticClass: "a_article_title" }, [
+                _c("span", [
+                  _c(
+                    "a",
+                    {
+                      staticClass: "a_title",
+                      attrs: {
+                        href: "/question/detail?id=" + item.id,
+                        target: "_blank"
+                      }
+                    },
+                    [_vm._v(_vm._s(item["title"]))]
+                  )
+                ])
+              ]),
+              _vm._v(" "),
+              _c("div", { staticClass: "a_article_user" }, [
+                _c("span", [
+                  _c(
+                    "a",
+                    {
+                      staticClass: "auser",
+                      attrs: { href: "/user?id=" + item["uid"] }
+                    },
+                    [
+                      _c("img", {
+                        staticStyle: { height: "30px", "border-radius": "7px" },
+                        attrs: {
+                          src:
+                            "http://www.vueblog.com/" + item["user"]["headpic"]
+                        }
+                      })
+                    ]
+                  )
+                ]),
+                _vm._v(" "),
+                _c("span", [
+                  _c(
+                    "a",
+                    {
+                      staticClass: "ausername",
+                      attrs: { href: "/user?id=" + item["uid"] }
+                    },
+                    [
+                      _vm._v(
+                        "\n\t\t\t\t\t\t" +
+                          _vm._s(item["user"]["name"]) +
+                          "\n\t\t\t\t\t"
+                      )
+                    ]
+                  )
+                ]),
+                _vm._v(" "),
+                _c("span", {
+                  directives: [
+                    {
+                      name: "time",
+                      rawName: "v-time",
+                      value: item["created_at"],
+                      expression: "item['created_at']"
+                    }
+                  ],
+                  staticClass: "atime"
+                })
+              ]),
+              _vm._v(" "),
+              _c("div", { staticClass: "a_article_body" }),
+              _vm._v(" "),
+              _c("div", { staticClass: "a_article_foot" }, [
+                item["isAgree"] == null
+                  ? _c("i", {
+                      staticClass: "fa fa-thumbs-o-up fa-i",
+                      attrs: { "aria-hidden": "true" },
+                      on: {
+                        click: function($event) {
+                          _vm.agree($event, item["id"])
+                        }
+                      }
+                    })
+                  : _c("i", {
+                      staticClass: "fa fa-thumbs-up agreed fa-i",
+                      attrs: { "aria-hidden": "true" },
+                      on: {
+                        click: function($event) {
+                          _vm.agree($event, item["id"])
+                        }
+                      }
+                    }),
+                _vm._v(" "),
+                _c("span", [
+                  _vm._v(
+                    "\n\t\t\t\t\t" + _vm._s(item["agree_count"]) + "\n\t\t\t\t"
+                  )
+                ]),
+                _vm._v(" "),
+                _c("i", {
+                  staticClass: "fa fa-commenting-o fa-i",
+                  staticStyle: { "margin-left": "10px" },
+                  attrs: { "aria-hidden": "true" }
+                }),
+                _vm._v(" "),
+                _c("span", [_vm._v(_vm._s(item["comment_count"]))]),
+                _vm._v(" "),
+                item["isCollection"] != null
+                  ? _c("i", {
+                      staticClass: "fa fa-star collection fa-i",
+                      staticStyle: { color: "#FF6666", "margin-left": "10px" },
+                      attrs: { "aria-hidden": "true" },
+                      on: {
+                        click: function($event) {
+                          _vm.collection($event, item["id"])
+                        }
+                      }
+                    })
+                  : _c("i", {
+                      staticClass: "fa fa-star-o collection fa-i",
+                      staticStyle: { "margin-left": "10px" },
+                      attrs: { "aria-hidden": "true" },
+                      on: {
+                        click: function($event) {
+                          _vm.collection($event, item["id"])
+                        }
+                      }
+                    }),
+                _vm._v(" "),
+                item["isCollection"] == null
+                  ? _c("span", [_vm._v("收藏")])
+                  : _c("span", [_vm._v("已收藏")])
+              ])
+            ])
+          })
+    ],
+    2
+  )
+}
+var staticRenderFns = []
+render._withStripped = true
+module.exports = { render: render, staticRenderFns: staticRenderFns }
+if (false) {
+  module.hot.accept()
+  if (module.hot.data) {
+    require("vue-hot-reload-api")      .rerender("data-v-b61be444", module.exports)
+  }
+}
+
+/***/ }),
+/* 84 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var disposed = false
+var normalizeComponent = __webpack_require__(1)
+/* script */
+var __vue_script__ = __webpack_require__(85)
+/* template */
+var __vue_template__ = __webpack_require__(86)
+/* template functional */
+var __vue_template_functional__ = false
+/* styles */
+var __vue_styles__ = null
+/* scopeId */
+var __vue_scopeId__ = null
+/* moduleIdentifier (server only) */
+var __vue_module_identifier__ = null
+var Component = normalizeComponent(
+  __vue_script__,
+  __vue_template__,
+  __vue_template_functional__,
+  __vue_styles__,
+  __vue_scopeId__,
+  __vue_module_identifier__
+)
+Component.options.__file = "resources\\assets\\js\\components\\question-detail.vue"
+
+/* hot reload */
+if (false) {(function () {
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), false)
+  if (!hotAPI.compatible) return
+  module.hot.accept()
+  if (!module.hot.data) {
+    hotAPI.createRecord("data-v-1c149a11", Component.options)
+  } else {
+    hotAPI.reload("data-v-1c149a11", Component.options)
+  }
+  module.hot.dispose(function (data) {
+    disposed = true
+  })
+})()}
+
+module.exports = Component.exports
+
+
+/***/ }),
+/* 85 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+/* harmony default export */ __webpack_exports__["default"] = ({
+	data: function data() {
+		return {
+			qid: '',
+			isLoad: true,
+			question: [],
+			zk: false,
+			follow_bt: true,
+			follow_count: '',
+			editor: '',
+			is_answer: false,
+			is_pic: false
+		};
+	},
+	beforeMount: function beforeMount() {
+		this.init();
+	},
+	updated: function updated() {
+		$('#q_desc').find('img').addClass('img-responsive');
+
+		if (!this.is_pic) {
+			$('#q_desc').find('img').css({ 'display': 'none' });
+		}
+		// console.log(document.getElementById('headImage'));
+	},
+
+	methods: {
+		init: function init() {
+			var self = this;
+			this.qid = this.GetQueryString('id=');
+			axios.post('/question/getDetail', {
+				id: this.qid
+			}).then(function (response) {
+				self.isLoad = false;
+				self.question = response.data;
+				self.follow_count = response.data['follow_count'];
+				if (response.data['is_collection'] == '0') {
+					self.follow_bt = true;
+				} else {
+					self.follow_bt = false;
+				}
+				// console.log(response);
+			}).catch(function (error) {
+				console.log(error);
+			});
+		},
+		//利用正则获取url地址的传递参数
+		GetQueryString: function GetQueryString(name) {
+			var reg = new RegExp("(^|&)" + name + "([^&]*)(&|$)");
+			var r = window.location.search.substr(1).match(reg);
+			if (r != null) return unescape(r[2]);return null;
+		},
+		q_zk: function q_zk(event) {
+			if (!this.zk) {
+				$('#q_desc').css({
+					'height': 'auto'
+				});
+				$('#q_desc').find('img').css({ 'display': 'block' });
+				this.zk = true;
+				this.is_pic = true;
+				event.target.innerHTML = '∧点击收起';
+			} else {
+				$('#q_desc').css({
+					'height': '100px'
+				});
+				$('#q_desc').find('img').css({ 'display': 'none' });
+				this.zk = false;
+				this.is_pic = false;
+				event.target.innerHTML = '∨点击展开';
+			}
+		},
+		q_collection: function q_collection(event, qid) {
+			var self = this;
+			axios.get('/question/follow?id=' + qid).then(function (response) {
+				switch (response['data']) {
+					case 2:
+						new Swal({
+							title: "请先登录",
+							timer: 1200,
+							showConfirmButton: false
+						});
+						break;
+					case 0:
+						new Swal({
+							title: "取消关注",
+							timer: 800,
+							showConfirmButton: false
+						});
+						self.follow_count--;
+						self.follow_bt = true;
+						break;
+					case 1:
+						new Swal({
+							title: "已关注",
+							timer: 800,
+							showConfirmButton: false
+						});
+						self.follow_count++;
+						self.follow_bt = false;
+						break;
+				}
+			}).catch(function (error) {
+				console.log(error);
+			});
+		},
+		answer: function answer() {
+			if (!$('#headImg').attr('userid')) {
+				new Swal({
+					title: "请登录",
+					timer: 800,
+					showConfirmButton: false
+				});
+				return false;
+			}
+			this.is_answer = !this.is_answer;
+			this.editor = new E('#answerOne', '#answerTwo');
+			//配置菜单
+			this.editor.customConfig.menus = ['head', // 标题
+			'bold', // 粗体
+			'fontSize', // 字号
+			'fontName', // 字体
+			'italic', // 斜体
+			'underline', // 下划线
+			'strikeThrough', // 删除线
+			'link', // 插入链接
+			'image', // 插入图片
+
+			'quote', // 引用
+			'justify', // 对齐方式
+			'list', // 列表
+			'code', // 插入代码
+			'undo', // 撤销
+			'redo' // 重复
+			];
+			this.editor.customConfig.showLinkImg = false;
+			this.editor.customConfig.uploadImgShowBase64 = true;
+			// this.editor.customConfig.uploadImgServer = '/upload'
+			this.editor.create();
+			this.editor.txt.html('<p>在此处输入文章内容</p>');
+		},
+		submit_answer: function submit_answer(event, id) {
+			axios.post('/answer/store', {
+				content: this.editor.txt.html(),
+				id: id
+			}).then(function (response) {
+				switch (response['data']) {
+					case 3:
+						new Swal({
+							title: "请输入内容",
+							timer: 1200,
+							showConfirmButton: false
+						});
+						break;
+					case 2:
+						new Swal({
+							title: "请登录",
+							timer: 1200,
+							showConfirmButton: false
+						});
+						break;
+					case 0:
+						new Swal({
+							title: "发布失败",
+							timer: 1200,
+							showConfirmButton: false
+						});
+						break;
+					case 1:
+						new Swal({
+							title: "发布成功",
+							timer: 1200,
+							showConfirmButton: false
+						});
+						break;
+					default:
+
+				}
+				// console.log(response);
+			});
+
+			// console.log(id);
+		}
+	}
+});
+
+/***/ }),
+/* 86 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var render = function() {
+  var _vm = this
+  var _h = _vm.$createElement
+  var _c = _vm._self._c || _h
+  return _c(
+    "div",
+    { attrs: { id: "q_main" } },
+    [
+      _vm.isLoad
+        ? _c("div", { attrs: { id: "ad_load" } }, [
+            _c("i", { staticClass: "fa fa-spinner fa-spin fa-3x fa-fw" })
+          ])
+        : _c(
+            "div",
+            [
+              _c(
+                "div",
+                {
+                  staticClass: "col-md-offset-2 col-md-8",
+                  attrs: { id: "q_head" }
+                },
+                [
+                  _c("div", { staticClass: "col-md-8" }, [
+                    _c(
+                      "div",
+                      { attrs: { id: "q_t" } },
+                      _vm._l(_vm.question.topic, function(topic) {
+                        return _c("span", [
+                          _c(
+                            "a",
+                            { staticClass: "q_topic", attrs: { href: "" } },
+                            [_vm._v(_vm._s(topic.topic))]
+                          )
+                        ])
+                      })
+                    ),
+                    _vm._v(" "),
+                    _c("div", [
+                      _c("span", { attrs: { id: "q_title" } }, [
+                        _vm._v(_vm._s(_vm.question.title))
+                      ])
+                    ]),
+                    _vm._v(" "),
+                    _c("div", { staticStyle: { position: "relative" } }, [
+                      _c("div", {
+                        attrs: { id: "q_desc" },
+                        domProps: { innerHTML: _vm._s(_vm.question.desc) }
+                      }),
+                      _vm._v(" "),
+                      !_vm.zk
+                        ? _c("div", { staticClass: "a_article_detail" })
+                        : _vm._e()
+                    ]),
+                    _vm._v(" "),
+                    _c(
+                      "div",
+                      {
+                        staticClass: "cold-md-4",
+                        attrs: { id: "q_head_action" }
+                      },
+                      [
+                        _c(
+                          "button",
+                          {
+                            staticClass: "btn btn-success",
+                            attrs: { type: "button" },
+                            on: { click: _vm.answer }
+                          },
+                          [
+                            _c("i", {
+                              staticClass: "fa fa-pencil-square-o",
+                              staticStyle: { "margin-right": "3px" },
+                              attrs: { "aria-hidden": "true" }
+                            }),
+                            _vm._v("写回答")
+                          ]
+                        ),
+                        _vm._v(" "),
+                        _vm.follow_bt
+                          ? _c(
+                              "button",
+                              {
+                                staticClass: "btn btn-info",
+                                attrs: { type: "button" },
+                                on: {
+                                  click: function($event) {
+                                    _vm.q_collection($event, _vm.question.id)
+                                  }
+                                }
+                              },
+                              [_vm._v("关注")]
+                            )
+                          : _c(
+                              "button",
+                              {
+                                staticClass: "btn btn-primary",
+                                attrs: { type: "button" },
+                                on: {
+                                  click: function($event) {
+                                    _vm.q_collection($event, _vm.question.id)
+                                  }
+                                }
+                              },
+                              [_vm._v("已关注")]
+                            ),
+                        _vm._v(" "),
+                        _c(
+                          "span",
+                          {
+                            attrs: {
+                              id: "q_comment",
+                              "data-toggle": "modal",
+                              "data-target": "#question_comment"
+                            }
+                          },
+                          [
+                            _c("i", {
+                              staticClass: "fa fa-comment-o",
+                              staticStyle: { "margin-left": "10px" },
+                              attrs: { "aria-hidden": "true" }
+                            }),
+                            _vm._v(" "),
+                            _c("span", [
+                              _vm._v("评论("),
+                              _c("span", { attrs: { id: "cot" } }, [
+                                _vm._v(_vm._s(_vm.question.comment_count))
+                              ]),
+                              _vm._v(")")
+                            ])
+                          ]
+                        ),
+                        _vm._v(" "),
+                        _c(
+                          "span",
+                          {
+                            attrs: { id: "q_zk" },
+                            on: {
+                              click: function($event) {
+                                _vm.q_zk($event)
+                              }
+                            }
+                          },
+                          [_vm._v("∨点击展开")]
+                        )
+                      ]
+                    )
+                  ]),
+                  _vm._v(" "),
+                  _c(
+                    "div",
+                    { staticClass: "col-md-4", attrs: { id: "q_head_right" } },
+                    [
+                      _c("div", { staticClass: "q_head_right_son" }, [
+                        _c("div", { staticClass: "q_left" }, [
+                          _c(
+                            "div",
+                            {
+                              staticStyle: {
+                                width: "50%",
+                                float: "right",
+                                "text-align": "center"
+                              }
+                            },
+                            [
+                              _c("div", [_vm._v("关注数 ")]),
+                              _vm._v(" "),
+                              _c("div", [_vm._v(_vm._s(_vm.follow_count))])
+                            ]
+                          )
+                        ]),
+                        _vm._v(" "),
+                        _c("div", { staticClass: "q_right" }, [
+                          _c(
+                            "div",
+                            {
+                              staticStyle: {
+                                width: "50%",
+                                "text-align": "center"
+                              }
+                            },
+                            [
+                              _c("div", [_vm._v("回答数 ")]),
+                              _vm._v(" "),
+                              _c("div", [
+                                _vm._v(_vm._s(_vm.question.answer_count))
+                              ])
+                            ]
+                          )
+                        ])
+                      ])
+                    ]
+                  )
+                ]
+              ),
+              _vm._v(" "),
+              _c("transition", { attrs: { name: "slide-fade" } }, [
+                _c(
+                  "div",
+                  {
+                    directives: [
+                      {
+                        name: "show",
+                        rawName: "v-show",
+                        value: _vm.is_answer,
+                        expression: "is_answer"
+                      }
+                    ],
+                    staticClass: "col-md-offset-2 col-md-8",
+                    staticStyle: { float: "left" },
+                    attrs: { id: "answer_edit" }
+                  },
+                  [
+                    _c("div", { attrs: { id: "answer" } }, [
+                      _c("div", { attrs: { id: "answerOne" } })
+                    ]),
+                    _vm._v(" "),
+                    _c("div", { attrs: { id: "answerTwo" } }),
+                    _vm._v(" "),
+                    _c("div", [
+                      _c(
+                        "button",
+                        {
+                          staticClass: "btn btn-success",
+                          attrs: { type: "button" },
+                          on: {
+                            click: function($event) {
+                              _vm.submit_answer($event, _vm.question.id)
+                            }
+                          }
+                        },
+                        [_vm._v("提交")]
+                      ),
+                      _vm._v(" "),
+                      _c(
+                        "button",
+                        {
+                          staticClass: "btn btn-default",
+                          attrs: { type: "button" },
+                          on: { click: _vm.answer }
+                        },
+                        [_vm._v("取消")]
+                      )
+                    ])
+                  ]
+                )
+              ]),
+              _vm._v(" "),
+              _c(
+                "div",
+                {
+                  staticClass: "col-md-offset-2 col-md-8",
+                  attrs: { id: "q_answer" }
+                },
+                [
+                  _c(
+                    "div",
+                    { staticClass: "col-md-8", attrs: { id: "q_answer_body" } },
+                    [_c("question-answer", { attrs: { qid: _vm.qid } })],
+                    1
+                  ),
+                  _vm._v(" "),
+                  _c(
+                    "div",
+                    {
+                      staticClass: "col-md-4",
+                      staticStyle: { border: "1px solid black" }
+                    },
+                    [_vm._v("\n\t        \t\tasdf\n\t        \t")]
+                  )
+                ]
+              )
+            ],
+            1
+          ),
+      _vm._v(" "),
+      _c("question-comment", { attrs: { qid: _vm.qid } })
+    ],
+    1
+  )
+}
+var staticRenderFns = []
+render._withStripped = true
+module.exports = { render: render, staticRenderFns: staticRenderFns }
+if (false) {
+  module.hot.accept()
+  if (module.hot.data) {
+    require("vue-hot-reload-api")      .rerender("data-v-1c149a11", module.exports)
+  }
+}
+
+/***/ }),
+/* 87 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var disposed = false
+var normalizeComponent = __webpack_require__(1)
+/* script */
+var __vue_script__ = __webpack_require__(89)
+/* template */
+var __vue_template__ = __webpack_require__(88)
+/* template functional */
+var __vue_template_functional__ = false
+/* styles */
+var __vue_styles__ = null
+/* scopeId */
+var __vue_scopeId__ = null
+/* moduleIdentifier (server only) */
+var __vue_module_identifier__ = null
+var Component = normalizeComponent(
+  __vue_script__,
+  __vue_template__,
+  __vue_template_functional__,
+  __vue_styles__,
+  __vue_scopeId__,
+  __vue_module_identifier__
+)
+Component.options.__file = "resources\\assets\\js\\components\\question-comment.vue"
+
+/* hot reload */
+if (false) {(function () {
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), false)
+  if (!hotAPI.compatible) return
+  module.hot.accept()
+  if (!module.hot.data) {
+    hotAPI.createRecord("data-v-60b1eecf", Component.options)
+  } else {
+    hotAPI.reload("data-v-60b1eecf", Component.options)
+  }
+  module.hot.dispose(function (data) {
+    disposed = true
+  })
+})()}
+
+module.exports = Component.exports
+
+
+/***/ }),
+/* 88 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var render = function() {
+  var _vm = this
+  var _h = _vm.$createElement
+  var _c = _vm._self._c || _h
+  return _c(
+    "div",
+    {
+      staticClass: "modal fade",
+      attrs: {
+        id: "question_comment",
+        tabindex: "-1",
+        role: "dialog",
+        "aria-labelledby": "gridSystemModalLabel"
+      }
+    },
+    [
+      _c("div", { staticClass: "modal-dialog", attrs: { role: "document" } }, [
+        _c("div", { staticClass: "modal-content" }, [
+          _c("div", { staticClass: "modal-header" }, [
+            _vm._v("\n            \t评论问题\n            ")
+          ]),
+          _vm._v(" "),
+          _c("div", { staticClass: "modal-body" }, [
+            _c(
+              "div",
+              { attrs: { id: "ad_comment" } },
+              [
+                _c(
+                  "div",
+                  {
+                    staticClass: "row",
+                    staticStyle: {
+                      "margin-bottom": "15px",
+                      "margin-left": "0px"
+                    }
+                  },
+                  [
+                    _c("form", { staticClass: "form-inline" }, [
+                      _c(
+                        "div",
+                        {
+                          staticClass: "form-group",
+                          staticStyle: { width: "100%" }
+                        },
+                        [
+                          _c("input", {
+                            attrs: {
+                              type: "text",
+                              id: "ad_comment_content",
+                              name: ""
+                            }
+                          }),
+                          _vm._v(" "),
+                          _c(
+                            "button",
+                            {
+                              staticClass: "btn btn-default",
+                              attrs: { type: "button", id: "ad_comment_bt" },
+                              on: {
+                                click: function($event) {
+                                  _vm.sub($event, _vm.ar["id"], 0)
+                                }
+                              }
+                            },
+                            [_vm._v("评论")]
+                          )
+                        ]
+                      )
+                    ])
+                  ]
+                ),
+                _vm._v(" "),
+                _vm._l(_vm.nowComment, function(item) {
+                  return _c("div", { staticClass: "ad_comment_list row" }, [
+                    _c("div", { staticClass: "ad_comment_lcontent" }, [
+                      _c("div", { staticStyle: { "padding-right": "10px" } }, [
+                        _c(
+                          "a",
+                          {
+                            staticClass: "ad_comment_fupic",
+                            attrs: { href: "/user/?id=" + item["uid"] }
+                          },
+                          [
+                            _c("img", {
+                              staticClass: "img-responsive",
+                              attrs: {
+                                src: "http://www.vueblog.com/" + item["headpic"]
+                              }
+                            })
+                          ]
+                        ),
+                        _vm._v(" "),
+                        _c("span", [
+                          _c(
+                            "a",
+                            {
+                              staticClass: "ad_comment_name",
+                              attrs: { href: "/user?id=" + item["uid"] }
+                            },
+                            [_vm._v(_vm._s(item["name"]))]
+                          )
+                        ]),
+                        _vm._v(" "),
+                        item["uid"] == _vm.ar["uid"]
+                          ? _c("span", [_vm._v("[作者]")])
+                          : _vm._e(),
+                        _vm._v(" "),
+                        item["to_user"] != null
+                          ? _c("span", [
+                              _c("span", [_vm._v("回复")]),
+                              _vm._v(" "),
+                              _c("span", [
+                                _c(
+                                  "a",
+                                  {
+                                    staticClass: "ad_comment_name",
+                                    attrs: {
+                                      href: "/user?id=" + item["to_user"]["uid"]
+                                    }
+                                  },
+                                  [_vm._v(_vm._s(item["to_user"]["name"]))]
+                                )
+                              ]),
+                              _vm._v(" "),
+                              item["to_user"]["uid"] == _vm.ar["uid"]
+                                ? _c("span", [_vm._v("[作者]")])
+                                : _vm._e()
+                            ])
+                          : _vm._e(),
+                        _vm._v(" "),
+                        _c("span", { staticClass: "ad_comment_time" }, [
+                          _vm._v("刚刚")
+                        ])
+                      ]),
+                      _vm._v(" "),
+                      _c(
+                        "div",
+                        {
+                          staticClass: "ad_comment_detail",
+                          staticStyle: {
+                            "word-break": "break-all",
+                            "word-wrap": "break-word"
+                          }
+                        },
+                        [
+                          _vm._v(
+                            "\n\t\t\t\t\t" +
+                              _vm._s(item["content"]) +
+                              "\n\t\t\t\t"
+                          )
+                        ]
+                      ),
+                      _vm._v(" "),
+                      _c("div", { staticClass: "ad_comment_do" }, [
+                        item["uid"] == _vm.userid
+                          ? _c("i", {
+                              staticClass: "fa fa-trash-o fa-mm",
+                              staticStyle: { "margin-left": "10px" },
+                              attrs: { "aria-hidden": "true" },
+                              on: {
+                                click: function($event) {
+                                  _vm.commentDel(
+                                    $event,
+                                    item["cid"],
+                                    item["tid"]
+                                  )
+                                }
+                              }
+                            })
+                          : _vm._e(),
+                        _vm._v(" "),
+                        item["uid"] == _vm.userid
+                          ? _c("span", [
+                              _vm._v("\n\t\t\t\t\t\t删除\n\t\t\t\t\t")
+                            ])
+                          : _vm._e()
+                      ])
+                    ])
+                  ])
+                }),
+                _vm._v(" "),
+                _vm._l(_vm.comment, function(item, index) {
+                  return _c("div", { staticClass: "ad_comment_list row" }, [
+                    _c("div", { staticClass: "ad_comment_lcontent" }, [
+                      _c("div", { staticStyle: { "padding-right": "10px" } }, [
+                        _c(
+                          "a",
+                          {
+                            staticClass: "ad_comment_fupic",
+                            attrs: { href: "/user?id=" + item["from_id"] }
+                          },
+                          [
+                            _c("img", {
+                              staticClass: "img-responsive",
+                              attrs: {
+                                src:
+                                  "http://www.vueblog.com/" +
+                                  item["from_user_headpic"]
+                              }
+                            })
+                          ]
+                        ),
+                        _vm._v(" "),
+                        _c("span", [
+                          _c(
+                            "a",
+                            {
+                              staticClass: "ad_comment_name",
+                              attrs: { href: "/user?id=" + item["from_id"] }
+                            },
+                            [_vm._v(_vm._s(item["from_user"]["name"]))]
+                          )
+                        ]),
+                        _vm._v(" "),
+                        item["from_id"] == _vm.ar["uid"]
+                          ? _c("span", [_vm._v("[作者]")])
+                          : _vm._e(),
+                        _vm._v(" "),
+                        item["to_id"] != 0
+                          ? _c("span", [
+                              _c("span", [_vm._v("回复")]),
+                              _vm._v(" "),
+                              _c("span", [
+                                _c(
+                                  "a",
+                                  {
+                                    staticClass: "ad_comment_name",
+                                    attrs: { href: "/user?id=" + item["to_id"] }
+                                  },
+                                  [_vm._v(_vm._s(item["to_user"]["name"]))]
+                                )
+                              ]),
+                              _vm._v(" "),
+                              item["to_id"] == _vm.ar["uid"]
+                                ? _c("span", [_vm._v("[作者]")])
+                                : _vm._e()
+                            ])
+                          : _vm._e(),
+                        _vm._v(" "),
+                        _c("span", {
+                          directives: [
+                            {
+                              name: "time",
+                              rawName: "v-time",
+                              value: item["created_at"],
+                              expression: "item['created_at']"
+                            }
+                          ],
+                          staticClass: "ad_comment_time"
+                        })
+                      ]),
+                      _vm._v(" "),
+                      _c(
+                        "div",
+                        {
+                          staticClass: "ad_comment_detail",
+                          staticStyle: {
+                            "word-break": "break-all",
+                            "word-wrap": "break-word"
+                          }
+                        },
+                        [
+                          _vm._v(
+                            "\n\t\t\t\t\t" +
+                              _vm._s(item["content"]) +
+                              "\n\t\t\t\t"
+                          )
+                        ]
+                      ),
+                      _vm._v(" "),
+                      _c("div", { staticClass: "ad_comment_do" }, [
+                        item["isAgree"] == null
+                          ? _c("i", {
+                              staticClass: "fa fa-thumbs-o-up fa-mm",
+                              attrs: { "aria-hidden": "true" },
+                              on: {
+                                click: function($event) {
+                                  _vm.agree($event, item["id"])
+                                }
+                              }
+                            })
+                          : _c("i", {
+                              staticClass: "fa fa-thumbs-up agreed fa-mm",
+                              staticStyle: { color: "#FF6666" },
+                              attrs: { "aria-hidden": "true" },
+                              on: {
+                                click: function($event) {
+                                  _vm.agree($event, item["id"])
+                                }
+                              }
+                            }),
+                        _vm._v(" "),
+                        _c("span", [
+                          _vm._v(
+                            "\n\t\t\t\t\t\t" +
+                              _vm._s(item["agree_count"]) +
+                              "\n\t\t\t\t\t"
+                          )
+                        ]),
+                        _vm._v(" "),
+                        _c("span", { staticClass: "q_comment_action" }, [
+                          _c("i", {
+                            staticClass: "fa fa-commenting-o fa-mm",
+                            staticStyle: { "margin-left": "10px" },
+                            attrs: { "aria-hidden": "true" },
+                            on: {
+                              click: function($event) {
+                                _vm.hf = index
+                              }
+                            }
+                          }),
+                          _vm._v(" "),
+                          _c("span", [
+                            _vm._v("\n\t\t\t\t\t\t\t回复\n\t\t\t\t\t\t")
+                          ]),
+                          _vm._v(" "),
+                          item["from_id"] == _vm.userid
+                            ? _c("i", {
+                                staticClass: "fa fa-trash-o fa-mm",
+                                staticStyle: { "margin-left": "10px" },
+                                attrs: { "aria-hidden": "true" },
+                                on: {
+                                  click: function($event) {
+                                    _vm.commentDel(
+                                      $event,
+                                      item["id"],
+                                      item["tid"]
+                                    )
+                                  }
+                                }
+                              })
+                            : _vm._e(),
+                          _vm._v(" "),
+                          item["from_id"] == _vm.userid
+                            ? _c("span", [
+                                _vm._v("\n\t\t\t\t\t\t\t删除\n\t\t\t\t\t\t")
+                              ])
+                            : _vm._e()
+                        ]),
+                        _vm._v(" "),
+                        index == _vm.hf
+                          ? _c(
+                              "div",
+                              {
+                                staticClass: "row",
+                                staticStyle: {
+                                  "margin-bottom": "15px",
+                                  "margin-top": "15px",
+                                  "margin-left": "0px"
+                                }
+                              },
+                              [
+                                _c("form", { staticClass: "form-inline" }, [
+                                  _c(
+                                    "div",
+                                    {
+                                      staticClass: "form-group",
+                                      staticStyle: { width: "100%" }
+                                    },
+                                    [
+                                      _c("input", {
+                                        attrs: {
+                                          type: "text",
+                                          id: "ad_comment_content",
+                                          name: ""
+                                        }
+                                      }),
+                                      _vm._v(" "),
+                                      _c(
+                                        "button",
+                                        {
+                                          staticClass: "btn btn-info",
+                                          attrs: {
+                                            type: "button",
+                                            id: "ad_comment_bt"
+                                          },
+                                          on: {
+                                            click: function($event) {
+                                              _vm.sub(
+                                                $event,
+                                                _vm.ar["id"],
+                                                item["from_id"]
+                                              )
+                                            }
+                                          }
+                                        },
+                                        [_vm._v("评论")]
+                                      ),
+                                      _vm._v(" "),
+                                      _c(
+                                        "button",
+                                        {
+                                          staticClass: "btn btn-default",
+                                          staticStyle: {
+                                            "margin-left": "10px",
+                                            float: "left"
+                                          },
+                                          attrs: { type: "button" },
+                                          on: { click: _vm.cqx }
+                                        },
+                                        [_vm._v("取消")]
+                                      )
+                                    ]
+                                  )
+                                ])
+                              ]
+                            )
+                          : _vm._e()
+                      ])
+                    ])
+                  ])
+                })
+              ],
+              2
+            )
+          ])
+        ])
+      ])
+    ]
+  )
+}
+var staticRenderFns = []
+render._withStripped = true
+module.exports = { render: render, staticRenderFns: staticRenderFns }
+if (false) {
+  module.hot.accept()
+  if (module.hot.data) {
+    require("vue-hot-reload-api")      .rerender("data-v-60b1eecf", module.exports)
+  }
+}
+
+/***/ }),
+/* 89 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+/* harmony default export */ __webpack_exports__["default"] = ({
+			data: function data() {
+						return {
+									to_id: '0',
+									content: '',
+									comment: '',
+									nowComment: [],
+									hf: null,
+									userid: '',
+									ar: [],
+
+									comment_count: ''
+						};
+			},
+
+			props: {
+						qid: String
+
+			},
+			mounted: function mounted() {
+						this.userid = $('#headImg').attr('userid');
+						var tid = this.qid;
+						// console.log(tid+'as-asdf');
+						var self = this;
+						axios.get('/question/getComment?tid=' + tid).then(function (response) {
+									// console.log(response);
+									self.comment = response['data'];
+									// console.log(self.comment);
+						}).catch(function (error) {
+									console.log(error);
+						});
+
+						axios.post('/question/getDetail', {
+									id: this.qid
+						}).then(function (response) {
+									self.ar = response['data'];
+
+									// console.log(response);
+						}).catch(function (error) {
+									console.log(error);
+						});
+			},
+			methods: {
+						sub: function sub(event, id, to_id) {
+									var self = this;
+									this.content = event.target.previousElementSibling.value;
+									$.ajaxSetup({ headers: { 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content') } });
+									axios.post('/question/comment', {
+												content: self.content,
+												to_id: to_id,
+												tid: id,
+												comment_type: 'question'
+									}).then(function (response) {
+												// console.log(response);
+												switch (response['data']) {
+															case 3:
+																		new Swal({
+																					title: "请输入内容",
+																					timer: 1200,
+																					showConfirmButton: false
+																		});
+																		break;
+															case 2:
+																		new Swal({
+																					title: "请登录",
+																					timer: 1200,
+																					showConfirmButton: false
+																		});
+																		break;
+															case 0:
+																		new Swal({
+																					title: "发布失败",
+																					timer: 1200,
+																					showConfirmButton: false
+																		});
+																		break;
+															default:
+																		new Swal({
+																					title: "发布成功",
+																					timer: 1200,
+																					showConfirmButton: false
+																		});
+																		$('#ad_comment_content').val('');
+
+																		if (to_id == 0) {
+																					self.nowComment.push(response['data']);
+																					var num = $('#cot').text();
+																					num++;
+																					$('#cot').text(num);
+																		} else {
+																					console.log(response['data']);
+																					self.nowComment.push(response['data']);
+																					self.hf = null;
+																		}
+
+												}
+									}).catch(function (error) {
+												console.log(error);
+									});
+						},
+						inputFunc: function inputFunc(event) {
+									console.log(event.target);
+						},
+						agree: function agree(event, id) {
+									//点赞请求
+									axios.get('/question/commentAgree?id=' + id).then(function (response) {
+												console.log(response);
+												switch (response['data']) {
+															case 2:
+																		new Swal({
+																					title: "请先登录",
+																					timer: 1200,
+																					showConfirmButton: false
+																		});
+																		break;
+															case 0:
+																		event.target.style.color = "#636B6F";
+																		event.target.nextElementSibling.innerText--;
+																		break;
+															case 1:
+																		event.target.style.color = "#FF6666";
+																		event.target.nextElementSibling.innerText++;
+																		break;
+												}
+									}).catch(function (error) {
+												console.log(error);
+									});
+						},
+						//关闭回复评论
+						cqx: function cqx() {
+									this.hf = null;
+						},
+						commentDel: function commentDel(event, id, tid) {
+									Swal({
+												title: '确定删除?',
+												type: 'warning',
+												showCancelButton: true,
+												confirmButtonText: '确定',
+												cancelButtonText: '取消'
+									}).then(function (result) {
+
+												if (result.value) {
+															axios.get('/question/commentDel?id=' + id + '&tid=' + tid).then(function (response) {
+																		console.log(response);
+																		var num = $('#cot').text();
+																		num--;
+																		$('#cot').text(num);
+
+																		event.target.parentNode.parentNode.parentNode.remove();
+															}).catch(function (error) {
+																		console.log(error);
+															});
+															Swal('删除成功');
+															// For more information about handling dismissals please visit
+															// https://sweetalert2.github.io/#handling-dismissals
+												} else if (result.dismiss === Swal.DismissReason.cancel) {
+															Swal('已取消');
+												}
+									});
+						}
+			}
+
+});
+
+/***/ }),
+/* 90 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var disposed = false
+var normalizeComponent = __webpack_require__(1)
+/* script */
+var __vue_script__ = __webpack_require__(92)
+/* template */
+var __vue_template__ = __webpack_require__(91)
+/* template functional */
+var __vue_template_functional__ = false
+/* styles */
+var __vue_styles__ = null
+/* scopeId */
+var __vue_scopeId__ = null
+/* moduleIdentifier (server only) */
+var __vue_module_identifier__ = null
+var Component = normalizeComponent(
+  __vue_script__,
+  __vue_template__,
+  __vue_template_functional__,
+  __vue_styles__,
+  __vue_scopeId__,
+  __vue_module_identifier__
+)
+Component.options.__file = "resources\\assets\\js\\components\\question-answer.vue"
+
+/* hot reload */
+if (false) {(function () {
+  var hotAPI = require("vue-hot-reload-api")
+  hotAPI.install(require("vue"), false)
+  if (!hotAPI.compatible) return
+  module.hot.accept()
+  if (!module.hot.data) {
+    hotAPI.createRecord("data-v-d9ed7a04", Component.options)
+  } else {
+    hotAPI.reload("data-v-d9ed7a04", Component.options)
+  }
+  module.hot.dispose(function (data) {
+    disposed = true
+  })
+})()}
+
+module.exports = Component.exports
+
+
+/***/ }),
+/* 91 */
+/***/ (function(module, exports, __webpack_require__) {
+
+var render = function() {
+  var _vm = this
+  var _h = _vm.$createElement
+  var _c = _vm._self._c || _h
+  return _c("div", [
+    _vm.isLoad
+      ? _c("div", { attrs: { id: "as_load" } }, [
+          _c("i", { staticClass: "fa fa-spinner fa-spin fa-3x fa-fw" })
+        ])
+      : _c(
+          "div",
+          _vm._l(_vm.answer, function(item) {
+            return _c("div", { staticClass: "answer_list" }, [
+              _c("div", { staticClass: "answer_list_head" }, [
+                _c("span", [
+                  _c(
+                    "a",
+                    {
+                      staticClass: "auser",
+                      attrs: { href: "/user?id=" + item["uid"] }
+                    },
+                    [
+                      _c("img", {
+                        staticClass: "a_headpic",
+                        attrs: {
+                          src: "http://www.vueblog.com/" + item["headpic"]
+                        }
+                      })
+                    ]
+                  )
+                ]),
+                _vm._v(" "),
+                _c("span", [
+                  _c(
+                    "a",
+                    {
+                      staticClass: "ausername",
+                      attrs: { href: "/user?id=" + item["uid"] }
+                    },
+                    [
+                      _vm._v(
+                        "\n\t\t\t\t\t\t\t" +
+                          _vm._s(item["name"]) +
+                          "\n\t\t\t\t\t\t"
+                      )
+                    ]
+                  )
+                ])
+              ]),
+              _vm._v(" "),
+              _c("div", {
+                staticClass: "answer_list_body",
+                domProps: { innerHTML: _vm._s(item["content"]) }
+              }),
+              _vm._v(" "),
+              _c("div", { staticClass: "answer_list_time" }, [
+                _c("span", [_vm._v("最后编辑于:" + _vm._s(item["updated_at"]))])
+              ]),
+              _vm._v(" "),
+              _vm._m(0, true)
+            ])
+          })
+        )
+  ])
+}
+var staticRenderFns = [
+  function() {
+    var _vm = this
+    var _h = _vm.$createElement
+    var _c = _vm._self._c || _h
+    return _c("div", { staticClass: "answer_list_action" }, [
+      _c("span", { staticClass: "answer_list_action_a" }, [
+        _c("i", {
+          staticClass: "fa fa-thumbs-o-up answer_list_action_i",
+          attrs: { "aria-hidden": "true" }
+        }),
+        _vm._v(" "),
+        _c("span", { staticClass: "answer_list_action_font" }, [_vm._v("1")])
+      ]),
+      _vm._v(" "),
+      _c("span", { staticClass: "answer_list_action_show" }, [
+        _c("span", { staticClass: "answer_list_action_a" }, [
+          _c("i", {
+            staticClass: "fa fa-comment-o answer_list_action_i",
+            attrs: { "aria-hidden": "true" }
+          }),
+          _vm._v(" "),
+          _c("span", { staticClass: "answer_list_action_font" }, [
+            _vm._v("1 条评论")
+          ])
+        ]),
+        _vm._v(" "),
+        _c("span", { staticClass: "answer_list_action_a" }, [
+          _c("i", {
+            staticClass: "fa fa-star-o answer_list_action_i",
+            attrs: { "aria-hidden": "true" }
+          }),
+          _vm._v(" "),
+          _c("span", { staticClass: "answer_list_action_font" }, [
+            _vm._v("收藏")
+          ])
+        ])
+      ])
+    ])
+  }
+]
+render._withStripped = true
+module.exports = { render: render, staticRenderFns: staticRenderFns }
+if (false) {
+  module.hot.accept()
+  if (module.hot.data) {
+    require("vue-hot-reload-api")      .rerender("data-v-d9ed7a04", module.exports)
+  }
+}
+
+/***/ }),
+/* 92 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+//
+
+/* harmony default export */ __webpack_exports__["default"] = ({
+	data: function data() {
+		return {
+			answer: [],
+			isLoad: true
+		};
+	},
+
+	props: {
+		qid: String
+	},
+	mounted: function mounted() {
+		var self = this;
+		axios.post('/answer/getAnswer', {
+			qid: this.qid
+		}).then(function (response) {
+			self.answer = response['data'];
+			self.isLoad = false;
+			console.log(response);
+		});
+	}
+});
 
 /***/ })
 /******/ ]);

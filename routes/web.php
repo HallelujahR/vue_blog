@@ -36,6 +36,20 @@ Route::post('/article/edit','ArticleController@edit');
 
 //问题
 Route::get('/question','QuestionController@index');
+Route::post('/question/getAll','QuestionController@getAll');
+Route::get('/question/detail/{id?}','QuestionController@detail');
+Route::post('/question/getDetail','QuestionController@getDetail');
+Route::get('/question/follow/{id?}','QuestionController@follow');
+Route::post('/question/comment','QuestionController@comment');
+Route::get('/question/getComment/{id?}','QuestionController@getComment');
+Route::get('/question/commentDel','QuestionController@commentDel');
+Route::get('/question/commentAgree/{id?}','QuestionController@commentAgree');
+
+
+//问题的答案
+Route::post('/answer/store','AnswerController@store');
+Route::post('/answer/getAnswer','AnswerController@getAnswer');
+
 
 Route::post('/question/createQuestion','QuestionController@createQuestion');
 Route::get('/test/{phone}','ArticleController@send');

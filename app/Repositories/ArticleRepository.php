@@ -116,22 +116,28 @@ class ArticleRepository {
     }
 
     public function collection($request){
-      $pd = User_collection::where('cid',$request->get('id'))->where('uid',Auth::id())->first();
-      if(!$pd){
-        if(Auth::id()){
-          $data['uid'] = Auth::id();
-          $data['cid'] = $request->get('id');
-          $data['collection_type'] = 'article';
-          $data = User_collection::create($data);
-          return '1';
+
+      if(Auth::id()){
+         $pd = User_collection::where('cid',$request->get('id'))->where('uid',Auth::id())->where('collection_type','article')->first();
+
+        if(!$pd){
+         
+            $data['uid'] = Auth::id();
+            $data['cid'] = $request->get('id');
+            $data['collection_type'] = 'article';
+            $data = User_collection::create($data);
+            return '1';
+            return '2';
+          
         }else{
-          return '2';
+          User_collection::where('cid',$request->get('id'))->where('collection_type','article')->where('uid',Auth::id())->delete();
+          return '0';
         }
-        
       }else{
-        User_collection::where('cid',$request->get('id'))->where('uid',Auth::id())->delete();
-        return '0';
+        return '2';
       }
+
+     
 
     }
 
@@ -191,14 +197,14 @@ class ArticleRepository {
       
       if(Auth::id()){
 
-        if(User_agree_comment::where('tid',$request->get('id'))->where('uid',Auth::id())->get()->count() > 0){
+        if(User_agree_comment::where('tid',$request->get('id'))->where('uid',Auth::id())->where('comment_type','article')->get()->count() > 0){
           Comments::findOrFail($request->get('id'))->decrement('agree_count');
           User_agree_comment::where('tid',$request->get('id'))->where('uid',Auth::id())->first()->delete();
           return '0';
         }else{
           $data['uid'] = Auth::id();
           $data['tid'] = $request->get('id');
-          $dasta['comment_type'] = 'article';
+          $data['comment_type'] = 'article';
           User_agree_comment::create($data);
           Comments::findOrFail($request->get('id'))->increment('agree_count');
           return '1';

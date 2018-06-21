@@ -6,10 +6,12 @@ $vendorDir = dirname(dirname(__FILE__));
 $baseDir = dirname($vendorDir);
 
 return array(
+    'App\\Answer' => $baseDir . '/app/Answer.php',
     'App\\Article' => $baseDir . '/app/Article.php',
     'App\\Comments' => $baseDir . '/app/Comments.php',
     'App\\Console\\Kernel' => $baseDir . '/app/Console/Kernel.php',
     'App\\Exceptions\\Handler' => $baseDir . '/app/Exceptions/Handler.php',
+    'App\\Http\\Controllers\\AnswerController' => $baseDir . '/app/Http/Controllers/AnswerController.php',
     'App\\Http\\Controllers\\Api\\Controller' => $baseDir . '/app/Http/Controllers/Api/Controller.php',
     'App\\Http\\Controllers\\Api\\VerificationCodesController' => $baseDir . '/app/Http/Controllers/Api/VerificationCodesController.php',
     'App\\Http\\Controllers\\ArticleController' => $baseDir . '/app/Http/Controllers/ArticleController.php',
@@ -21,6 +23,7 @@ return array(
     'App\\Http\\Controllers\\HomeController' => $baseDir . '/app/Http/Controllers/HomeController.php',
     'App\\Http\\Controllers\\QuestionController' => $baseDir . '/app/Http/Controllers/QuestionController.php',
     'App\\Http\\Controllers\\TopicController' => $baseDir . '/app/Http/Controllers/TopicController.php',
+    'App\\Http\\Controllers\\UserController' => $baseDir . '/app/Http/Controllers/UserController.php',
     'App\\Http\\Kernel' => $baseDir . '/app/Http/Kernel.php',
     'App\\Http\\Middleware\\EncryptCookies' => $baseDir . '/app/Http/Middleware/EncryptCookies.php',
     'App\\Http\\Middleware\\RedirectIfAuthenticated' => $baseDir . '/app/Http/Middleware/RedirectIfAuthenticated.php',
@@ -39,6 +42,7 @@ return array(
     'App\\Repositories\\TopicRepository' => $baseDir . '/app/Repositories/TopicRepository.php',
     'App\\Topic' => $baseDir . '/app/Topic.php',
     'App\\User' => $baseDir . '/app/User.php',
+    'App\\User_agree_comment' => $baseDir . '/app/User_agree_comment.php',
     'App\\User_article_agrees' => $baseDir . '/app/User_article_agrees.php',
     'App\\User_collection' => $baseDir . '/app/User_collection.php',
     'App\\User_detail' => $baseDir . '/app/User_detail.php',

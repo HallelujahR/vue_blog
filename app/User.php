@@ -67,4 +67,8 @@ class User extends Authenticatable
     public function User_agree_comment(){
         return $this->hasMany('App\User_agree_comment');
     }
+
+    public function Answer(){
+        return $this->hasMany('App\Answer');
+    }
 }

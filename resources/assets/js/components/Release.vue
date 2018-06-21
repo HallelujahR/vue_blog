@@ -62,7 +62,7 @@
 				<div id="editorOneDiv">
 					<div id="editorOne" ></div>
 				</div>
-				<div id="editorTwo" class="col-md-12" require>
+				<div id="editorTwo" class="col-md-12" required>
 				</div>
 			</div>
 			<div class="form-group">

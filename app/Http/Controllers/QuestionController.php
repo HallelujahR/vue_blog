@@ -20,8 +20,9 @@ class QuestionController extends Controller
     	return view('question.Index');
     }
 
-    public function test(){
-    	return 'ok';
+    public function getAll(){
+        $data = $this->QuestionRepository->getAll();
+        return $data;
     }
 
     public function createQuestion(Request $request){
@@ -33,4 +34,39 @@ class QuestionController extends Controller
     	return $status;
     }
 
+    public function detail(){
+        return view('question.detail');
+    }
+
+    public function getDetail(Request $request){
+        $data = $this->QuestionRepository->getDetail($request);
+        return $data;
+    }
+
+    public function follow(Request $request){
+        $statu = $this->QuestionRepository->follow($request);
+
+        return $statu;
+    }
+
+    public function comment(Request $request){
+        $statu = $this->QuestionRepository->comment($request);
+        return $statu;
+
+    }
+
+    public function getComment(Request $request){
+        $data = $this->QuestionRepository->getComment($request);
+        return $data;
+    }
+
+    public function commentDel(Request $request){
+        $statu = $this->QuestionRepository->commentDel($request);
+        return $statu;
+    }
+
+    public function commentAgree(Request $request){
+        $statu = $this->QuestionRepository->commentAgree($request);
+        return $statu;
+    }
 }

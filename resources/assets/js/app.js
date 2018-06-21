@@ -33,3 +33,19 @@ Vue.component('comment-article',require('./components/comment-article.vue'));
 
 //注册修改文章组件
 Vue.component('article-edit',require('./components/article-edit.vue'));
+
+//注册问题首页组件
+import Questionlist from './components/question-list.vue';
+Vue.component('question-list',Questionlist);
+
+//问题详情
+import QuestionDetail from './components/question-detail.vue';
+Vue.component('question-detail',QuestionDetail);
+
+//评论问题
+import QuestionComment from './components/question-comment.vue';
+Vue.component('question-comment',QuestionComment);
+
+//问题答案
+import QuestionAnswer from './components/question-answer.vue';
+Vue.component('question-answer',QuestionAnswer);
