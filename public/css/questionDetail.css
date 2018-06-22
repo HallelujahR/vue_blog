@@ -30,6 +30,11 @@
 	#q_answer{
 		width:100%;
 	}
+	.answer_list_body img{
+		opacity:0px;
+		width:0px;
+		height:0px;
+	}
 }
 body{
 	background-color:#FFFFFF;
@@ -185,7 +190,15 @@ overflow-y: hidden ;
   transform: translateX(10px);
   opacity: 0;
 }
+.answer_list_body{
+	/*height:200px;*/
+	overflow:hidden;
+	margin-bottom:10px;
+}
 /******************************************/
+.answer_list_time{
+	color:#859EC5;
+}
 #q_answer_body{
 	padding-top:10px;
 	padding-bottom:10px;
@@ -209,6 +222,7 @@ overflow-y: hidden ;
 }
 .answer_list_action{
 	margin-top:10px;
+	color:#859EC5;
 }
 .answer_list_action_i{
 	font-size:16px !important;
@@ -228,6 +242,14 @@ overflow-y: hidden ;
 }
 .answer_list_head{
 	margin-bottom:15px;
+}
+.djzk{
+	float:right;
+}
+.djzk:hover{
+	color:#FF6666;
+	transition:all 0.3s;
+	cursor: pointer;
 }
 /*.answer_list_action_show{
 	opacity:0;

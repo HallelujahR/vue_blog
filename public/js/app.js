@@ -64214,7 +64214,7 @@ var render = function() {
         ])
       : _c(
           "div",
-          _vm._l(_vm.answer, function(item) {
+          _vm._l(_vm.answer, function(item, index) {
             return _c("div", { staticClass: "answer_list" }, [
               _c("div", { staticClass: "answer_list_head" }, [
                 _c("span", [
@@ -64259,7 +64259,22 @@ var render = function() {
               }),
               _vm._v(" "),
               _c("div", { staticClass: "answer_list_time" }, [
-                _c("span", [_vm._v("最后编辑于:" + _vm._s(item["updated_at"]))])
+                _c("span", [
+                  _vm._v("最后编辑于:" + _vm._s(item["updated_at"]))
+                ]),
+                _vm._v(" "),
+                _c(
+                  "span",
+                  {
+                    staticClass: "djzk",
+                    on: {
+                      click: function($event) {
+                        _vm.answer_ak($event, index)
+                      }
+                    }
+                  },
+                  [_vm._v("∨点击展开")]
+                )
               ]),
               _vm._v(" "),
               _vm._m(0, true)
@@ -64380,17 +64395,44 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 //
 //
 //
+//
+//
 
 /* harmony default export */ __webpack_exports__["default"] = ({
 	data: function data() {
 		return {
 			answer: [],
-			isLoad: true
+			isLoad: true,
+			isZk: false
 		};
 	},
 
 	props: {
 		qid: String
+	},
+	updated: function updated() {
+		for (var i = 0; i < $('.answer_list_body').length; i++) {
+			if ($('.answer_list_body:eq(' + i + ')').height() < 150 && $('.answer_list_body:eq(' + i + ')').find('img').length < 1) {
+				$('.answer_list_time:eq(' + i + ')').css({ 'display': 'none' });
+			} else {
+				if ($('.answer_list_body:eq(' + i + ')').find('img').length > 0) {
+					$('.answer_list_body:eq(' + i + ')').prepend($('.answer_list_body:eq(' + i + ')').find('img:eq(' + 0 + ')').clone().css({
+						'float': 'left',
+						'height': '150px',
+						'opacity': '1',
+						'margin-right': '20px'
+					}));
+				}
+				$('.answer_list_body:eq(' + i + ')').css({ 'height': '150px' });
+			}
+		}
+
+		$('.answer_list_body').find('img:not(:first)').css({
+			'opacity': '0',
+			'height': '0px',
+			'width': '0px',
+			'transition': 'all 0.3s'
+		});
 	},
 	mounted: function mounted() {
 		var self = this;
@@ -64401,6 +64443,55 @@ Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
 			self.isLoad = false;
 			console.log(response);
 		});
+	},
+
+	methods: {
+		answer_ak: function answer_ak(event, index) {
+			if (!this.isZk) {
+				//展开
+				$('.answer_list_body:eq(' + index + ')').find('img:eq(' + 0 + ')').css({
+					// 'float':'left',
+					'height': '0px',
+					'opacity': '0',
+					'width': '0px',
+					'transition': 'all 0.3s'
+				});
+
+				$('.answer_list_body:eq(' + index + ')').css({
+					'height': 'auto'
+				});
+				$('.answer_list_body:eq(' + index + ')').find('img:not(:first)').css({
+					// 'display':'none'
+					'height': 'auto',
+					'width': 'auto',
+					'opacity': '1',
+					'transition': 'all 0.4s',
+					'float': 'none'
+				});
+				this.isZk = !this.isZk;
+				event.target.innerHTML = '∧点击收起';
+			} else {
+				//收起
+				$('.answer_list_body:eq(' + index + ')').find('img:eq(' + 0 + ')').css({
+					'height': '150px',
+					'opacity': '1',
+					'width': 'auto',
+					'transition': 'all 0.3s'
+				});
+
+				$('.answer_list_body:eq(' + index + ')').css({
+					'height': '150px'
+				});
+				$('.answer_list_body:eq(' + index + ')').find('img:not(:first)').css({
+					'opacity': '0',
+					'height': '0px',
+					'width': '0px',
+					'transition': 'all 0.3s'
+				});
+				this.isZk = !this.isZk;
+				event.target.innerHTML = '∨点击展开';
+			}
+		}
 	}
 });
 
