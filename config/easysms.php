@@ -19,8 +19,8 @@ return [
             'file' => '/tmp/easy-sms.log',
         ],
         'aliyun' => [
-        'access_key_id' => 'LTAIL1MXk7iDclyS',
-        'access_key_secret' => 'xJZWgLG0d22BZmJqGwOR8cwKMYTJql',
+        'access_key_id' => '',
+        'access_key_secret' => '',
         'sign_name' => '流域Rivered',
         ],
     ],
